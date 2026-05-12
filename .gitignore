@@ -1,0 +1,34 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+models/
+logs/
+results/
+wandb/
+embed_cache/
+
+# Large local and downloaded data artifacts
+data/**/*.parquet
+data/**/*.arrow
+data/**/*.fasta
+data/**/*.fa
+data/**/*.gz
+!data/**/*.meta.json
+
+# Local tooling artifacts
+tools/mmseqs/bin/mmseqs
+tools/mmseqs/userguide.pdf
+tools/mmseqs/examples/DB.fasta
+
+# Local editor and environment overrides
+.vscode/settings.json
+.env
+.env.*
+!.env.example
+
+# Virtual environments
+.venv

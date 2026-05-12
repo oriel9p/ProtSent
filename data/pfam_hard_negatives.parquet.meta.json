@@ -1,0 +1,8 @@
+{
+  "dataset": "pfam_hard_negatives",
+  "max_total_rows": 0,
+  "pfam_file": "data/pfam_sorted.parquet",
+  "pfam_mtime_ns": 1771499272709205631,
+  "pfam_size_bytes": 5151913025,
+  "schema_version": 1
+}

@@ -1,0 +1,32 @@
+{
+  "citation": "",
+  "description": "",
+  "features": {
+    "sequence": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "entry_id": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "disorder_mean": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "disorder_std": {
+      "dtype": "float64",
+      "_type": "Value"
+    },
+    "seq_length": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "num_residues_scored": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": ""
+}
