@@ -118,7 +118,8 @@ python protein_benchmark_suite.py --compare \
 | Category | Tasks |
 |---|---|
 | Binary (8) | PPI, solubility, peptide-HLA, metal ion binding, signal peptide, neuropeptide, binary subcellular localization, material production |
-| Multiclass (5) | Remote homology (fold), EC classification, subcellular localization, antibiotic resistance, temperature stability |
+| Multiclass (4) | Remote homology (fold), subcellular localization, antibiotic resistance, temperature stability |
+| Multilabel (1) | EC classification |
 | Regression (10) | Variant effect (GB1), fluorescence, stability, thermostability, optimal pH, enzyme catalytic efficiency, cloning, beta-lactamase, AAV fitness, RhlA mutations |
 
 ## Few-shot evaluation

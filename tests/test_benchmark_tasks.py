@@ -119,12 +119,17 @@ def test_classification_tasks_prefer_auc_main_metric() -> None:
         "binary_subcellular_localization",
         "remote_homology",
         "subcellular_loc",
-        "ec_classification",
         "antibiotic_resistance",
         "temperature_stability",
     ]
     for key in auc_task_keys:
         assert TASKS[key].main_metric == "AUC"
+
+
+def test_ec_classification_is_multilabel_with_macro_f1() -> None:
+    cfg = TASKS["ec_classification"]
+    assert cfg.problem_type == "multilabel"
+    assert cfg.main_metric == "F1_Macro"
 
 
 # ---------------------------------------------------------------------------

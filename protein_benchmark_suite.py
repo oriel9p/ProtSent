@@ -16,9 +16,9 @@ Features:
 Tasks (33 total):
     Binary (6):      solubility, ppi_bernett, peptide_hla, metal_ion_binding,
                                      material_production, binary_subcellular_localization
-  Multiclass (5):  remote_homology, subcellular_loc, ec_classification,
-                   antibiotic_resistance, temperature_stability
-  Multilabel (2):  go_mf, cafa5
+  Multiclass (4):  remote_homology, subcellular_loc, antibiotic_resistance,
+                   temperature_stability
+  Multilabel (3):  ec_classification, go_mf, cafa5
         Regression (11): variant_effect, fluorescence, stability, thermostability,
                                                                          optimal_ph, enzyme_catalytic_efficiency, cloning_clf,
                                                                          chezod_disorder, beta_lactamase_peer,
@@ -748,7 +748,12 @@ def extract_labels(data, label_col: str, problem_type: str) -> Tuple[List, str]:
         if isinstance(lbl, list):
             return [str(x) for x in lbl]
         if isinstance(lbl, str):
-            return [x for x in lbl.replace(",", " ").split() if x]
+            cleaned = lbl.strip()
+            if cleaned.startswith("[") and cleaned.endswith("]"):
+                cleaned = cleaned[1:-1]
+            for separator in (",", ";", "|"):
+                cleaned = cleaned.replace(separator, " ")
+            return [x.strip("'\"") for x in cleaned.split() if x.strip("'\"")]
         return [str(lbl)]
 
     def _parse_regression(lbl):

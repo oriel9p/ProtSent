@@ -255,15 +255,6 @@ TASKS: Dict[str, TaskConfig] = {
         problem_type="multiclass",
         main_metric="AUC",
     ),
-    "ec_classification": TaskConfig(
-        name="EC Classification",
-        dataset="AI4Protein/EC",
-        input_map={"seq": "aa_seq"},
-        label_col="label",
-        problem_type="multiclass",
-        main_metric="AUC",
-        validation_split="validation",
-    ),
     "antibiotic_resistance": TaskConfig(
         name="Antibiotic Resistance",
         dataset="biomap-research/antibiotic_resistance",
@@ -284,6 +275,15 @@ TASKS: Dict[str, TaskConfig] = {
     # =========================================================================
     # Multi-label Classification
     # =========================================================================
+    "ec_classification": TaskConfig(
+        name="EC Classification",
+        dataset="AI4Protein/EC",
+        input_map={"seq": "aa_seq"},
+        label_col="label",
+        problem_type="multilabel",
+        main_metric="F1_Macro",
+        validation_split="validation",
+    ),
     "go_mf": TaskConfig(
         name="Molecular Function (GO)",
         dataset="AI4Protein/GO_MF",
