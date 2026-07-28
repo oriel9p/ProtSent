@@ -77,11 +77,64 @@ not be informative about anything.
 
 The protocol used instead has three parts:
 
-**(a) Identity stratification.** For every SCOPe-40 sequence, compute the maximum
-sequence identity to any pretraining sequence, then report Recall@10 binned by
-that identity (<20% / 20-40% / 40-70% / >70%). If ProtSent's advantage over
-ESM2-35M holds in the low-identity bins, the gain is not memorisation.
-*PENDING — see §5.*
+**(a) Identity vs. gain — completed, and it answers the concern directly.**
+
+The planned analysis was to bin Recall@10 by max identity to the pretraining
+corpus and show the gain survives at low identity. **That binning is not possible
+here**: the `[0, 0.2)` bin is empty and the median max-identity is **0.89**.
+AFDB is predicted structure over essentially all of UniProt, and SCOPe domains
+come from PDB entries whose parent sequences are in UniProt, so every SCOPe
+sequence has a close neighbour in the corpus. This is a property of corpus
+coverage, not of ProtSent: ESM-2 is pretrained on UniRef50, the same sequence
+universe.
+
+| max identity to pretraining | unfiltered | after dc40 |
+|---|---:|---:|
+| [0, 0.2) | **0 (0.00%)** | **0 (0.00%)** |
+| [0.2, 0.4) | 247 (11.19%) | 281 (12.73%) |
+| [0.4, 0.7) | 459 (20.80%) | 475 (21.52%) |
+| [0.7, 1.0] | 1,501 (68.01%) | 1,451 (65.75%) |
+
+Per corpus, STRING — not AFDB — supplies most of the near-identical matches
+(1,399 of 2,207 above 0.7, vs AFDB's 733).
+
+The question the binning was meant to answer is answered directly instead. If the
+advantage came from memorising pretraining neighbours, queries with a *closer*
+pretraining neighbour would gain *more*. Measured per query on the **published**
+ProtSent 35M (trained on the unfiltered corpus — the model under scrutiny),
+against ESM-2 35M, over the 1,693 eligible queries
+(`scope_identity_correlation.py`, `results/benchmarks/scope_identity_correlation.json`):
+
+| metric | mean gain | Spearman r | p |
+|---|---:|---:|---:|
+| hit@1 | +0.0868 | −0.0152 | 0.53 |
+| hit@10 | +0.0898 | −0.0259 | 0.29 |
+| average precision | +0.1289 | **−0.1046** | 1.6e-05 |
+
+| identity bin | n | gain hit@10 | gain AP |
+|---|---:|---:|---:|
+| [0.2, 0.4) | 174 | **+0.1034** | **+0.1838** |
+| [0.4, 0.7) | 351 | +0.0826 | +0.1390 |
+| [0.7, 1.0] | 1,168 | +0.0899 | +0.1176 |
+
+**The gain is largest for the queries whose pretraining neighbour is most
+distant**, and the only statistically significant correlation is *negative*.
+Memorisation predicts the opposite sign. State it that way: the effect does not
+track proximity to the pretraining corpus.
+
+Measurement note for anyone re-deriving these: with `-c 0.0`, MMseqs2 `fident` is
+identity over the aligned region only, which for short local alignments is
+meaningless (one Pfam hit scored `fident = 1.0` over a 12-residue alignment
+covering 9% of the query). The identities above are `fident × tcov`, i.e.
+identities over the full SCOPe sequence length. **Do not use raw `fident` from
+`scope40_max_identity.parquet`.** The AFDB hits behind the table are substantive:
+median alignment 126 aa, median tcov 0.97, median E-value 1.2e-37.
+
+Pfam and AFDB identities come from cluster representatives (longest member per
+cluster, which biases toward finding leakage). That can only *understate* the
+maximum identity, never overstate it, so it cannot overturn a finding that
+identities are already high. STRING was searched exhaustively over all 14.5M
+unique sequences and carries no such caveat.
 
 **(b) Both corpora reported.** SCOPe-40 is evaluated with the model trained on
 the fold_prediction-filtered corpus **and** on the unfiltered one, so the effect
@@ -378,7 +431,11 @@ contributes 20.9% of its available filtered pairs.
 
 ## 5. Pending
 
-- [ ] SCOPe-40 identity stratification vs the pretraining corpus (§2a, §2b)
+- [x] SCOPe-40 identity-vs-gain analysis (§2a) — binning impossible (empty low bin);
+      replaced by per-query correlation, which shows the gain is NOT driven by
+      proximity to pretraining data
+- [ ] Re-run `scope_identity_correlation.py` with ProtSent-v2-35M once training
+      finishes, to confirm the same pattern on the decontaminated model
 - [ ] SCOPe-40 for ProtSent-v2-35M (retrained on the filtered corpus), reported
       both unfiltered and identity-stratified, alongside the published
       ProtSent 35M row above so the ± decontamination effect is directly visible
