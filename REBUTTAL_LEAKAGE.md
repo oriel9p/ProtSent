@@ -28,6 +28,12 @@ protein that merely *contains* a test-length domain is still caught.
 | Pfam | `biomap-research/fold_prediction[test]` (3,244 seqs) | 28,530,684 | 27,929,772 | 600,912 | **2.11%** |
 | STRING | `Synthyra/bernett_gold_ppi[test]` (3,022 seqs) | 76,070,154 pairs | 71,891,417 pairs | 4,178,737 | **5.49%** |
 
+Totals: **240,005,097 → 226,122,796 rows, 13,882,301 removed (5.78%)**.
+
+Do not quote 5.78% as the size of the corpus the model actually saw — those are
+two different reductions, and §4 applies a second one. See the "rows reaching
+training" table in §4.
+
 Additional detail: AFDB 117,549,800 unique sequences searched → 7,414,137 leaked;
 clusters 819,790 → 817,282. Pfam 600,899 leaked unique sequences; families
 29,395 → 29,368. STRING 14,567,625 unique sequences searched → 319,282 leaked; a
@@ -331,15 +337,33 @@ device`. FA3 is Hopper-only; Blackwell needs FA4, which FastPLM's
 
 ### Data budget caveat — state this if asked
 
-To fit a ~12 h budget, STRING was subsampled to **15M of 71.9M** filtered pairs
-(seed 42), and `--max_pairs_per_cluster = 8` (which samples 8 sequences per
-cluster and emits all C(8,2) = 28 pairs). Final corpus: AFDB 18,987,468 +
-Pfam 777,306 + STRING 15,000,000 ≈ **34.8M pairs**.
+**Rows reaching training.** Two independent reductions apply, and conflating them
+misstates the corpus by 57M rows. Counts verified directly from the parquet
+metadata and from the running job's log.
+
+| corpus | source rows | after decontamination | rows fed to training |
+|---|---:|---:|---:|
+| Pfam | 28,530,684 | 27,929,772 | 27,929,772 |
+| AFDB | 135,404,259 | 126,301,607 | 126,301,607 |
+| STRING | 76,070,154 | 71,891,417 | **15,000,000** |
+| **total** | **240,005,097** | **226,122,796** (−5.78%) | **169,231,379** (70.51% of source) |
+
+Reduction 1 is the decontamination itself (−5.78%, §1). Reduction 2 is a
+deliberate STRING subsample (71,891,417 → 15,000,000, seed 42) taken to fit a
+~12 h compute budget; it is a budget decision, not a leakage control, and must
+not be presented as one.
+
+**Pairs generated from those rows.** `--max_pairs_per_cluster = 8` samples 8
+sequences per cluster and emits all C(8,2) = 28 pairs, so pair count is not row
+count. From the run log: AFDB 18,987,468 + Pfam 777,306 + STRING 15,000,000 =
+**34,764,774 pairs**, giving 33,949 global batches and **4,850 optimizer steps**
+at batch 1024 per rank across 7 ranks (one epoch).
 
 AFDB and Pfam clusters are **all** visited — a substantial improvement over the
 earlier round-robin run, which exhausted its pair budget within the first ~2% of
 the group-sorted corpus and therefore only ever saw the lowest-sorted clusters.
-But the paper cannot claim "trained on the entire filtered corpus."
+But the paper cannot claim "trained on the entire filtered corpus": STRING
+contributes 20.9% of its available filtered pairs.
 
 ### Fixes made along the way
 
