@@ -22,12 +22,31 @@ DEVICE="${DEVICE:-cuda}"
 export HF_HOME=/storage/models/hf_home
 export TOKENIZERS_PARALLELISM=false
 export PROTSENT_ESMPLUSPLUS_ATTN_BACKEND=flash_attention_2
+# This box has 256 cores but OpenBLAS is precompiled for far fewer threads.
+# Left uncapped, the kNN/linear probe fits abort with "corrupted size vs.
+# prev_size" (SIGABRT, rc=134) once a task is large enough -- aav_flip, at
+# 50,430 x 22,186 sequences, reproduces it every time. Nested joblib/loky
+# parallelism on top makes it worse. Capping fixes it and costs nothing here,
+# since the probe fits are not the bottleneck.
+export OPENBLAS_NUM_THREADS=32
+export OMP_NUM_THREADS=32
+export MKL_NUM_THREADS=32
+export NUMEXPR_NUM_THREADS=32
 
 mkdir -p "$OUT"
 
-# scope40_retrieval is in RETRIEVAL_TASKS, which is opt-in and excluded from the
-# defaults -- it must be named explicitly or it silently will not run.
-TASKS="${TASKS:-scope40_retrieval remote_homology}"
+# The 23 tasks that have a paired MMseqs2 baseline row, so every model number has
+# an alignment reference. scope40_retrieval is in RETRIEVAL_TASKS, which is opt-in
+# and excluded from the suite defaults -- it must be named explicitly or it
+# silently will not run. rhla_enzyme_mutations is omitted: its sequences are
+# 6-residue mutation-site strings, too short for MMseqs2 k-mers, so no baseline
+# exists to compare against.
+TASKS="${TASKS:-aav_flip antibiotic_resistance beta_lactamase_peer \
+binary_subcellular_localization cloning_clf ec_classification \
+enzyme_catalytic_efficiency fluorescence go_mf material_production \
+metal_ion_binding optimal_ph peptide_hla profet_np_sp_cleaved remote_homology \
+scope40_retrieval signalp_binary solubility stability subcellular_loc \
+temperature_stability thermostability variant_effect}"
 
 run_one() {
   local model="$1" tag="$2" probe="$3"
