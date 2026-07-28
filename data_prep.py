@@ -13,6 +13,7 @@ import logging
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Iterable, Optional, cast
 
@@ -57,54 +58,128 @@ def _resolve_pfam_hard_negative_spec(
     return ("hard_negative", float(hard_negative_threshold), 6, 50, 8)
 
 
-def _download_file(url: str, dest_path: Path) -> None:
+def _download_file(url: str, dest_path: Path, attempts: int = 3) -> None:
     """Download a file with wget (preferred) or requests fallback.
 
     Args:
         url: Source URL to download from.
         dest_path: Local filesystem destination.
+        attempts: Number of full download attempts before failing.
 
     Raises:
-        requests.HTTPError: If the download fails via both methods.
+        RuntimeError: If the download fails via both methods.
     """
     if dest_path.exists():
-        logger.info("Found existing: %s", dest_path.name)
-        return
+        if dest_path.stat().st_size > 0:
+            logger.info("Found existing: %s", dest_path.name)
+            return
+        logger.warning("Removing empty partial download: %s", dest_path)
+        dest_path.unlink()
 
     logger.info("Downloading: %s", dest_path.name)
-    try:
-        result = subprocess.run(
-            ["wget", "-c", "-O", str(dest_path), url],
-            capture_output=True,
-            text=True,
-            timeout=3600,
-        )
-        if result.returncode == 0:
-            logger.info("Downloaded: %s", dest_path.name)
-            return
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            result = subprocess.run(
+                [
+                    "wget",
+                    "-c",
+                    "--tries=3",
+                    "--timeout=30",
+                    "--read-timeout=300",
+                    "-O",
+                    str(dest_path),
+                    url,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if (
+                result.returncode == 0
+                and dest_path.exists()
+                and dest_path.stat().st_size > 0
+            ):
+                logger.info("Downloaded: %s", dest_path.name)
+                return
+            if result.returncode != 0:
+                logger.warning(
+                    "wget attempt %d/%d failed for %s: %s",
+                    attempt,
+                    attempts,
+                    dest_path.name,
+                    result.stderr.strip()[-500:],
+                )
+        except FileNotFoundError as exc:
+            last_error = exc
+            logger.info("wget not available, using requests for %s", dest_path.name)
+        except subprocess.SubprocessError as exc:
+            last_error = exc
+            logger.warning(
+                "wget attempt %d/%d failed for %s: %s",
+                attempt,
+                attempts,
+                dest_path.name,
+                exc,
+            )
 
-    with requests.get(url, stream=True, timeout=300) as r:
-        r.raise_for_status()
-        total_size = int(r.headers.get("content-length", 0))
-        with tqdm(
-            total=total_size if total_size > 0 else None,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
-            mininterval=5.0,
-            desc=f"Downloading {dest_path.name}",
-            dynamic_ncols=True,
-            leave=False,
-        ) as progress:
-            with open(dest_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=1024 * 1024):
-                    if not chunk:
-                        continue
-                    f.write(chunk)
-                    progress.update(len(chunk))
-    logger.info("Downloaded: %s", dest_path.name)
+        existing_size = dest_path.stat().st_size if dest_path.exists() else 0
+        headers = {"Range": f"bytes={existing_size}-"} if existing_size > 0 else {}
+        try:
+            with requests.get(
+                url, stream=True, timeout=(30, 300), headers=headers
+            ) as r:
+                if r.status_code == 416 and existing_size > 0:
+                    logger.info("Downloaded: %s", dest_path.name)
+                    return
+                r.raise_for_status()
+
+                append = existing_size > 0 and r.status_code == 206
+                if existing_size > 0 and not append:
+                    logger.info(
+                        "Server did not honor resume for %s; restarting download",
+                        dest_path.name,
+                    )
+                    existing_size = 0
+
+                content_length = int(r.headers.get("content-length", 0))
+                total_size = existing_size + content_length if content_length > 0 else 0
+                with tqdm(
+                    total=total_size if total_size > 0 else None,
+                    initial=existing_size if total_size > existing_size else 0,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                    mininterval=5.0,
+                    desc=f"Downloading {dest_path.name}",
+                    dynamic_ncols=True,
+                    leave=False,
+                ) as progress:
+                    with open(dest_path, "ab" if append else "wb") as f:
+                        for chunk in r.iter_content(chunk_size=1024 * 1024):
+                            if not chunk:
+                                continue
+                            f.write(chunk)
+                            progress.update(len(chunk))
+
+            if dest_path.exists() and dest_path.stat().st_size > 0:
+                logger.info("Downloaded: %s", dest_path.name)
+                return
+        except requests.RequestException as exc:
+            last_error = exc
+            logger.warning(
+                "requests attempt %d/%d failed for %s: %s",
+                attempt,
+                attempts,
+                dest_path.name,
+                exc,
+            )
+
+        if attempt < attempts:
+            time.sleep(min(2**attempt, 30))
+
+    if dest_path.exists() and dest_path.stat().st_size == 0:
+        dest_path.unlink()
+    raise RuntimeError(f"Failed to download {url} to {dest_path}") from last_error
 
 
 def _load_afdb_foldseek_map_lazy(
@@ -139,9 +214,211 @@ class DataPrep:
         "GFP_AEQVI_",
     )
 
+    # Benchmark test splits that pretraining corpora are filtered against.
+    # Keyed by short name -> (HF dataset, split, sequence columns, FASTA prefix).
+    _BENCHMARK_TEST_SETS = {
+        "bernett": ("Synthyra/bernett_gold_ppi", "test", ("protein1_sequence", "protein2_sequence", "SeqA", "SeqB"), "BERNETT"),
+        "fold": ("biomap-research/fold_prediction", "test", ("seq",), "FOLD"),
+    }
+
     def __init__(self, data_dir: str = "data"):
         self.data_dir = data_dir
         os.makedirs(data_dir, exist_ok=True)
+        self._mmseqs_bin_cache: Optional[str] = None
+
+    def _resolve_mmseqs_binary(self) -> str:
+        """Locate the mmseqs binary, preferring a bundled copy over PATH."""
+        if self._mmseqs_bin_cache is not None:
+            return self._mmseqs_bin_cache
+
+        bundled = Path(self.data_dir).parent / "tools" / "mmseqs" / "bin" / "mmseqs"
+        if not bundled.exists():
+            bundled = (
+                Path(__file__).resolve().parent / "tools" / "mmseqs" / "bin" / "mmseqs"
+            )
+        if bundled.exists():
+            self._mmseqs_bin_cache = str(bundled)
+            logger.info("Using bundled mmseqs: %s", self._mmseqs_bin_cache)
+            return self._mmseqs_bin_cache
+
+        try:
+            result = subprocess.run(
+                ["mmseqs", "version"], capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                self._mmseqs_bin_cache = "mmseqs"
+                logger.info("Using system mmseqs: %s", result.stdout.strip())
+                return self._mmseqs_bin_cache
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        raise RuntimeError(
+            "MMseqs2 not found. Install the GPU build:\n"
+            "  curl -L -o mmseqs.tar.gz https://github.com/soedinglab/MMseqs2/"
+            "releases/download/18-8cc5c/mmseqs-linux-gpu.tar.gz\n"
+            "  tar xzf mmseqs.tar.gz && ln -s $PWD/mmseqs <repo>/tools/mmseqs\n"
+            "Or via bioconda: conda install -c bioconda mmseqs2"
+        )
+
+    def _build_benchmark_test_fasta(self, test_set: str, out_path: Path) -> list[str]:
+        """Write a benchmark test split to FASTA (deduped, sorted). Returns the sequences."""
+        dataset_name, split, seq_cols, prefix = self._BENCHMARK_TEST_SETS[test_set]
+        try:
+            ds = load_dataset(dataset_name, split=split)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load {dataset_name}[{split}] for decontamination"
+            ) from e
+
+        present = [c for c in seq_cols if c in ds.column_names]
+        if not present:
+            raise RuntimeError(
+                f"{dataset_name}[{split}] is missing supported sequence columns; "
+                f"available columns: {ds.column_names}"
+            )
+        logger.info("Using %s sequence columns: %s", dataset_name, ", ".join(present))
+
+        sequences: set[str] = set()
+        for row in ds:
+            for col in present:
+                value = str(row.get(col, "") or "").strip()
+                if value:
+                    sequences.add(value)
+
+        if not sequences:
+            raise RuntimeError(f"{dataset_name}[{split}] has no non-empty sequences")
+
+        ordered = sorted(sequences)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w") as f:
+            for index, sequence in enumerate(ordered, start=1):
+                f.write(f">{prefix}_{index:08d}\n{sequence}\n")
+        logger.info("%s test set: %d unique sequences -> %s", test_set, len(ordered), out_path)
+        return ordered
+
+    def _mmseqs_leaked_query_ids(
+        self,
+        query_fasta: Path,
+        target_fasta: Path,
+        hits_tsv: Path,
+        tmp_dir: Path,
+        *,
+        min_seq_id: float,
+        cov: float = 0.8,
+        cov_mode: int = 1,
+        threads: int = 48,
+        gpu: bool = False,
+        timeout: int = 86_400,
+    ) -> set[str]:
+        """Search query_fasta against target_fasta; return query ids that hit.
+
+        The corpus is the QUERY and the test set is the TARGET so that each corpus
+        sequence only needs *any* hit — the default --max-seqs prefilter cap would
+        otherwise silently truncate hits in the reverse orientation. cov-mode 1 is
+        coverage of the target (the test sequence), so a long corpus protein that
+        merely contains a test-length domain is still caught.
+
+        easy-search (not easy-linclust) is used deliberately: linclust's k-mer
+        prefilter loses sensitivity below ~50% identity, and decontamination needs
+        recall, not speed.
+        """
+        mmseqs_bin = self._resolve_mmseqs_binary()
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        hits_tsv.unlink(missing_ok=True)
+
+        cmd = [
+            mmseqs_bin, "easy-search",
+            str(query_fasta), str(target_fasta), str(hits_tsv), str(tmp_dir),
+            "--min-seq-id", str(min_seq_id),
+            "--cov-mode", str(cov_mode),
+            "-c", str(cov),
+            "--alignment-mode", "3",
+            "-e", "1e-3",
+            "--threads", str(threads),
+            "--format-output", "query,target,fident,alnlen,qcov,tcov,evalue",
+            "--remove-tmp-files", "-v", "3",
+        ]
+        cmd += ["--gpu", "1"] if gpu else ["-s", "7.5"]
+
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=timeout)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(
+                f"mmseqs easy-search failed ({' '.join(cmd)}):\n{e.stderr[-4000:]}"
+            ) from e
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(
+                f"mmseqs easy-search timed out after {timeout}s ({' '.join(cmd)})"
+            ) from e
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        leaked: set[str] = set()
+        with open(hits_tsv) as f:
+            for line in f:
+                if line.strip():
+                    leaked.add(line.split("\t", 1)[0])
+        return leaked
+
+    def _decontaminate_dataframe(
+        self,
+        df: pl.DataFrame,
+        seq_col: str,
+        test_set: str,
+        *,
+        min_seq_id: float,
+        cov: float = 0.8,
+        threads: int = 48,
+        gpu: bool = False,
+        label: str = "corpus",
+    ) -> pl.DataFrame:
+        """Drop rows whose sequence aligns to a benchmark test sequence.
+
+        Test-set leakage removal only — this is independent of, and applied after,
+        each corpus's own internal redundancy reduction.
+        """
+        work_dir = Path(self.data_dir) / "decontam" / label
+        work_dir.mkdir(parents=True, exist_ok=True)
+        test_fasta = work_dir / f"{test_set}_test.fasta"
+        self._build_benchmark_test_fasta(test_set, test_fasta)
+
+        unique_seqs = df.select(pl.col(seq_col).alias("sequence")).drop_nulls().unique()
+        query_fasta = work_dir / "query.fasta"
+        with open(query_fasta, "wb") as f:
+            for i, seq in enumerate(unique_seqs["sequence"].to_list()):
+                f.write(b">%d\n%s\n" % (i, seq.encode()))
+
+        logger.info(
+            "Decontaminating %s: %d unique sequences vs %s test set at %.0f%% id / %.0f%% cov",
+            label, unique_seqs.height, test_set, 100 * min_seq_id, 100 * cov,
+        )
+        leaked_ids = self._mmseqs_leaked_query_ids(
+            query_fasta,
+            test_fasta,
+            work_dir / "hits.tsv",
+            work_dir / "mmseqs_tmp",
+            min_seq_id=min_seq_id,
+            cov=cov,
+            threads=threads,
+            gpu=gpu,
+        )
+
+        if not leaked_ids:
+            logger.info("%s: no test-set leakage found", label)
+            return df
+
+        leaked_seqs = unique_seqs["sequence"].gather(sorted(int(i) for i in leaked_ids))
+        before = df.height
+        df = df.filter(~pl.col(seq_col).is_in(leaked_seqs))
+        logger.info(
+            "%s decontamination: removed %d/%d rows (%.4f%%) matching %d leaked sequences",
+            label, before - df.height, before,
+            100.0 * (before - df.height) / max(1, before), leaked_seqs.len(),
+        )
+        if df.height == 0:
+            raise RuntimeError(f"{label} decontamination removed every row")
+        return df
 
     def _normalize_columns(self, df: pl.DataFrame) -> pl.DataFrame:
         rename_map = {
@@ -316,7 +593,14 @@ class DataPrep:
         if dfs:
             self._sort_and_save(pl.concat(dfs), "nvidia_sorted.parquet", False)
 
-    def prep_afdb(self, limit_gb: int = 25) -> None:
+    def prep_afdb(
+        self,
+        limit_gb: int = 25,
+        decontaminate: bool = True,
+        decontam_min_seq_id: float = 0.4,
+        threads: int = 48,
+        mmseqs_gpu: bool = False,
+    ) -> None:
         """Download AFDB sequences and label them with Foldseek structural cluster IDs.
 
         Two-step ETL:
@@ -336,6 +620,12 @@ class DataPrep:
             limit_gb: Approximate output size cap in GB.
                 Controls max_rows ceiling (default 25 => ~50M sequences).
                 Set <= 0 for an uncapped full join.
+            decontaminate: Drop sequences similar to the remote-homology benchmark
+                test split (biomap-research/fold_prediction[test]).
+            decontam_min_seq_id: Identity cutoff for that filter (default 0.40,
+                at 80% coverage of the test sequence).
+            threads: Threads for the MMseqs2 decontamination search.
+            mmseqs_gpu: Use the MMseqs2 GPU prefilter for that search.
         """
         logger.info(
             "ETL: AFDB Structural Clusters (Foldseek) | Target: ~%s GB", limit_gb
@@ -474,6 +764,22 @@ class DataPrep:
                 "Validate mapping semantics."
             )
 
+        # Remove anything similar to the remote-homology benchmark test set.
+        # AFDB has no internal identity clustering of its own — it inherits AFDB50
+        # cluster ids (<50% identity between representatives, stricter than the 70%
+        # used for Pfam), and within-cluster members are deliberately kept because
+        # they are the positive pairs for contrastive training.
+        if decontaminate:
+            df_result = self._decontaminate_dataframe(
+                df_result,
+                "sequence",
+                "fold",
+                min_seq_id=decontam_min_seq_id,
+                threads=threads,
+                gpu=mmseqs_gpu,
+                label="afdb",
+            )
+
         self._sort_and_save(
             df_result,
             "afdb_sorted.parquet",
@@ -484,22 +790,35 @@ class DataPrep:
         )
 
     def prep_pfam_full(
-        self, min_seq_id: float = 0.7, threads: int = 40, fast: bool = False
+        self,
+        min_seq_id: float = 0.7,
+        threads: int = 40,
+        fast: bool = False,
+        decontaminate: bool = True,
+        decontam_min_seq_id: float = 0.4,
+        mmseqs_gpu: bool = False,
     ):
         """
         ETL Pipeline for Pfam-A Full (Large Scale with MMseqs2).
 
         Process:
         1. Downloads Pfam-A.fasta.gz (50M+ seqs) + Pfam-A.clans.tsv.gz
-        2. Attempts MMseqs2 clustering at 60% identity (reduces to ~10-35M representatives)
+        2. Internal redundancy reduction: MMseqs2 linclust at ``min_seq_id``
+           identity / 80% coverage, keeping representatives only
         3. Falls back to full dataset if MMseqs2 unavailable
         4. Maps Family -> Clan hierarchy
-        5. Sorts by Clan -> Family for streaming dataloader compatibility
+        5. Removes sequences similar to the remote-homology benchmark test split
+        6. Sorts by Clan -> Family for streaming dataloader compatibility
 
         Args:
-            min_seq_id: MMseqs2 sequence identity threshold (default 0.7)
+            min_seq_id: MMseqs2 *internal* redundancy identity threshold (default 0.70)
             threads: Number of threads for MMseqs2 (default 40)
             fast: If True, limit to 50k sequences for testing
+            decontaminate: Drop sequences similar to the remote-homology benchmark
+                test split (biomap-research/fold_prediction[test]).
+            decontam_min_seq_id: Identity cutoff for that filter (default 0.40,
+                at 80% coverage of the test sequence).
+            mmseqs_gpu: Use the MMseqs2 GPU prefilter for that search.
         """
 
         logger.info("ETL: Pfam-A Full (with MMseqs2 de-duplication)")
@@ -738,6 +1057,17 @@ class DataPrep:
         # --- 7. Sort & Save ---
         logger.info("Sorting by Clan -> Family and filtering singleton families...")
         before_save = len(df)
+        if decontaminate:
+            df = self._decontaminate_dataframe(
+                df,
+                "sequence",
+                "fold",
+                min_seq_id=decontam_min_seq_id,
+                threads=threads,
+                gpu=mmseqs_gpu,
+                label="pfam",
+            )
+
         self._sort_and_save(df, "pfam_sorted.parquet", True)
         logger.info("Final size before singleton filter: %d sequences", before_save)
 
@@ -754,6 +1084,8 @@ class DataPrep:
         min_seq_len: int = 10,
         max_seq_len: int = 1024,
         cleanup_mode: str = "aggressive",
+        decontam_min_seq_id: float = 0.4,
+        mmseqs_gpu: bool = False,
     ):
         """
         ETL Pipeline for STRING-DB Protein-Protein Interactions.
@@ -772,8 +1104,12 @@ class DataPrep:
         It is consumed directly by protein_pipeline.py as a PPI pair dataset.
 
         Args:
-            min_seq_id: MMseqs2 cascaded-cluster sequence identity threshold (default 0.50)
+            min_seq_id: MMseqs2 cascaded-cluster sequence identity threshold (default 0.50).
+                This is the *internal* redundancy reduction cutoff, not the test-set one.
             threads: Number of threads for MMseqs2 (default 48)
+            decontam_min_seq_id: Identity cutoff for removing sequences similar to the
+                Bernett test split (default 0.40, at 80% coverage of the test sequence)
+            mmseqs_gpu: Use the MMseqs2 GPU prefilter for the decontamination search
             min_combined_score: Minimum combined_score filter for links
                 (default 400 = STRING-DB medium confidence)
             max_rows: Maximum interaction pairs to keep (0 = no limit)
@@ -804,31 +1140,7 @@ class DataPrep:
         # --- 1. Download ---
         for fname, url in files_to_download.values():
             dest = stringdb_dir / fname
-            if dest.exists():
-                logger.info("Found existing: %s", dest.name)
-                continue
-            logger.info("Downloading: %s", fname)
-            try:
-                result = subprocess.run(
-                    ["wget", "-c", "-O", str(dest), url],
-                    capture_output=True,
-                    text=True,
-                    timeout=5000,
-                )
-                if result.returncode == 0:
-                    logger.info("Downloaded: %s", fname)
-                else:
-                    logger.error("wget failed for %s: %s", fname, result.stderr)
-                    raise RuntimeError(f"Download failed for {fname}")
-            except FileNotFoundError:
-                # wget not available, use requests
-                logger.info("wget not available, using requests for %s", fname)
-                with requests.get(url, stream=True, timeout=600) as r:
-                    r.raise_for_status()
-                    with open(dest, "wb") as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                logger.info("Downloaded: %s", fname)
+            _download_file(url, dest)
 
         # --- 2. Decompress FASTA ---
         fasta_gz = stringdb_dir / "protein.sequences.v12.0.fa.gz"
@@ -849,60 +1161,17 @@ class DataPrep:
         filtered_fasta = stringdb_dir / "filtered_proteins.fa"
         decontaminated_fasta = stringdb_dir / "decontaminated_proteins.fa"
         bernett_test_fasta = stringdb_dir / "bernett_test.fasta"
-        decontam_combined_fasta = stringdb_dir / "decontam50_combined.fasta"
+        decontam_hits_tsv = stringdb_dir / "decontam_hits.tsv"
         decontam_hash_file = stringdb_dir / ".decontam_bernett_sha256"
         decontam_signature_file = stringdb_dir / ".decontam_input_signature"
         links_gz = stringdb_dir / "protein.physical.links.full.v12.0.txt.gz"
         clu_tsv = stringdb_dir / "clu45.tsv"
         threshold_file = stringdb_dir / ".filtered_score_threshold"
 
-        mmseqs_bin_cache: Optional[str] = None
-
-        def _resolve_mmseqs_binary() -> str:
-            nonlocal mmseqs_bin_cache
-            if mmseqs_bin_cache is not None:
-                return mmseqs_bin_cache
-
-            bundled = Path(self.data_dir).parent / "tools" / "mmseqs" / "bin" / "mmseqs"
-            if not bundled.exists():
-                bundled = (
-                    Path(__file__).resolve().parent
-                    / "tools"
-                    / "mmseqs"
-                    / "bin"
-                    / "mmseqs"
-                )
-            if bundled.exists():
-                mmseqs_bin_cache = str(bundled)
-                logger.info("Using bundled mmseqs: %s", mmseqs_bin_cache)
-                return mmseqs_bin_cache
-
-            try:
-                result = subprocess.run(
-                    ["mmseqs", "version"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                if result.returncode == 0:
-                    mmseqs_bin_cache = "mmseqs"
-                    logger.info("Using system mmseqs: %s", result.stdout.strip())
-                    return mmseqs_bin_cache
-            except (FileNotFoundError, subprocess.TimeoutExpired):
-                pass
-
-            raise RuntimeError(
-                "MMseqs2 not found. Install via: conda install -c bioconda mmseqs2\n"
-                "Or place the binary at tools/mmseqs/bin/mmseqs"
-            )
-
         def _remove_decontam_outputs(remove_sidecars: bool = False) -> None:
             for file_path in [
                 decontaminated_fasta,
-                stringdb_dir / "decontam50_all_seqs.fasta",
-                stringdb_dir / "decontam50_rep_seq.fasta",
-                stringdb_dir / "decontam50_cluster.tsv",
-                decontam_combined_fasta,
+                decontam_hits_tsv,
                 bernett_test_fasta,
             ]:
                 file_path.unlink(missing_ok=True)
@@ -981,61 +1250,21 @@ class DataPrep:
         )
 
         logger.info("Preparing Bernett test decontamination set ...")
-        try:
-            bernett_ds = load_dataset("Synthyra/bernett_gold_ppi", split="test")
-        except Exception as e:
-            raise RuntimeError(
-                "Failed to load Synthyra/bernett_gold_ppi test split for decontamination"
-            ) from e
-
-        bernett_columns = bernett_ds.column_names
-        if {
-            "protein1_sequence",
-            "protein2_sequence",
-        }.issubset(bernett_columns):
-            bernett_seq1_col, bernett_seq2_col = (
-                "protein1_sequence",
-                "protein2_sequence",
-            )
-        elif {"SeqA", "SeqB"}.issubset(bernett_columns):
-            bernett_seq1_col, bernett_seq2_col = "SeqA", "SeqB"
-        else:
-            raise RuntimeError(
-                "Synthyra/bernett_gold_ppi test split is missing supported sequence "
-                f"columns; available columns: {bernett_columns}"
-            )
-
-        logger.info(
-            "Using Bernett sequence columns: %s, %s",
-            bernett_seq1_col,
-            bernett_seq2_col,
+        sorted_bernett_sequences = self._build_benchmark_test_fasta(
+            "bernett", bernett_test_fasta
         )
-
-        bernett_sequences: set[str] = set()
-        for row in bernett_ds:
-            seq1 = str(row.get(bernett_seq1_col, "")).strip()
-            seq2 = str(row.get(bernett_seq2_col, "")).strip()
-            if seq1:
-                bernett_sequences.add(seq1)
-            if seq2:
-                bernett_sequences.add(seq2)
-
-        if not bernett_sequences:
-            raise RuntimeError(
-                "Synthyra/bernett_gold_ppi test split has no non-empty protein sequences"
-            )
-
-        sorted_bernett_sequences = sorted(bernett_sequences)
-        with open(bernett_test_fasta, "w") as f:
-            for index, sequence in enumerate(sorted_bernett_sequences, start=1):
-                f.write(f">BERNETT_{index:08d}\n{sequence}\n")
 
         bernett_sha256 = hashlib.sha256(
             "\n".join(sorted_bernett_sequences).encode("utf-8")
         ).hexdigest()
 
         source_stat = decontam_source_fasta.stat()
-        input_signature = f"{decontam_source_fasta.name}:{source_stat.st_size}:{source_stat.st_mtime_ns}"
+        # The cutoff is part of the signature: without it, lowering the threshold
+        # would be a silent no-op against an existing decontaminated FASTA.
+        input_signature = (
+            f"{decontam_source_fasta.name}:{source_stat.st_size}:{source_stat.st_mtime_ns}"
+            f":minid={decontam_min_seq_id}:cov=0.8:covmode=1:method=easy-search"
+        )
         previous_hash = (
             decontam_hash_file.read_text().strip()
             if decontam_hash_file.exists()
@@ -1056,69 +1285,20 @@ class DataPrep:
             logger.info("Regenerating Bernett decontaminated FASTA ...")
             clu_tsv.unlink(missing_ok=True)
 
-            mmseqs_bin = _resolve_mmseqs_binary()
-            decontam_prefix = stringdb_dir / "decontam50"
-            tmp_dir = stringdb_dir / "mmseqs_tmp"
-            if tmp_dir.exists():
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-            tmp_dir.mkdir(parents=True, exist_ok=True)
-
-            with open(decontam_combined_fasta, "w") as fout:
-                with open(bernett_test_fasta, "r") as fin:
-                    shutil.copyfileobj(fin, fout)
-                with open(decontam_source_fasta, "r") as fin:
-                    shutil.copyfileobj(fin, fout)
-
-            subprocess.run(
-                [
-                    mmseqs_bin,
-                    "easy-linclust",
-                    str(decontam_combined_fasta),
-                    str(decontam_prefix),
-                    str(tmp_dir),
-                    "--min-seq-id",
-                    "0.50",
-                    "--cov-mode",
-                    "1",
-                    "-c",
-                    "0.80",
-                    "--threads",
-                    str(threads),
-                    "--remove-tmp-files",
-                    "-v",
-                    "3",
-                ],
-                check=True,
+            # Search the STRING proteins (query) against the Bernett test split
+            # (target). easy-search rather than easy-linclust: linclust's k-mer
+            # prefilter loses sensitivity below ~50% identity, and this needs recall.
+            removed_ids = self._mmseqs_leaked_query_ids(
+                decontam_source_fasta,
+                bernett_test_fasta,
+                decontam_hits_tsv,
+                stringdb_dir / "mmseqs_tmp",
+                min_seq_id=decontam_min_seq_id,
+                cov=0.8,
+                cov_mode=1,
+                threads=threads,
+                gpu=mmseqs_gpu,
             )
-
-            decontam_cluster_tsv = stringdb_dir / "decontam50_cluster.tsv"
-            if not decontam_cluster_tsv.exists():
-                raise RuntimeError(
-                    "Decontamination clustering did not produce decontam50_cluster.tsv"
-                )
-
-            contaminated_reps: set[str] = set()
-            with open(decontam_cluster_tsv, "r") as f:
-                for line_tsv in f:
-                    parts = line_tsv.rstrip().split("\t")
-                    if len(parts) != 2:
-                        continue
-                    rep, member = parts
-                    if rep.startswith("BERNETT_") or member.startswith("BERNETT_"):
-                        contaminated_reps.add(rep)
-
-            removed_ids: set[str] = set()
-            with open(decontam_cluster_tsv, "r") as f:
-                for line_tsv in f:
-                    parts = line_tsv.rstrip().split("\t")
-                    if len(parts) != 2:
-                        continue
-                    rep, member = parts
-                    if rep in contaminated_reps:
-                        if not rep.startswith("BERNETT_"):
-                            removed_ids.add(rep)
-                        if not member.startswith("BERNETT_"):
-                            removed_ids.add(member)
 
             total_proteins = 0
             kept_proteins = 0
@@ -1142,7 +1322,9 @@ class DataPrep:
                 (100.0 * removed_proteins / total_proteins) if total_proteins else 0.0
             )
             logger.info(
-                "Bernett decontamination: Bernett sequences=%d, kept proteins=%d, removed=%d/%d proteins (%.3f%%)",
+                "Bernett decontamination (>=%.0f%% id, >=80%% coverage of the test sequence): "
+                "Bernett sequences=%d, kept proteins=%d, removed=%d/%d proteins (%.3f%%)",
+                100 * decontam_min_seq_id,
                 len(sorted_bernett_sequences),
                 kept_proteins,
                 removed_proteins,
@@ -1177,10 +1359,7 @@ class DataPrep:
                 stringdb_dir / "linclust65_all_seqs.fasta",
                 stringdb_dir / "linclust65_rep_seq.fasta",
                 stringdb_dir / "linclust65_cluster.tsv",
-                stringdb_dir / "decontam50_all_seqs.fasta",
-                stringdb_dir / "decontam50_rep_seq.fasta",
-                stringdb_dir / "decontam50_cluster.tsv",
-                decontam_combined_fasta,
+                decontam_hits_tsv,
                 bernett_test_fasta,
                 stringdb_dir / "clu45_reps.tsv",
                 stringdb_dir / "clu45",
@@ -1197,7 +1376,6 @@ class DataPrep:
                 "repDB*",
                 "seqDB*",
                 "linclust65*",
-                "decontam50*",
                 "clu45.*",
             ]:
                 for file_path in stringdb_dir.glob(pattern):
@@ -1220,7 +1398,7 @@ class DataPrep:
                     file_path.unlink(missing_ok=True)
 
         if not clu_tsv.exists():
-            mmseqs_bin = _resolve_mmseqs_binary()
+            mmseqs_bin = self._resolve_mmseqs_binary()
 
             tmp_dir = stringdb_dir / "mmseqs_tmp"
             if tmp_dir.exists():
@@ -2673,7 +2851,28 @@ def main() -> None:
         "--min_seq_id",
         type=float,
         default=0.5,
-        help="STRING-DB: MMseqs2 cascaded-cluster sequence identity threshold (default 0.5)",
+        help="STRING-DB: MMseqs2 cascaded-cluster sequence identity threshold for "
+        "*internal* redundancy reduction (default 0.5)",
+    )
+    parser.add_argument(
+        "--decontam_min_seq_id",
+        type=float,
+        default=0.4,
+        help="Identity cutoff for removing training sequences similar to the benchmark "
+        "test split, at 80%% coverage of the test sequence (default 0.4). "
+        "Applies to stringdb (vs Bernett PPI test) and afdb/pfam (vs remote-homology test).",
+    )
+    parser.add_argument(
+        "--no_decontaminate",
+        action="store_true",
+        help="Skip benchmark test-set decontamination for afdb/pfam (not recommended).",
+    )
+    parser.add_argument(
+        "--mmseqs_gpu",
+        action="store_true",
+        help="Use the MMseqs2 GPU prefilter for the decontamination search. Only worth it "
+        "for large target databases; with a few thousand test sequences the CPU path "
+        "(-s 7.5, many threads) is faster.",
     )
     parser.add_argument(
         "--max_rows",
@@ -2812,9 +3011,19 @@ def main() -> None:
     if args.dataset == "nvidia":
         dp.prep_nvidia(args.limit_gb)
     elif args.dataset == "pfam":
-        dp.prep_pfam_full(fast=args.fast)
+        dp.prep_pfam_full(
+            fast=args.fast,
+            decontaminate=not args.no_decontaminate,
+            decontam_min_seq_id=args.decontam_min_seq_id,
+            mmseqs_gpu=args.mmseqs_gpu,
+        )
     elif args.dataset == "afdb":
-        dp.prep_afdb(args.limit_gb)
+        dp.prep_afdb(
+            args.limit_gb,
+            decontaminate=not args.no_decontaminate,
+            decontam_min_seq_id=args.decontam_min_seq_id,
+            mmseqs_gpu=args.mmseqs_gpu,
+        )
     elif args.dataset == "stringdb":
         dp.prep_stringdb(
             min_seq_id=args.min_seq_id,
@@ -2823,6 +3032,8 @@ def main() -> None:
             min_seq_len=args.min_seq_len,
             max_seq_len=args.max_seq_len,
             cleanup_mode=args.stringdb_cleanup,
+            decontam_min_seq_id=args.decontam_min_seq_id,
+            mmseqs_gpu=args.mmseqs_gpu,
         )
     elif args.dataset == "dms":
         dp.prep_dms(

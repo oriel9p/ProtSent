@@ -193,15 +193,19 @@ from sentence_transformers import (
     SentenceTransformer,
     SentenceTransformerTrainer,
     SentenceTransformerTrainingArguments,
-    losses,
-    models,
 )
-from sentence_transformers.data_collator import SentenceTransformerDataCollator
+from sentence_transformers.sentence_transformer import losses
+from sentence_transformers.sentence_transformer import modules as models
+from sentence_transformers.sentence_transformer.data_collator import (
+    SentenceTransformerDataCollator,
+)
 
 try:
-    from sentence_transformers.training_args import BatchSamplers
+    from sentence_transformers.base.sampler import DefaultBatchSampler
+    from sentence_transformers.sentence_transformer.training_args import BatchSamplers
 except ImportError:
     BatchSamplers: Optional[Any] = None
+    DefaultBatchSampler = object
 from transformers import (
     AutoModel,
     AutoModelForMaskedLM,
@@ -212,6 +216,8 @@ from transformers import (
 
 # tempfile used only for ESMplusplus tokenizer conversion
 import tempfile
+from functools import partial
+from torch.utils.data import BatchSampler
 
 from model_utils import (
     AMPLIFYWrapper,
@@ -227,6 +233,7 @@ from model_utils import (
     get_torch_compile_settings,
     uses_hf_esm_rotary_embeddings,
 )
+from gor_loss import LossWithGOR
 from static_guide import DEFAULT_STATIC_GUIDE_DIR, load_static_guide_model
 
 logging.basicConfig(
@@ -240,6 +247,106 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 _TRACEBACK_SIGNAL_HANDLE: Any | None = None
 
 apply_esmplusplus_compat_patch()
+
+
+def _pair_length(max_seq_length: int, *seqs: str | None) -> int:
+    return min(max((len(seq or "") for seq in seqs), default=0), max_seq_length)
+
+
+class LengthBucketBatchSampler(DefaultBatchSampler):
+    """Shuffle examples within clipped-length buckets before forming batches."""
+
+    def __init__(
+        self,
+        dataset: Dataset,
+        batch_size: int,
+        drop_last: bool,
+        valid_label_columns: list[str] | None = None,
+        generator: torch.Generator | None = None,
+        seed: int = 0,
+        bucket_size: int = 64,
+        length_column: str = "label",
+    ) -> None:
+        BatchSampler.__init__(self, dataset, batch_size=batch_size, drop_last=drop_last)
+        self.valid_label_columns = valid_label_columns
+        self.generator = generator
+        self.seed = seed
+        self.epoch = 0
+        self.bucket_size = max(1, int(bucket_size))
+        self.length_column = length_column
+        if length_column not in dataset.column_names:
+            raise ValueError(
+                f"LengthBucketBatchSampler requires a '{length_column}' column"
+            )
+
+        # Fetch the entire column at once as a numpy array using C/Arrow optimizations,
+        # which is 10000x faster than iterating ds[col] in python loops.
+        import numpy as np
+        
+        lengths_arr = None
+        if hasattr(dataset, "_indices") and dataset._indices is not None:
+            try:
+                indices = dataset._indices.column(0).to_numpy()
+                physical_lengths = dataset.data.column(length_column).to_numpy()
+                lengths_arr = physical_lengths[indices]
+            except Exception as e:
+                logger.warning(f"Could not use NumPy fast path for index mapping, falling back: {e}")
+        
+        if lengths_arr is None:
+            try:
+                lengths_arr = dataset.data.column(length_column).to_numpy()
+            except Exception:
+                try:
+                    lengths_arr = dataset.select_columns([length_column]).to_pandas()[length_column].values
+                except Exception as e:
+                    raise ValueError(f"Could not retrieve length column '{length_column}' from dataset: {e}")
+
+        if len(lengths_arr) == 0:
+            buckets = {}
+        else:
+            buckets_np = lengths_arr // self.bucket_size
+            sorted_indices = np.argsort(buckets_np)
+            sorted_buckets = buckets_np[sorted_indices]
+            unique_buckets, split_indices = np.unique(sorted_buckets, return_index=True)
+            split_arrays = np.split(sorted_indices, split_indices[1:])
+            # Keep as numpy arrays directly instead of converting to python list
+            buckets = {
+                int(b): idxs
+                for b, idxs in zip(unique_buckets, split_arrays)
+            }
+        self.buckets = buckets
+        self._len = 0
+        for indices in buckets.values():
+            full, remainder = divmod(len(indices), batch_size)
+            self._len += full + (0 if drop_last or remainder == 0 else 1)
+
+    def set_epoch(self, epoch: int) -> None:
+        self.epoch = epoch
+
+    def __iter__(self):
+        import numpy as np
+        rng = np.random.default_rng(self.seed + self.epoch)
+        batches: list[list[int]] = []
+        for indices in self.buckets.values():
+            shuffled = indices.copy()
+            rng.shuffle(shuffled)
+            
+            num_batches = len(shuffled) // self.batch_size
+            if num_batches > 0:
+                complete_part = shuffled[:num_batches * self.batch_size]
+                batches.extend(
+                    complete_part.reshape(num_batches, self.batch_size).tolist()
+                )
+            if not self.drop_last and len(shuffled) % self.batch_size != 0:
+                remainder_batch = shuffled[num_batches * self.batch_size:].tolist()
+                batches.append(remainder_batch)
+                
+        # Now shuffle the batches order
+        rng.shuffle(batches)
+        yield from batches
+
+    def __len__(self) -> int:
+        return self._len
 
 
 def _register_signal_tracebacks(output_dir: str, local_rank: int) -> None:
@@ -375,10 +482,11 @@ def _compile_sentence_transformer_backbone(model: SentenceTransformer) -> bool:
         return False
 
     first_module = list(model._modules.values())[0]
-    backbone = getattr(first_module, "auto_model", None)
+    backbone_attr = "model" if hasattr(first_module, "model") else "auto_model"
+    backbone = getattr(first_module, backbone_attr, None)
     if backbone is None:
         logger.warning(
-            "Skipping torch.compile: first SentenceTransformer module has no auto_model"
+            "Skipping torch.compile: first SentenceTransformer module has no model/auto_model"
         )
         return False
 
@@ -402,7 +510,7 @@ def _compile_sentence_transformer_backbone(model: SentenceTransformer) -> bool:
         )
 
     try:
-        first_module.auto_model = torch.compile(backbone, **compile_kwargs)
+        setattr(first_module, backbone_attr, torch.compile(backbone, **compile_kwargs))
     except Exception as e:
         logger.warning(
             "torch.compile failed (backend=%s, dynamic=%s, mode=%s): %s",
@@ -439,6 +547,104 @@ def _ensure_tokenizer_vocab_attr(st_model: SentenceTransformer) -> None:
             logger.info("   🔧 Added tokenizer.vocab compatibility shim")
         except Exception as exc:
             logger.warning("   ⚠️ Could not attach tokenizer.vocab shim: %s", exc)
+
+
+def _patch_cached_gist_guide_preprocess(st_model: SentenceTransformer) -> None:
+    """Drop ST 5.6 non-tensor preprocess metadata before CachedGIST moves tensors.
+
+    sentence-transformers 5.6 may return fields such as ``modality`` from
+    ``SentenceTransformer.preprocess``. ``CachedGISTEmbedLoss`` retokenizes with
+    the guide model and then blindly calls ``.to(device)`` on every returned
+    value, so string metadata crashes the cached GIST path. The transformer
+    module defaults missing modality to text, so filtering non-tensors is safe
+    for protein text guides.
+    """
+    if getattr(st_model, "_protsent_cached_gist_preprocess_patch", False):
+        return
+
+    original_preprocess = st_model.preprocess
+
+    def preprocess_without_metadata(*args, **kwargs):
+        features = original_preprocess(*args, **kwargs)
+        if isinstance(features, dict):
+            return {
+                key: value for key, value in features.items() if isinstance(value, torch.Tensor)
+            }
+        return features
+
+    st_model.preprocess = preprocess_without_metadata
+    st_model._protsent_cached_gist_preprocess_patch = True
+
+
+def _patch_cached_gist_embed_minibatch(loss_obj: nn.Module) -> None:
+    """Allow CachedGISTEmbedLoss to retokenize ST 5.6 preprocess metadata.
+
+    In sentence-transformers 5.6, ``SentenceTransformer.preprocess`` includes
+    non-tensor fields such as ``modality``. ``CachedGISTEmbedLoss`` retokenizes
+    with the guide model and then applies ``.to(self.guide.device)`` to every
+    field, which crashes on strings. Patch the loss instance rather than
+    site-packages so normal environments can keep using upstream behavior.
+    """
+    if getattr(loss_obj, "_protsent_cached_gist_embed_patch", False):
+        return
+
+    try:
+        from contextlib import nullcontext
+        from types import MethodType
+
+        from sentence_transformers.sentence_transformer.losses.cached_gist_embed import (
+            RandContext,
+            _create_minibatch,
+        )
+    except Exception as exc:
+        logger.warning("Could not patch CachedGISTEmbedLoss metadata handling: %s", exc)
+        return
+
+    def embed_minibatch(
+        self,
+        sentence_feature: dict[str, torch.Tensor],
+        begin: int,
+        end: int,
+        with_grad: bool,
+        copy_random_state: bool,
+        random_state=None,
+    ):
+        grad_context = nullcontext if with_grad else torch.no_grad
+        random_state_context = nullcontext() if random_state is None else random_state
+        sentence_feature_minibatch = _create_minibatch(sentence_feature, begin, end)
+        with random_state_context:
+            with grad_context():
+                if copy_random_state:
+                    random_state = RandContext(
+                        *[
+                            value
+                            for value in sentence_feature_minibatch.values()
+                            if isinstance(value, torch.Tensor)
+                        ]
+                    )
+                else:
+                    random_state = None
+                reps = self.model(sentence_feature_minibatch)["sentence_embedding"]
+            with torch.no_grad():
+                guide_features = sentence_feature_minibatch
+                if self.must_retokenize:
+                    decoded = self.tokenizer.batch_decode(
+                        sentence_feature_minibatch["input_ids"],
+                        skip_special_tokens=True,
+                    )
+                    guide_features = self.guide.preprocess(decoded)
+                guide_features = {
+                    key: value.to(self.guide.device)
+                    if isinstance(value, torch.Tensor)
+                    else value
+                    for key, value in guide_features.items()
+                }
+                guide_reps = self.guide(guide_features)["sentence_embedding"]
+
+        return reps, guide_reps, random_state
+
+    loss_obj.embed_minibatch = MethodType(embed_minibatch, loss_obj)
+    loss_obj._protsent_cached_gist_embed_patch = True
 
 
 def _load_gist_guide_model(args: argparse.Namespace) -> SentenceTransformer:
@@ -533,6 +739,39 @@ def _build_pooling_module(
     raise ValueError(f"Unsupported pooling_mode: {pooling_mode}")
 
 
+def _attach_backbone(word_embedding_model, hf_model, tokenizer) -> None:
+    """Swap the backbone and tokenizer into a SentenceTransformers Transformer.
+
+    These modules are built from a small stand-in checkpoint and then have the
+    real model grafted in. sentence-transformers >=5 turned both ``auto_model``
+    and ``tokenizer`` into read-only properties backed by ``.model`` and
+    ``.processor``.
+
+    ``auto_model`` is the dangerous one: assigning to it does NOT raise, because
+    ``nn.Module.__setattr__`` diverts any Module value into ``self._modules``,
+    while every *read* still goes through the property and returns the stand-in.
+    The result is a model that loads, encodes, and trains — as the 8M stand-in,
+    at its hidden size, silently. Assign to the backing attributes instead, and
+    verify the swap took.
+    """
+    if isinstance(getattr(type(word_embedding_model), "auto_model", None), property):
+        word_embedding_model.model = hf_model
+    else:
+        word_embedding_model.auto_model = hf_model
+
+    if isinstance(getattr(type(word_embedding_model), "tokenizer", None), property):
+        word_embedding_model.processor = cast(Any, tokenizer)
+    else:
+        word_embedding_model.tokenizer = cast(Any, tokenizer)
+
+    if word_embedding_model.auto_model is not hf_model:
+        raise RuntimeError(
+            "Failed to graft the backbone into the SentenceTransformers Transformer "
+            f"module: auto_model is still {type(word_embedding_model.auto_model).__name__}. "
+            "sentence-transformers has changed its module layout again."
+        )
+
+
 def load_model_for_training(
     model_name: str,
     max_seq_length: int = 512,
@@ -569,8 +808,7 @@ def load_model_for_training(
         word_embedding_model = models.Transformer(
             model_name_or_path=safe_name, max_seq_length=max_seq_length
         )
-        word_embedding_model.auto_model = hf_model
-        word_embedding_model.tokenizer = cast(Any, tokenizer)
+        _attach_backbone(word_embedding_model, hf_model, tokenizer)
 
         pooling_model = _build_pooling_module(
             hidden_size,
@@ -588,8 +826,10 @@ def load_model_for_training(
 
         lm_model = from_pretrained_with_flash(AutoModelForMaskedLM, model_name)
 
-        if hasattr(lm_model, "attn_backend"):
-            lm_model.attn_backend = "sdpa"
+        # Honour PROTSENT_ESMPLUSPLUS_ATTN_BACKEND here too (defaults to
+        # kernels_flash). Hardcoding "sdpa" silently disabled flash attention for
+        # these Synthyra models regardless of the environment variable.
+        force_sdpa_backend(lm_model)
 
         if hasattr(lm_model, "tokenizer") and lm_model.tokenizer is not None:
             tokenizer = lm_model.tokenizer
@@ -607,8 +847,7 @@ def load_model_for_training(
         word_embedding_model = models.Transformer(
             model_name_or_path=safe_name, max_seq_length=max_seq_length
         )
-        word_embedding_model.auto_model = hf_model
-        word_embedding_model.tokenizer = cast(Any, tokenizer)
+        _attach_backbone(word_embedding_model, hf_model, tokenizer)
 
         pooling_model = _build_pooling_module(
             hidden_size,
@@ -629,9 +868,10 @@ def load_model_for_training(
         # DPLM2 uses AutoModel (not AutoModelForMaskedLM)
         lm_model = from_pretrained_with_flash(AutoModel, model_name)
 
-        if hasattr(lm_model, "attn_backend"):
-            lm_model.attn_backend = "sdpa"
-            logger.info("   ✅ Set DPLM2 attention backend to SDPA")
+        # Honour PROTSENT_ESMPLUSPLUS_ATTN_BACKEND here too (defaults to
+        # kernels_flash). Hardcoding "sdpa" silently disabled flash attention for
+        # these Synthyra models regardless of the environment variable.
+        force_sdpa_backend(lm_model)
 
         if hasattr(lm_model, "tokenizer") and lm_model.tokenizer is not None:
             tokenizer = lm_model.tokenizer
@@ -649,8 +889,7 @@ def load_model_for_training(
         word_embedding_model = models.Transformer(
             model_name_or_path=safe_name, max_seq_length=max_seq_length
         )
-        word_embedding_model.auto_model = hf_model
-        word_embedding_model.tokenizer = cast(Any, tokenizer)
+        _attach_backbone(word_embedding_model, hf_model, tokenizer)
 
         pooling_model = _build_pooling_module(
             hidden_size,
@@ -668,9 +907,10 @@ def load_model_for_training(
 
         lm_model = from_pretrained_with_flash(AutoModelForMaskedLM, model_name)
 
-        if hasattr(lm_model, "attn_backend"):
-            lm_model.attn_backend = "sdpa"
-            logger.info("   ✅ Set Profluent-E1 attention backend to SDPA")
+        # Honour PROTSENT_ESMPLUSPLUS_ATTN_BACKEND here too (defaults to
+        # kernels_flash). Hardcoding "sdpa" silently disabled flash attention for
+        # these Synthyra models regardless of the environment variable.
+        force_sdpa_backend(lm_model)
 
         # Profluent-E1 may have model.tokenizer or model.prep_tokens
         if hasattr(lm_model, "tokenizer") and lm_model.tokenizer is not None:
@@ -690,8 +930,7 @@ def load_model_for_training(
         word_embedding_model = models.Transformer(
             model_name_or_path=safe_name, max_seq_length=max_seq_length
         )
-        word_embedding_model.auto_model = hf_model
-        word_embedding_model.tokenizer = cast(Any, tokenizer)
+        _attach_backbone(word_embedding_model, hf_model, tokenizer)
 
         pooling_model = _build_pooling_module(
             hidden_size,
@@ -736,8 +975,12 @@ def load_model_for_training(
         word_embedding_model = models.Transformer(
             model_name_or_path=safe_name, max_seq_length=max_seq_length
         )
-        word_embedding_model.auto_model = hf_model
-        word_embedding_model.tokenizer = tokenizer
+        # sentence-transformers >=5.4 renamed Transformer.auto_model -> .model (and
+        # forward() dispatches on self.model), and made .tokenizer a read-only
+        # property backed by .processor. Assign the new attributes so the ESM-C
+        # module is actually used (the old names silently no-op / raise).
+        word_embedding_model.model = hf_model
+        word_embedding_model.processor = tokenizer
 
         pooling_model = _build_pooling_module(
             hidden_size,
@@ -990,8 +1233,11 @@ def _resolve_dms_train_batch_size(
 ) -> int:
     """Resolve per-device training batch size when DMS CoSENT is enabled.
 
-    Uses ``dms_batch_size`` as the primary target, with a fallback of
-    ``mnrl_mini_batch_size // 2`` when ``dms_batch_size <= 0``.
+    Uses ``dms_batch_size`` as the primary target. The training CLI resolves
+    ``--dms_batch_size 0`` to ``--batch_size`` before calling this helper so
+    non-cached contrastive and CoSENT datasets share the intended large batch.
+    Direct helper calls retain the historical ``mnrl_mini_batch_size // 2``
+    fallback when ``dms_batch_size <= 0``.
 
     For DDP + round-robin sampling, pick the smallest batch size >= target that
     yields a global round-robin batch count divisible by ``world_size``.
@@ -1414,6 +1660,8 @@ def _load_ppi_pair_dataset(
     file_paths: List[str],
     max_pairs: int = 0,
     sample_seed: int = 40,
+    length_labels: bool = False,
+    max_seq_length: int = 1024,
 ) -> Dataset:
     """Load a PPI parquet directly as a sentence-pair Dataset.
 
@@ -1437,6 +1685,16 @@ def _load_ppi_pair_dataset(
         if extra:
             ds = ds.remove_columns(extra)
         ds = ds.rename_columns({"seq1": "sentence_0", "seq2": "sentence_1"})
+        if length_labels:
+            ds = ds.map(
+                lambda batch: {
+                    "label": [
+                        _pair_length(max_seq_length, a, b)
+                        for a, b in zip(batch["sentence_0"], batch["sentence_1"])
+                    ]
+                },
+                batched=True,
+            )
         logger.info(
             "🔗  Loaded %d PPI pairs from %d file(s) (direct parquet)",
             len(ds),
@@ -1489,14 +1747,19 @@ def _load_ppi_pair_dataset(
             s0 = sampled_row_group.column("seq1").to_pylist()
             s1 = sampled_row_group.column("seq2").to_pylist()
             for a, b in zip(s0, s1):
-                yield {"sentence_0": a, "sentence_1": b}
+                row = {"sentence_0": a, "sentence_1": b}
+                if length_labels:
+                    row["label"] = _pair_length(max_seq_length, a, b)
+                yield row
                 total += 1
+
+    feat_dict = {"sentence_0": Value("string"), "sentence_1": Value("string")}
+    if length_labels:
+        feat_dict["label"] = Value("int64")
 
     ds = Dataset.from_generator(
         _gen,
-        features=Features(
-            {"sentence_0": Value("string"), "sentence_1": Value("string")}
-        ),
+        features=Features(feat_dict),
     )
     logger.info(
         "🔗  Loaded %d PPI pairs from %d file(s) (row-group sample, cap=%d, seed=%d)",
@@ -1515,6 +1778,8 @@ def _build_pair_dataset(
     max_pairs_per_cluster: int,
     max_pairs: int,
     hard_negatives: bool = False,
+    length_labels: bool = False,
+    max_seq_length: int = 1024,
 ) -> Dataset:
     """Build a pair Dataset using a generator over group-sorted data.
 
@@ -1587,6 +1852,13 @@ def _build_pair_dataset(
                 }
                 if has_neg:
                     row["sentence_2"] = buf_hard_neg[a_i] or ""
+                if length_labels:
+                    row["label"] = _pair_length(
+                        max_seq_length,
+                        buf_seqs[a_i],
+                        buf_seqs[b_i],
+                        row.get("sentence_2"),
+                    )
                 yield row
                 total_pairs += 1
                 if max_pairs > 0 and total_pairs >= max_pairs:
@@ -1623,6 +1895,8 @@ def _build_pair_dataset(
     }
     if has_neg:
         feat_dict["sentence_2"] = Value("string")
+    if length_labels:
+        feat_dict["label"] = Value("int64")
 
     pair_ds = Dataset.from_generator(
         _pair_gen,
@@ -1864,6 +2138,15 @@ def run_training(args):
         loss_mode,
         str(batch_sampler) if batch_sampler is not None else "none",
     )
+    if getattr(args, "length_bucketed_batches", False):
+        if batch_sampler is not None and batch_sampler != BatchSamplers.BATCH_SAMPLER:
+            raise ValueError(
+                "--length_bucketed_batches is only compatible with the default batch sampler"
+            )
+        logger.info(
+            "🪣 Length-bucketed batches enabled (bucket_size=%d)",
+            args.length_bucket_size,
+        )
 
     if loss_mode in {"cached_mnrl", "cached_gist"}:
         cache_splits = (args.batch_size + args.mnrl_mini_batch_size - 1) // max(
@@ -1984,6 +2267,18 @@ def run_training(args):
         progress_min_interval,
     )
 
+    # gradient_checkpointing adds a non-picklable input-require-grads hook to the
+    # model; under the 'spawn' start method (forced on Python 3.14) the model-bound
+    # DataLoader collate_fn then fails to pickle to worker processes. Fall back to
+    # in-process data loading when checkpointing is on.
+    _dl_workers = args.dataloader_num_workers
+    if getattr(args, "gradient_checkpointing", False) and _dl_workers > 0:
+        logger.warning(
+            "⚠️  gradient_checkpointing on: forcing dataloader_num_workers=0 "
+            "(spawn cannot pickle the model-bound collate with the checkpoint hook)."
+        )
+        _dl_workers = 0
+
     training_kwargs: dict[str, Any] = {
         "output_dir": output_dir,
         "run_name": args.run_name,
@@ -1996,37 +2291,51 @@ def run_training(args):
         "lr_scheduler_type": args.lr_scheduler_type,
         "bf16": True,
         "tf32": True,
+        "gradient_checkpointing": bool(getattr(args, "gradient_checkpointing", False)),
+        "gradient_checkpointing_kwargs": {"use_reentrant": False}
+        if getattr(args, "gradient_checkpointing", False)
+        else None,
         "logging_steps": 2 if args.fast else 20,
         "save_strategy": "steps",
         "save_steps": save_steps,
         "warmup_steps": 2 if args.fast else args.warmup_steps,
-        "save_total_limit": 1,
+        "save_total_limit": args.save_total_limit,
         "gradient_accumulation_steps": grad_accum,
         "ddp_timeout": 1800,
         "ddp_bucket_cap_mb": 50,
         "dataloader_drop_last": True,
         "ignore_data_skip": True,
         "dataloader_pin_memory": True,
-        "dataloader_prefetch_factor": 2 if args.dataloader_num_workers > 0 else None,
+        "dataloader_prefetch_factor": 2 if _dl_workers > 0 else None,
         "auto_find_batch_size": False,
         "report_to": report_to_arg,
-        "dataloader_num_workers": args.dataloader_num_workers,
-        "dataloader_persistent_workers": args.dataloader_num_workers > 0,
+        "dataloader_num_workers": _dl_workers,
+        "dataloader_persistent_workers": _dl_workers > 0,
         "disable_tqdm": not show_progress_bars,
     }
 
-    resolved_primary_loss = (
-        getattr(args, "multi_mnrl_loss", "mnrl")
-        if getattr(args, "multi_primary_loss", "auto") == "auto"
-        else getattr(args, "multi_primary_loss", "auto")
-    )
+    if getattr(args, "length_bucketed_batches", False):
+        training_kwargs["batch_sampler"] = partial(
+            LengthBucketBatchSampler,
+            bucket_size=args.length_bucket_size,
+            length_column="label",
+        )
+
     # Multi-GPU DDP: use gather_across_devices=True for cross-device negatives.
     # Both CachedMNRL and MNRL support DDP natively via this parameter.
-    _gather_across_devices = world_size > 1
+    _gather_across_devices = world_size > 1 and not getattr(
+        args, "no_gather_across_devices", False
+    )
     if _gather_across_devices:
         logger.info(
             "🌐 DDP (world_size=%d): enabling gather_across_devices for loss "
             "functions (cross-device in-batch negatives)",
+            world_size,
+        )
+    elif world_size > 1:
+        logger.info(
+            "🌐 DDP (world_size=%d): gather_across_devices disabled; using "
+            "per-rank in-batch negatives only",
             world_size,
         )
 
@@ -2065,7 +2374,9 @@ def run_training(args):
     multi_dataset_sampler = None
     if len(files) > 1 and args.multi_dataset_sampler != "none":
         try:
-            from sentence_transformers.training_args import MultiDatasetBatchSamplers
+            from sentence_transformers.sentence_transformer.training_args import (
+                MultiDatasetBatchSamplers,
+            )
 
             sampler_map = {
                 "round_robin": "ROUND_ROBIN",
@@ -2127,6 +2438,23 @@ def run_training(args):
             }
         return losses.MatryoshkaLoss(model, loss_obj, matryoshka_dims=dims)
 
+    gor_weight = float(getattr(args, "gor_weight", 0.0) or 0.0)
+    if gor_weight < 0:
+        raise ValueError("--gor_weight must be non-negative")
+    if gor_weight > 0:
+        logger.info("🧭 GOR enabled for contrastive losses (weight=%.4f)", gor_weight)
+
+    def _apply_gor(loss_obj: nn.Module) -> nn.Module:
+        if gor_weight <= 0:
+            return loss_obj
+        mini_batch_size = getattr(args, "mnrl_mini_batch_size", 32)
+        return LossWithGOR(
+            model,
+            loss_obj,
+            gor_weight=gor_weight,
+            mini_batch_size=mini_batch_size,
+        )
+
     # ── Build datasets & loss, then train ────────────────────────────────
     if loss_mode in {"mnrl", "cached_mnrl", "cached_gist"}:
         per_file_max = args.max_map_rows
@@ -2159,6 +2487,8 @@ def run_training(args):
                     max_pairs_per_cluster=args.max_pairs_per_cluster,
                     max_pairs=per_file_max,
                     hard_negatives=args.hard_negatives,
+                    length_labels=args.length_bucketed_batches,
+                    max_seq_length=args.max_seq_length,
                 )
                 if args.pair_dataset_shuffle:
                     ds = ds.shuffle(seed=args.pair_dataset_shuffle_seed)
@@ -2170,6 +2500,8 @@ def run_training(args):
                     file_paths=[f],
                     max_pairs=per_file_max,
                     sample_seed=args.pair_dataset_shuffle_seed,
+                    length_labels=args.length_bucketed_batches,
+                    max_seq_length=args.max_seq_length,
                 )
                 if args.pair_dataset_shuffle:
                     ds = ds.shuffle(seed=args.pair_dataset_shuffle_seed)
@@ -2181,6 +2513,8 @@ def run_training(args):
                     file_paths=ppi_files,
                     max_pairs=args.max_map_rows,
                     sample_seed=args.pair_dataset_shuffle_seed,
+                    length_labels=args.length_bucketed_batches,
+                    max_seq_length=args.max_seq_length,
                 )
             else:
                 train_dataset = _build_pair_dataset(
@@ -2190,6 +2524,8 @@ def run_training(args):
                     max_pairs_per_cluster=args.max_pairs_per_cluster,
                     max_pairs=args.max_map_rows,
                     hard_negatives=args.hard_negatives,
+                    length_labels=args.length_bucketed_batches,
+                    max_seq_length=args.max_seq_length,
                 )
             if args.pair_dataset_shuffle:
                 train_dataset = train_dataset.shuffle(
@@ -2250,6 +2586,7 @@ def run_training(args):
                 gather_across_devices=_gather_across_devices,
             )
 
+        loss = _apply_gor(loss)
         loss = _apply_matryoshka(loss)
 
         trainer = SentenceTransformerTrainer(
@@ -2349,15 +2686,23 @@ def run_training(args):
         # Multi-task: selectable primary loss + optional DMS CoSENT dataset.
         from sentence_transformers import util
 
-        per_file_max = args.max_map_rows
-        if len(files) > 1 and per_file_max > 0:
-            per_file_max = max(1, per_file_max // len(files))
-
         ppi_files = [f for f in files if _is_ppi_parquet(f)]
         cluster_files = [f for f in files if not _is_ppi_parquet(f)]
 
-        train_dataset: dict[str, Dataset] = {}
-        loss_dict: dict[str, nn.Module] = {}
+        def _pair_cap_for_file(file_path: str) -> int:
+            """Per-file pair budget. 0 = no limit, matching --max_map_rows' help text.
+
+            This previously returned the source row count, which is NOT "no limit":
+            because --max_pairs_per_cluster emits C(min(n, k), 2) pairs per cluster
+            (~55 pairs per source row at k=500), the budget was exhausted inside the
+            first ~2% of a group-sorted corpus, so training only ever saw the
+            lowest-sorted clans/clusters. Control the volume with
+            --max_pairs_per_cluster (uniform across the corpus) or an explicit
+            --max_map_rows, not with an accidental prefix truncation.
+            """
+            if args.max_map_rows > 0:
+                return max(1, args.max_map_rows // max(1, len(files)))
+            return 0
 
         configured_primary = getattr(args, "multi_primary_loss", "auto")
         legacy_mnrl = getattr(args, "multi_mnrl_loss", "mnrl")
@@ -2395,6 +2740,8 @@ def run_training(args):
             guide_model.requires_grad_(False)
             _ensure_tokenizer_vocab_attr(model)
             _ensure_tokenizer_vocab_attr(guide_model)
+            if primary_loss == "cached_gist":
+                _patch_cached_gist_guide_preprocess(guide_model)
             logger.info(
                 "   ✅ Multi-task guide model loaded and frozen for %s",
                 primary_loss,
@@ -2402,23 +2749,27 @@ def run_training(args):
 
         def _build_pair_primary_loss() -> nn.Module:
             if primary_loss == "cached_mnrl":
-                return losses.CachedMultipleNegativesRankingLoss(
-                    model,
-                    scale=mnrl_scale,
-                    similarity_fct=similarity_fct,
-                    mini_batch_size=args.mnrl_mini_batch_size,
-                    gather_across_devices=_gather_across_devices,
+                return _apply_gor(
+                    losses.CachedMultipleNegativesRankingLoss(
+                        model,
+                        scale=mnrl_scale,
+                        similarity_fct=similarity_fct,
+                        mini_batch_size=args.mnrl_mini_batch_size,
+                        gather_across_devices=_gather_across_devices,
+                    )
                 )
             if primary_loss == "mnrl":
-                return losses.MultipleNegativesRankingLoss(
-                    model,
-                    scale=mnrl_scale,
-                    similarity_fct=similarity_fct,
-                    gather_across_devices=_gather_across_devices,
+                return _apply_gor(
+                    losses.MultipleNegativesRankingLoss(
+                        model,
+                        scale=mnrl_scale,
+                        similarity_fct=similarity_fct,
+                        gather_across_devices=_gather_across_devices,
+                    )
                 )
             if primary_loss == "cached_gist":
                 assert guide_model is not None
-                return losses.CachedGISTEmbedLoss(
+                cached_gist_loss = losses.CachedGISTEmbedLoss(
                     model,
                     guide=guide_model,
                     temperature=gist_temperature,
@@ -2429,138 +2780,164 @@ def run_training(args):
                     contrast_positives=args.gist_contrast_positives,
                     gather_across_devices=_gather_across_devices,
                 )
+                _patch_cached_gist_embed_minibatch(cached_gist_loss)
+                return _apply_gor(cached_gist_loss)
             if primary_loss == "gist":
                 assert guide_model is not None
-                return losses.GISTEmbedLoss(
-                    model,
-                    guide=guide_model,
-                    temperature=gist_temperature,
-                    margin_strategy=args.gist_margin_strategy,
-                    margin=args.gist_margin,
-                    contrast_anchors=True,
-                    contrast_positives=args.gist_contrast_positives,
-                    gather_across_devices=_gather_across_devices,
+                return _apply_gor(
+                    losses.GISTEmbedLoss(
+                        model,
+                        guide=guide_model,
+                        temperature=gist_temperature,
+                        margin_strategy=args.gist_margin_strategy,
+                        margin=args.gist_margin,
+                        contrast_anchors=True,
+                        contrast_positives=args.gist_contrast_positives,
+                        gather_across_devices=_gather_across_devices,
+                    )
                 )
             raise ValueError(f"Pair primary loss is not supported for {primary_loss}")
 
-        if primary_loss == "triplet":
-            if ppi_files:
-                logger.warning(
-                    "⚠️ Skipping %d PPI file(s) for triplet multi mode (pair-only schema)",
-                    len(ppi_files),
-                )
+        def _execute_dataset_and_loss_building():
+            local_train_ds: dict[str, Dataset] = {}
+            local_loss_dict: dict[str, nn.Module] = {}
 
-            for f in cluster_files:
-                name = os.path.splitext(os.path.basename(f))[0]
-                file_family_col = (
-                    family_col
-                    if family_col is not None
-                    else _best_family_col_for_file(f)
-                )
-                ds = _build_label_dataset(
-                    file_paths=[f],
-                    seq_col=seq_col,
-                    family_col=file_family_col,
-                    max_rows=per_file_max,
-                    min_label_count=args.min_label_count,
-                    max_samples_per_label=args.triplet_max_samples_per_label,
-                    seed=args.seed,
-                )
-                train_dataset[name] = ds
-                loss_dict[name] = _build_triplet_loss(model, args)
-                logger.info(
-                    "📦 %s: %d labeled samples (Triplet)",
-                    name,
-                    len(ds),
-                )
-        else:
-            primary_label_map = {
-                "mnrl": "MNRL",
-                "cached_mnrl": "CachedMNRL",
-                "gist": "GIST",
-                "cached_gist": "CachedGIST",
-            }
-            primary_label = primary_label_map.get(primary_loss, primary_loss)
-
-            for f in cluster_files:
-                name = os.path.splitext(os.path.basename(f))[0]
-                ds = _build_pair_dataset(
-                    file_paths=[f],
-                    seq_col=seq_col,
-                    group_col=group_col,
-                    max_pairs_per_cluster=args.max_pairs_per_cluster,
-                    max_pairs=per_file_max,
-                    hard_negatives=args.hard_negatives,
-                )
-                if args.pair_dataset_shuffle:
-                    ds = ds.shuffle(seed=args.pair_dataset_shuffle_seed)
-                train_dataset[name] = ds
-                loss_dict[name] = _build_pair_primary_loss()
-                logger.info("📦 %s: %d pairs (%s)", name, len(ds), primary_label)
-
-            for f in ppi_files:
-                name = os.path.splitext(os.path.basename(f))[0]
-                ds = _load_ppi_pair_dataset(
-                    file_paths=[f],
-                    max_pairs=per_file_max,
-                    sample_seed=args.pair_dataset_shuffle_seed,
-                )
-                if args.pair_dataset_shuffle:
-                    ds = ds.shuffle(seed=args.pair_dataset_shuffle_seed)
-                train_dataset[name] = ds
-                loss_dict[name] = _build_pair_primary_loss()
-                logger.info("📦 %s: %d PPI pairs (%s)", name, len(ds), primary_label)
-
-        simcse_files_resolved = None
-        if args.simcse_files:
-            simcse_files_resolved = _expand_paths(args.simcse_files, data_dir="data")
-        if simcse_files_resolved:
             if primary_loss == "triplet":
-                logger.warning(
-                    "⚠️ SimCSE dataset skipped for multi_primary_loss=triplet"
-                )
-            else:
-                simcse_seq_col = seq_col
-                simcse_ds = _build_simcse_dataset(
-                    file_paths=simcse_files_resolved,
-                    seq_col=simcse_seq_col,
-                    max_rows=args.simcse_max_rows,
-                )
-                train_dataset["simcse"] = simcse_ds
-                loss_dict["simcse"] = _build_pair_primary_loss()
-                logger.info(
-                    "📦 simcse: %d self-pairs (%s, mini_bs=%d)",
-                    len(simcse_ds),
-                    primary_loss,
-                    args.mnrl_mini_batch_size,
-                )
+                if ppi_files:
+                    logger.warning(
+                        "⚠️ Skipping %d PPI file(s) for triplet multi mode (pair-only schema)",
+                        len(ppi_files),
+                    )
 
-        # DMS always contributes a CoSENT objective when provided.
-        if args.dms_file and os.path.exists(args.dms_file):
-            dms_ds = _load_dms_dataset(args.dms_file, max_rows=args.dms_max_rows)
-            train_dataset["dms_cosent"] = dms_ds
-            # Pass gather_across_devices to CoSENTLoss so that DDP collective
-            # operations stay symmetric with the MNRL losses.  If the installed
-            # sentence-transformers version doesn't support the kwarg, fall back
-            # to the plain constructor.
-            try:
-                loss_dict["dms_cosent"] = losses.CoSENTLoss(
-                    model,
-                    scale=mnrl_scale,
-                    gather_across_devices=_gather_across_devices,
+                for f in cluster_files:
+                    name = os.path.splitext(os.path.basename(f))[0]
+                    file_family_col = (
+                        family_col
+                        if family_col is not None
+                        else _best_family_col_for_file(f)
+                    )
+                    ds = _build_label_dataset(
+                        file_paths=[f],
+                        seq_col=seq_col,
+                        family_col=file_family_col,
+                        max_rows=per_file_max,
+                        min_label_count=args.min_label_count,
+                        max_samples_per_label=args.triplet_max_samples_per_label,
+                        seed=args.seed,
+                    )
+                    local_train_ds[name] = ds
+                    local_loss_dict[name] = _build_triplet_loss(model, args)
+                    logger.info(
+                        "📦 %s: %d labeled samples (Triplet)",
+                        name,
+                        len(ds),
+                    )
+            else:
+                primary_label_map = {
+                    "mnrl": "MNRL",
+                    "cached_mnrl": "CachedMNRL",
+                    "gist": "GIST",
+                    "cached_gist": "CachedGIST",
+                }
+                primary_label = primary_label_map.get(primary_loss, primary_loss)
+
+                for f in cluster_files:
+                    name = os.path.splitext(os.path.basename(f))[0]
+                    ds = _build_pair_dataset(
+                        file_paths=[f],
+                        seq_col=seq_col,
+                        group_col=group_col,
+                        max_pairs_per_cluster=args.max_pairs_per_cluster,
+                        max_pairs=_pair_cap_for_file(f),
+                        hard_negatives=args.hard_negatives,
+                        length_labels=args.length_bucketed_batches,
+                        max_seq_length=args.max_seq_length,
+                    )
+                    if args.pair_dataset_shuffle:
+                        ds = ds.shuffle(seed=args.pair_dataset_shuffle_seed)
+                    local_train_ds[name] = ds
+                    local_loss_dict[name] = _build_pair_primary_loss()
+                    logger.info("📦 %s: %d pairs (%s)", name, len(ds), primary_label)
+
+                for f in ppi_files:
+                    name = os.path.splitext(os.path.basename(f))[0]
+                    ds = _load_ppi_pair_dataset(
+                        file_paths=[f],
+                        max_pairs=_pair_cap_for_file(f),
+                        sample_seed=args.pair_dataset_shuffle_seed,
+                        length_labels=args.length_bucketed_batches,
+                        max_seq_length=args.max_seq_length,
+                    )
+                    if args.pair_dataset_shuffle:
+                        ds = ds.shuffle(seed=args.pair_dataset_shuffle_seed)
+                    local_train_ds[name] = ds
+                    local_loss_dict[name] = _build_pair_primary_loss()
+                    logger.info("📦 %s: %d PPI pairs (%s)", name, len(ds), primary_label)
+
+            simcse_files_resolved = None
+            if args.simcse_files:
+                simcse_files_resolved = _expand_paths(args.simcse_files, data_dir="data")
+            if simcse_files_resolved:
+                if primary_loss == "triplet":
+                    logger.warning(
+                        "⚠️ SimCSE dataset skipped for multi_primary_loss=triplet"
+                    )
+                else:
+                    simcse_seq_col = seq_col
+                    simcse_ds = _build_simcse_dataset(
+                        file_paths=simcse_files_resolved,
+                        seq_col=simcse_seq_col,
+                        max_rows=args.simcse_max_rows,
+                    )
+                    local_train_ds["simcse"] = simcse_ds
+                    local_loss_dict["simcse"] = _build_pair_primary_loss()
+                    logger.info(
+                        "📦 simcse: %d self-pairs (%s, mini_bs=%d)",
+                        len(simcse_ds),
+                        primary_loss,
+                        args.mnrl_mini_batch_size,
+                    )
+
+            # DMS always contributes a CoSENT objective when provided.
+            if args.dms_file and os.path.exists(args.dms_file):
+                dms_ds = _load_dms_dataset(args.dms_file, max_rows=args.dms_max_rows)
+                local_train_ds["dms_cosent"] = dms_ds
+                try:
+                    local_loss_dict["dms_cosent"] = losses.CoSENTLoss(
+                        model,
+                        scale=mnrl_scale,
+                        gather_across_devices=_gather_across_devices,
+                    )
+                except TypeError:
+                    local_loss_dict["dms_cosent"] = losses.CoSENTLoss(model, scale=mnrl_scale)
+                logger.info(
+                    "📦 dms_cosent: %d pairs (CoSENTLoss, target_bs=%d, scale=%.1f)",
+                    len(dms_ds),
+                    args.dms_batch_size,
+                    mnrl_scale,
                 )
-            except TypeError:
-                loss_dict["dms_cosent"] = losses.CoSENTLoss(
-                    model, scale=mnrl_scale
-                )
-            logger.info(
-                "📦 dms_cosent: %d pairs (CoSENTLoss, target_bs=%d, scale=%.1f)",
-                len(dms_ds),
-                args.dms_batch_size,
-                mnrl_scale,
-            )
-        elif args.dms_file:
-            logger.warning("⚠️ DMS file not found: %s (skipping)", args.dms_file)
+            elif args.dms_file:
+                logger.warning("⚠️ DMS file not found: %s (skipping)", args.dms_file)
+
+            return local_train_ds, local_loss_dict
+
+        train_dataset: dict[str, Dataset] = {}
+        loss_dict: dict[str, nn.Module] = {}
+
+        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+        is_ddp = world_size > 1 and torch.distributed.is_initialized()
+
+        if not is_ddp or local_rank == 0:
+            train_dataset, loss_dict = _execute_dataset_and_loss_building()
+            if is_ddp:
+                logger.info("✅ Rank 0 completed dataset preparation. Releasing other ranks...")
+                torch.distributed.barrier()
+        else:
+            logger.info("⏳ Other ranks waiting for rank 0 dataset preparation...")
+            torch.distributed.barrier()
+            logger.info("🚀 Rank 0 released. Proceeding to load cached datasets...")
+            train_dataset, loss_dict = _execute_dataset_and_loss_building()
+            logger.info("✅ Non-zero rank loaded datasets instantly from rank 0 cache!")
 
         if not train_dataset:
             raise ValueError("No datasets built for multi-task training.")
@@ -2601,7 +2978,9 @@ def run_training(args):
 
         # Multi-dataset sampler (respect CLI arg)
         try:
-            from sentence_transformers.training_args import MultiDatasetBatchSamplers
+            from sentence_transformers.sentence_transformer.training_args import (
+                MultiDatasetBatchSamplers,
+            )
 
             sampler_map = {
                 "round_robin": MultiDatasetBatchSamplers.ROUND_ROBIN,
@@ -2958,6 +3337,18 @@ if __name__ == "__main__":
         "proportional (samples by size), auto (picks round_robin), none (sequential interleaving)",
     )
     train_cmd.add_argument(
+        "--length_bucketed_batches",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Bucket pair batches by clipped sequence length to reduce padding waste.",
+    )
+    train_cmd.add_argument(
+        "--length_bucket_size",
+        type=int,
+        default=64,
+        help="Length bucket width used by --length_bucketed_batches.",
+    )
+    train_cmd.add_argument(
         "--max_map_rows",
         type=int,
         default=50_000_000,
@@ -2974,7 +3365,7 @@ if __name__ == "__main__":
         type=int,
         default=256,
         help="Mini-batch size for CachedMultipleNegativesRankingLoss / CachedGISTEmbedLoss. "
-        "In --loss_mode multi this is also used as the default per-device train batch size.",
+        "Ignored by non-cached MNRL/GIST except as a legacy DMS fallback in helper tests.",
     )
     train_cmd.add_argument(
         "--multi_mnrl_loss",
@@ -3048,8 +3439,30 @@ if __name__ == "__main__":
         "Default: False — recommended when many positives share the same family/label, "
         "as pushing them apart can hurt performance.",
     )
+    train_cmd.add_argument(
+        "--gor_weight",
+        type=float,
+        default=0.0,
+        help="Optional GlobalOrthogonalRegularizationLoss weight for contrastive losses "
+        "(requires sentence-transformers>=5.3.0). Use 0 to disable; start with 0.1.",
+    )
     train_cmd.add_argument("--max_files", type=int, default=0)
     train_cmd.add_argument("--max_pairs_per_cluster", type=int, default=30)
+    train_cmd.add_argument(
+        "--gradient_checkpointing",
+        action="store_true",
+        default=False,
+        help="Trade ~30%% step speed for ~10x less activation memory. Lets the "
+        "grad-enabled DMS/CoSENT step (the batch-size cap) hold larger batches at "
+        "1024 tokens. Drop the flag if the ESM++ wrapper lacks "
+        "gradient_checkpointing_enable.",
+    )
+    train_cmd.add_argument(
+        "--no_gather_across_devices",
+        action="store_true",
+        default=False,
+        help="Disable cross-device contrastive gather under DDP. Faster but fewer negatives per step.",
+    )
     train_cmd.add_argument(
         "--hard_negatives",
         action="store_true",
@@ -3090,6 +3503,12 @@ if __name__ == "__main__":
         type=int,
         default=200,
         help="Save checkpoint every N steps (default: 200)",
+    )
+    train_cmd.add_argument(
+        "--save_total_limit",
+        type=int,
+        default=1,
+        help="Number of checkpoints to keep (default: 1)",
     )
     train_cmd.add_argument(
         "--dataloader_num_workers",
@@ -3138,7 +3557,7 @@ if __name__ == "__main__":
         "--dms_batch_size",
         type=int,
         default=0,
-        help="Target per-device batch size when DMS CoSENT is enabled (0 = use mnrl_mini_batch_size).",
+        help="Target per-device batch size when DMS CoSENT is enabled (0 = inherit --batch_size).",
     )
     train_cmd.add_argument(
         "--mask_rate",

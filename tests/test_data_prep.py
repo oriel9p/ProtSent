@@ -4,6 +4,7 @@ These tests are offline and mock Hugging Face dataset loading.
 """
 
 import gzip
+import subprocess
 import sys
 from pathlib import Path
 from typing import cast
@@ -13,7 +14,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from data_prep import DataPrep, _load_afdb_foldseek_map_lazy, _resolve_pfam_hard_negative_spec
+from data_prep import (
+    DataPrep,
+    _download_file,
+    _load_afdb_foldseek_map_lazy,
+    _resolve_pfam_hard_negative_spec,
+)
 
 
 def _mock_load_dataset(repo_id: str, name: str, split: str) -> dict[str, list[object]]:
@@ -83,6 +89,24 @@ def test_load_afdb_foldseek_map_lazy_filters_flags(tmp_path: Path) -> None:
     )
     assert flag12_df.shape[0] == 3
     assert set(flag12_df["entry_id"].to_list()) == {"entryA", "entryB", "entryC"}
+
+
+def test_download_file_replaces_zero_byte_placeholder(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dest_path = tmp_path / "download.bin"
+    dest_path.write_bytes(b"")
+
+    def fake_run(cmd, **kwargs):
+        output_path = Path(cmd[cmd.index("-O") + 1])
+        output_path.write_bytes(b"payload")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr("data_prep.subprocess.run", fake_run)
+
+    _download_file("https://example.test/download.bin", dest_path)
+
+    assert dest_path.read_bytes() == b"payload"
 
 
 def test_prep_dms_deduplicates_known_overlap_prefixes_by_default(
