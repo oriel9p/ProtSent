@@ -13,6 +13,7 @@ set -uo pipefail
 cd ~/ProtSent
 
 MODEL_NEW="${MODEL_NEW:-models/protsent_esm2_35m_v3}"
+MODEL_OLD="${MODEL_OLD:-oriel9p/protsent-esm2-35M}"
 MODEL_BASE="${MODEL_BASE:-/storage/models/ESM2-35M}"
 OUT="${OUT:-results/benchmarks/v3}"
 BATCH="${BATCH:-64}"
@@ -74,9 +75,14 @@ if ! ls "$MODEL_NEW"/*.safetensors "$MODEL_NEW"/pytorch_model.bin >/dev/null 2>&
   exit 1
 fi
 
+# Three arms so the +/- decontamination effect is directly visible:
+#   esm2_35m     the untuned starting point
+#   protsent_old the published paper model (trained on the UNfiltered corpus)
+#   protsent_v3  retrained on the 40%/80%-decontaminated corpus
 for probe in knn linear; do
-  run_one "$MODEL_NEW"  protsent_v3 "$probe"
-  run_one "$MODEL_BASE" esm2_35m    "$probe"
+  run_one "$MODEL_NEW"  protsent_v3  "$probe"
+  run_one "$MODEL_OLD"  protsent_old "$probe"
+  run_one "$MODEL_BASE" esm2_35m     "$probe"
 done
 
 echo

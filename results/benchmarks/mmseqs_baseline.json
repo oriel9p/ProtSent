@@ -281,20 +281,6 @@
   },
   {
     "Model": "MMseqs2 (alignment baseline)",
-    "Task": "SCOPe-40 Structural Retrieval",
-    "task_key": "scope40_retrieval",
-    "main_metric": "Recall@10",
-    "problem_type": "retrieval",
-    "eval_split": "test",
-    "n_train": 2207,
-    "n_test": 2207,
-    "mmseqs_flags": "-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3 --format-output query,target,fident,alnlen,evalue,bits",
-    "Recall@1": 0.5029451744449479,
-    "Recall@10": 0.5636610783869506,
-    "Recall@30": 0.5641141821477118
-  },
-  {
-    "Model": "MMseqs2 (alignment baseline)",
     "Task": "Remote Homology (Fold)",
     "task_key": "remote_homology",
     "main_metric": "AUC",
@@ -356,5 +342,26 @@
     "hit_coverage": 0.9554896142433235,
     "AUC": 0.9010262725779967,
     "AUC_n_classes": 2
+  },
+  {
+    "Model": "MMseqs2 (alignment baseline)",
+    "Task": "SCOPe-40 Structural Retrieval",
+    "task_key": "scope40_retrieval",
+    "main_metric": "Recall@10",
+    "problem_type": "retrieval",
+    "eval_split": "test",
+    "n_train": 2207,
+    "n_test": 2207,
+    "mmseqs_flags": "-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3 --format-output query,target,fident,alnlen,evalue,bits",
+    "Recall@1": 0.5029451744449479,
+    "Recall@10": 0.5636610783869506,
+    "Recall@30": 0.5641141821477118,
+    "MAP": 0.3100189162833511,
+    "eligible_Recall@1": 0.6556408741878322,
+    "eligible_Recall@10": 0.7347903130537508,
+    "eligible_Recall@30": 0.735380980507974,
+    "eligible_MAP": 0.40414161148101346,
+    "n_queries": 2207,
+    "n_eligible_queries": 1693
   }
 ]

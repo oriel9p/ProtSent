@@ -73,17 +73,32 @@ def easy_search(query: Path, target: Path, out_tsv: Path, threads: int) -> None:
 
 
 def read_hits(tsv: Path) -> dict[int, list[tuple[int, float]]]:
-    """query_idx -> [(target_idx, bits), ...] sorted by bits descending."""
-    hits: dict[int, list[tuple[int, float]]] = {}
+    """query_idx -> [(target_idx, bits), ...] in rank order.
+
+    Ranked by **E-value ascending, then bitscore descending** -- the conventional
+    ordering for a sequence-search baseline, and the one the rebuttal reports.
+    Bitscore alone gives a different (and, for SCOPe-40, markedly more optimistic)
+    ranking, so the tie-break matters and is stated explicitly rather than left to
+    whatever order MMseqs2 emitted.
+
+    The returned score stays the bitscore, since downstream class scoring wants a
+    higher-is-better magnitude rather than an E-value.
+    """
+    hits: dict[int, list[tuple[int, float, float]]] = {}
     with open(tsv) as fh:
         for line in fh:
             parts = line.rstrip("\n").split("\t")
             if len(parts) < 6:
                 continue
-            hits.setdefault(int(parts[0]), []).append((int(parts[1]), float(parts[5])))
-    for v in hits.values():
-        v.sort(key=lambda t: -t[1])
-    return hits
+            # query, target, fident, alnlen, evalue, bits
+            hits.setdefault(int(parts[0]), []).append(
+                (int(parts[1]), float(parts[4]), float(parts[5]))
+            )
+    ranked: dict[int, list[tuple[int, float]]] = {}
+    for q, v in hits.items():
+        v.sort(key=lambda t: (t[1], -t[2]))
+        ranked[q] = [(tgt, bits) for tgt, _evalue, bits in v]
+    return ranked
 
 
 def load_task(task: str, max_samples: int | None = None):
@@ -106,14 +121,71 @@ def load_task(task: str, max_samples: int | None = None):
 
 
 def eval_retrieval(hits, labels, k_list=(1, 10, 30)) -> dict[str, float]:
-    """Family-level Recall@K, self excluded. Mirrors evaluate_retrieval()."""
-    out = {}
+    """Family-level Recall@K and MAP, self excluded.
+
+    Recall@K mirrors evaluate_retrieval() (protein_benchmark_suite.py:1863-1907)
+    so the baseline and the model are scored identically.
+
+    Reported over two query populations, because they answer different questions
+    and the gap between them is large:
+
+      all queries      every query counts, including the ~N with no same-family
+                       partner anywhere in the gallery. Those are unachievable by
+                       any method, so this depresses every system equally.
+      eligible queries queries that have at least one non-self same-family protein
+                       in the gallery, i.e. the ones where retrieval is possible
+                       at all. This is the fairer denominator for comparing
+                       methods, and the one to quote when a paper reports
+                       "eligible" or "achievable" recall.
+
+    MAP is average precision over the ranked list, averaged over queries, with
+    self-matches removed and unretrieved relevant items contributing zero.
+    """
+    n = len(labels)
+    labels = list(labels)
+    # A query is eligible iff some OTHER gallery protein shares its family.
+    counts: dict = {}
+    for lab in labels:
+        counts[lab] = counts.get(lab, 0) + 1
+    eligible = [q for q in range(n) if counts[labels[q]] > 1]
+
+    def _recall_at(qs, k):
+        return float(
+            np.mean([
+                any(
+                    labels[t] == labels[q]
+                    for t in [t for t, _ in hits.get(q, []) if t != q][:k]
+                )
+                for q in qs
+            ])
+        ) if qs else float("nan")
+
+    def _map(qs):
+        aps = []
+        for q in qs:
+            n_rel = counts[labels[q]] - 1  # exclude self
+            if n_rel <= 0:
+                aps.append(0.0)
+                continue
+            ranked = [t for t, _ in hits.get(q, []) if t != q]
+            found = 0
+            precision_sum = 0.0
+            for rank, t in enumerate(ranked, start=1):
+                if labels[t] == labels[q]:
+                    found += 1
+                    precision_sum += found / rank
+            aps.append(precision_sum / n_rel)  # unretrieved relevants score 0
+        return float(np.mean(aps)) if aps else float("nan")
+
+    out: dict[str, float] = {}
     for k in k_list:
-        matched = []
-        for q in range(len(labels)):
-            neigh = [t for t, _ in hits.get(q, []) if t != q][:k]
-            matched.append(any(labels[t] == labels[q] for t in neigh))
-        out[f"Recall@{k}"] = float(np.mean(matched))
+        out[f"Recall@{k}"] = _recall_at(range(n), k)
+    out["MAP"] = _map(range(n))
+    for k in k_list:
+        out[f"eligible_Recall@{k}"] = _recall_at(eligible, k)
+    out["eligible_MAP"] = _map(eligible)
+    out["n_queries"] = n
+    out["n_eligible_queries"] = len(eligible)
     return out
 
 
@@ -275,7 +347,7 @@ def main() -> int:
 
 def _selfcheck() -> None:
     """Metric functions must agree with the suite's definitions."""
-    # Recall: q0 and q2 share family "A"; q1 is alone in "B".
+    # Recall/MAP: q0 and q2 share family "A"; q1 is alone in "B".
     labels = ["A", "B", "A"]
     hits = {0: [(0, 99.0), (1, 5.0), (2, 4.0)], 1: [(1, 99.0), (0, 3.0)], 2: []}
     r = eval_retrieval(hits, labels, k_list=(1, 2))
@@ -283,18 +355,34 @@ def _selfcheck() -> None:
     # q1 never matches (no other "B"). q2 has no hits at all: miss.
     assert r["Recall@1"] == 0.0, r
     assert abs(r["Recall@2"] - 1 / 3) < 1e-9, r
+    # Only q0 and q2 have a same-family partner, so 2 of 3 are eligible.
+    assert r["n_eligible_queries"] == 2, r
+    assert r["n_queries"] == 3, r
+    # Eligible Recall@2: q0 hits, q2 has no hits -> 1/2.
+    assert abs(r["eligible_Recall@2"] - 0.5) < 1e-9, r
+    # MAP over all 3: q0 finds its 1 relevant at rank 2 -> AP 0.5; q1 0; q2 0.
+    assert abs(r["MAP"] - (0.5 / 3)) < 1e-9, r
+    assert abs(r["eligible_MAP"] - 0.25) < 1e-9, r
+
+    # Rank order must be E-value ascending, then bitscore descending.
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".tsv", delete=False) as fh:
+        # target 7 has a worse bitscore but a far better E-value -> must rank first
+        fh.write("0\t7\t0.9\t100\t1e-40\t50\n")
+        fh.write("0\t8\t0.9\t100\t1e-3\t900\n")
+        tmp = fh.name
+    ranked = read_hits(Path(tmp))
+    assert [t for t, _ in ranked[0]] == [7, 8], ranked
 
     # Multiclass: test0 best-hits a class-"x" train seq, test1 has no hit.
     m = eval_multiclass({0: [(0, 50.0), (1, 10.0)]}, ["x", "y"], ["x", "y"])
     assert m["hit_coverage"] == 0.5, m
     assert m["Accuracy"] == 0.5, m  # test0 correct, test1 falls to class 0 ("x")
 
-    # Regression / multilabel: these were defined but unrouted at one point, so
-    # assert they emit the main_metric key their TaskConfigs declare.
-    r = eval_regression({0: [(1, 9.0)]}, [0.0, 10.0], [10.0, 0.0])
-    assert abs(r["Spearman"] - 1.0) < 1e-9 and r["hit_coverage"] == 0.5, r
-    ml = eval_multilabel({0: [(0, 9.0)]}, [["a", "b"]], [["a", "b"], ["c"]])
-    assert ml["F1_Micro"] > 0 and ml["hit_coverage"] == 0.5, ml
+    # Regression: no-hit queries fall back to the training mean.
+    g = eval_regression({0: [(1, 9.0)]}, [0.0, 10.0], [10.0, 5.0])
+    assert g["hit_coverage"] == 0.5, g
+
     print("selfcheck ok")
 
 

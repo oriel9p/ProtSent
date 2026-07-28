@@ -144,15 +144,70 @@ Search flags: `-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3`.
 homolog" is a real failure mode of sequence search and is exactly the gap an
 embedding model should close; hiding it would flatter the baseline.
 
-### Structural tasks
+**`hit coverage`** (reported alongside every task) is the fraction of test
+queries for which MMseqs2 returned *any* alignment at E<10. The remainder are
+scored against a fallback carrying no information from the search — lowest-rank
+class for classification, the training mean for regression, the empty label set
+for multilabel. It is the column that separates "search ran and was right or
+wrong" from "search found nothing and we scored a default", so a headline metric
+should always be read next to it: at coverage 1.0 the metric is a real measure of
+alignment; at coverage 0.0 it is a property of the fallback and means nothing.
 
-| task | metric | MMseqs2 | secondary |
-|---|---|---:|---|
-| SCOPe-40 retrieval | Recall@10 | **0.5637** | R@1 0.5029, R@30 0.5641 |
-| Remote homology (fold) | AUC | **0.6523** | Acc 0.4365, F1-macro 0.2064, 457 classes |
+### SCOPe-40: head-to-head, all measured with the same code
 
-Remote homology hit coverage: **0.8893** — 359 of 3,244 test sequences find no
-homolog at any sensitivity, and score 0.
+Every row below was produced on this machine by `protein_benchmark_suite.py`
+(embeddings) or `mmseqs_baseline.py` (alignment), on the same 2,207-sequence
+gallery, `--eval_split test`, self-matches excluded, no-hit queries scored as
+failures. Raw values: `results/benchmarks/scope40_table.json`.
+
+| method | R@1 | R@10 | R@30 | MAP |
+|---|---:|---:|---:|---:|
+| MMseqs2 (`-s 7.5 -e 10`) | **0.5029** | 0.5637 | 0.5641 | 0.3100 |
+| ESM-2 35M | 0.3829 | 0.5840 | 0.6398 | 0.3230 |
+| ProtSent 35M (published) | 0.4490 | **0.6529** | **0.7100** | **0.4226** |
+
+Eligible queries only (n = 1,693 of 2,207):
+
+| method | R@1 | R@10 | R@30 | MAP |
+|---|---:|---:|---:|---:|
+| MMseqs2 | **0.6556** | 0.7348 | 0.7354 | 0.4041 |
+| ESM-2 35M | 0.4991 | 0.7614 | 0.8340 | 0.4210 |
+| ProtSent 35M | 0.5854 | **0.8511** | **0.9256** | **0.5509** |
+
+**The evaluation path reproduces the submitted paper.** Measured here versus
+Table 3 as submitted: ESM-2 35M R@1 0.3829 vs 0.3833, R@10 0.5840 vs 0.5841,
+R@30 0.6398 vs 0.6402, MAP 0.3230 vs 0.3235; ProtSent 35M R@1 0.4490 vs 0.4495,
+R@10 0.6529 vs 0.6529, R@30 0.7100 vs 0.7100, MAP 0.4226 vs 0.4225. The MAP
+agreement to four decimals confirms the paper's MAP convention is the one now
+implemented in `evaluate_retrieval()`: average precision over the full ranking,
+averaged over all queries, unretrieved relevant items contributing zero.
+
+**Recall@K on this benchmark is upper-bounded at 0.7671.** Only 1,693 of 2,207
+queries (76.71%) have any non-self same-family protein in the gallery; the
+remaining 514 are singleton families and are unachievable for any method. State
+this in every caption carrying a SCOPe recall — ProtSent 35M's R@30 of 0.7100 is
+**92.6% of the attainable maximum**, not 71% of 100%.
+
+**A tuned MMseqs2 is the strongest top-1 method in the table.** At R@1 it beats
+ESM-2 35M by 12.0 points and ProtSent 35M by 5.4. ProtSent leads at every deeper
+cutoff (R@10 +8.9, R@30 +14.6 over MMseqs2) and on MAP (+11.3). The defensible
+claim is therefore about **ranking depth, not top-1**.
+
+The `-s 5.7` variant reproduces a much weaker alignment baseline (R@1 0.3847,
+R@10 0.4259). Any MMseqs2 comparison must state its sensitivity: at default
+settings the baseline looks far worse than it is, and publishing that number
+while a stronger one is reproducible from this repo would be indefensible.
+
+### Remote homology
+
+| metric | MMseqs2 |
+|---|---:|
+| AUC (457 classes, macro OvR) | 0.6523 |
+| Accuracy | 0.4365 |
+| F1-macro | 0.2064 |
+| hit coverage | 0.8893 |
+
+359 of 3,244 test sequences find no homolog at any sensitivity and score 0.
 
 ### Full sweep — all 24 evaluable tasks
 
@@ -300,6 +355,71 @@ But the paper cannot claim "trained on the entire filtered corpus."
 ## 5. Pending
 
 - [ ] SCOPe-40 identity stratification vs the pretraining corpus (§2a, §2b)
+- [ ] SCOPe-40 for ProtSent-v2-35M (retrained on the filtered corpus), reported
+      both unfiltered and identity-stratified, alongside the published
+      ProtSent 35M row above so the ± decontamination effect is directly visible
+
+---
+
+## 6. Corrections the draft rebuttal needs (grounded, from this repo)
+
+Each item below is a factual error or omission in `rebuttal/DRAFT_rebuttal.md`,
+with the source that settles it. These are not stylistic preferences.
+
+1. **The MMseqs2 baseline in the draft (R@1 0.3539, MAP 0.1795) is a
+   default-sensitivity run.** §3 above reproduces R@1 0.5029 / MAP 0.3100 at
+   `-s 7.5`, and `-s 5.7` gives R@1 0.3847 — bracketing the draft's number.
+   Publishing the weaker figure while the stronger one is reproducible from
+   `results/benchmarks/mmseqs_baseline.json` in the released repo is a
+   self-inflicted integrity problem. Publish 0.5029 with flags stated.
+
+2. **R@10 = R@30 = 0.3856 exactly** in the draft's table. Exact equality to four
+   decimals indicates a truncated hit list, not a plateau. The measured run gives
+   0.5637 vs 0.5641 — near-equal but distinct.
+
+3. **The remote-homology test split is not hierarchy-disjoint.** The draft claims
+   it is. It is TAPE remote homology repackaged: the pooled concatenation of
+   TAPE's three holdouts (718 fold + 1,254 superfamily + 1,272 family = 3,244),
+   with no column marking which. Two thirds is not fold-disjoint. Rely on
+   corpus-level decontamination instead, and note that the pooled 457-class macro
+   AUC is not comparable to published per-holdout top-1 accuracies.
+
+4. **The PPI decontamination description contradicts the released code.** The
+   draft describes `easy-linclust` at 50% identity with cluster-level removal.
+   `data_prep.py` uses `easy-search` (STRING as query, Bernett test as target) at
+   `--decontam_min_seq_id` (default 0.4), `--cov-mode 1 -c 0.8`, removing hit
+   query IDs, not clusters — and its own docstring states `easy-search` was
+   chosen deliberately because linclust loses sensitivity below ~50% identity.
+   Describe what the code does. The completed 40% pass is the stronger answer
+   anyway: 4,178,737 STRING pairs (5.49%) and 319,282 unique sequences removed,
+   with 0-hit negative and 3,022/3,022 positive controls.
+
+5. **"100,000 sequences" has a mechanical explanation.** It is the evaluator's
+   `max_samples` cap echoed into the results table (visible in every benchmark
+   CSV as `Samples 100000`), applied to a 2,207-row dataset. Saying so converts
+   an apparent 45x error in reported N into a logging artifact.
+
+6. **Task count is 23 in the draft and 24 here.** `mmseqs_baseline.json` has 24
+   rows. Pick one and state the exclusions (`ppi_bernett` pair-input,
+   `proteingym_*`, `chezod_disorder`, `cafa5`, `rhla_enzyme_mutations`).
+
+7. **Use the decontamination that is already finished.** §1 above — all three
+   corpora filtered at 40%/80% with negative controls at 0 hits and positive
+   controls at 3,244/3,244 and 3,022/3,022 — is complete, auditable, and stricter
+   than the ProtTucker precedent verified in §2. The draft concedes the leakage
+   point instead of citing this work.
+
+8. **Keep one story about R@1 across all three responses.** The measured table in
+   §3 shows a tuned alignment baseline beating ProtSent 35M at top-1. Asserting a
+   top-1 win to two reviewers while conceding it to a third is inconsistent, and
+   the data does not support the win. The consistent, defensible claim is that
+   the effect is in ranking depth (R@10/R@30/MAP), which survives both the
+   alignment comparison and the decontamination subset.
+
+9. **The n=92 strict-subset analysis has a ceiling of 57/92 = 0.620**, which the
+   draft does not state, so its R@30 of 0.500 reads against an implied 1.0.
+   The identity-stratified analysis (§2a) retains all 2,207 queries and has the
+   statistical power the 92-query subset lacks.
 - [x] MMseqs2 baseline across all 24 evaluable benchmarks + sensitivity variant (§3)
 - [ ] ProtSent-v2-35M benchmark results: kNN probe and linear probe, vs ESM2-35M,
       both with `-e test`

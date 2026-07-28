@@ -1925,6 +1925,51 @@ def evaluate_retrieval(
         ]
         results[f"Recall@{k}"] = float(np.mean(matches))
 
+    # MAP and eligible-query metrics, defined identically to mmseqs_baseline.py so
+    # the embedding and alignment baselines are directly comparable.
+    #
+    # MAP needs the FULL ranking, not the max_k+1 neighbours fetched above: an
+    # average-precision term exists for every relevant item, including ones ranked
+    # far past 30. A query whose family partners all sit at rank 500 has non-zero
+    # AP but zero Recall@30.
+    #
+    # "Eligible" queries are those with at least one non-self same-family protein
+    # in the gallery. The rest are unachievable for any method and drag every
+    # system down equally, so the eligible subset is the fairer denominator when
+    # comparing methods.
+    unique, counts_arr = np.unique(label_array, return_counts=True)
+    family_size = dict(zip(unique.tolist(), counts_arr.tolist()))
+    eligible = np.array([family_size[lab] > 1 for lab in label_array.tolist()])
+
+    full_nn = NearestNeighbors(
+        n_neighbors=len(embeddings), metric="cosine", n_jobs=-1
+    )
+    full_nn.fit(embeddings)
+    _, full_idx = full_nn.kneighbors(embeddings)
+
+    aps = np.zeros(len(embeddings), dtype=np.float64)
+    for q in range(len(embeddings)):
+        n_rel = family_size[label_array[q]] - 1  # exclude self
+        if n_rel <= 0:
+            continue
+        ranked = full_idx[q][full_idx[q] != q]
+        rel = label_array[ranked] == label_array[q]
+        hit_ranks = np.flatnonzero(rel) + 1
+        if hit_ranks.size:
+            aps[q] = np.sum(np.arange(1, hit_ranks.size + 1) / hit_ranks) / n_rel
+
+    results["MAP"] = float(aps.mean())
+    if eligible.any():
+        for k in k_list:
+            matches = np.array([
+                (nl[vm][:k] == ql).any()
+                for nl, vm, ql in zip(neighbor_labels, valid_mask, label_array)
+            ])
+            results[f"eligible_Recall@{k}"] = float(matches[eligible].mean())
+        results["eligible_MAP"] = float(aps[eligible].mean())
+    results["n_queries"] = int(len(embeddings))
+    results["n_eligible_queries"] = int(eligible.sum())
+
     return results
 
 
