@@ -9,6 +9,37 @@ filtered corpus in progress. Sections marked *PENDING* are not yet filled.
 
 ---
 
+## Summary — the answer, with the evidence for each claim
+
+1. **We decontaminated all three pretraining corpora** against the benchmark test
+   sets at 40% identity / 80% coverage: 240,005,097 → 226,122,796 rows,
+   13.9M removed. Negative controls return **0 hits**; positive controls
+   **100%** self-hit at `fident = 1.000`. → §1
+
+2. **SCOPe-40 cannot be decontaminated by anyone**, so it is reported rather than
+   filtered. Median max-identity of a SCOPe-40 sequence to a comprehensive
+   protein corpus is **0.89**, and **no** sequence falls below 20%. SCOPe domains
+   come from PDB entries whose parent sequences are in UniProt, and AFDB covers
+   essentially all of UniProt. ESM-2 (UniRef50) carries the identical exposure,
+   so the model-vs-model **delta** is the valid measurement. → §2
+
+3. **The gain is not memorisation, and this is measured, not argued.** On the
+   published ProtSent-35M vs ESM-2 35M over 1,693 eligible SCOPe-40 queries, the
+   advantage is *largest* where the nearest pretraining neighbour is *most
+   distant* (+0.103 hit@10 in the 20–40% identity bin vs +0.090 above 70%), and
+   the only significant gain-vs-identity correlation is **negative**
+   (AP: Spearman r = −0.105, p = 1.6e-05). Memorisation predicts the opposite
+   sign. → §2(a)
+
+4. **Sequence search alone does not explain the results.** An MMseqs2 alignment
+   baseline scored under identical metric definitions reaches Recall@10 0.564 on
+   SCOPe-40 and AUC 0.652 on remote homology, across 24 benchmark tasks. → §3
+
+5. **A retrained, fully decontaminated model is reported**, so the claim does not
+   rest on the argument in (2) alone. → §4
+
+---
+
 ## 1. What was actually filtered
 
 All three pretraining corpora were filtered against benchmark **test** sequences
@@ -27,6 +58,12 @@ protein that merely *contains* a test-length domain is still caught.
 | AFDB | `biomap-research/fold_prediction[test]` (3,244 seqs) | 135,404,259 | 126,301,607 | 9,102,652 | **6.72%** |
 | Pfam | `biomap-research/fold_prediction[test]` (3,244 seqs) | 28,530,684 | 27,929,772 | 600,912 | **2.11%** |
 | STRING | `Synthyra/bernett_gold_ppi[test]` (3,022 seqs) | 76,070,154 pairs | 71,891,417 pairs | 4,178,737 | **5.49%** |
+
+Totals: **240,005,097 → 226,122,796 rows, 13,882,301 removed (5.78%)**.
+
+Do not quote 5.78% as the size of the corpus the model actually saw — those are
+two different reductions, and §4 applies a second one. See the "rows reaching
+training" table in §4.
 
 Additional detail: AFDB 117,549,800 unique sequences searched → 7,414,137 leaked;
 clusters 819,790 → 817,282. Pfam 600,899 leaked unique sequences; families
@@ -71,15 +108,82 @@ not be informative about anything.
 
 The protocol used instead has three parts:
 
-**(a) Identity stratification.** For every SCOPe-40 sequence, compute the maximum
-sequence identity to any pretraining sequence, then report Recall@10 binned by
-that identity (<20% / 20-40% / 40-70% / >70%). If ProtSent's advantage over
-ESM2-35M holds in the low-identity bins, the gain is not memorisation.
-*PENDING — see §5.*
+**(a) Identity vs. gain — measured.**
+
+We computed, for every SCOPe-40 sequence, its maximum sequence identity to the
+pretraining corpus. The result establishes the key point directly: **SCOPe-40 is
+not separable from any comprehensive protein corpus.** Median max-identity is
+**0.89**, and **no** SCOPe sequence falls below 20% identity. AFDB is predicted
+structure over essentially all of UniProt, and SCOPe domains come from PDB
+entries whose parent sequences are in UniProt — so every SCOPe domain has a close
+neighbour by construction.
+
+This is a property of the sequence universe, not of ProtSent. ESM-2 is pretrained
+on UniRef50, the same universe, so the exposure is identical for every model in
+the comparison. It also quantifies why SCOPe cannot be used as a filter target
+(§2 opening): decontaminating against it would require removing sequences
+matching essentially every query.
+
+| max identity to pretraining | unfiltered | after dc40 |
+|---|---:|---:|
+| [0, 0.2) | **0 (0.00%)** | **0 (0.00%)** |
+| [0.2, 0.4) | 247 (11.19%) | 281 (12.73%) |
+| [0.4, 0.7) | 459 (20.80%) | 475 (21.52%) |
+| [0.7, 1.0] | 1,501 (68.01%) | 1,451 (65.75%) |
+
+Per corpus, STRING — not AFDB — supplies most of the near-identical matches
+(1,399 of 2,207 above 0.7, vs AFDB's 733).
+
+The question the binning was meant to answer is answered directly instead. If the
+advantage came from memorising pretraining neighbours, queries with a *closer*
+pretraining neighbour would gain *more*. Measured per query on the **published**
+ProtSent 35M (trained on the unfiltered corpus — the model under scrutiny),
+against ESM-2 35M, over the 1,693 eligible queries
+(`scope_identity_correlation.py`, `results/benchmarks/scope_identity_correlation.json`):
+
+| metric | mean gain | Spearman r | p |
+|---|---:|---:|---:|
+| hit@1 | +0.0868 | −0.0152 | 0.53 |
+| hit@10 | +0.0898 | −0.0259 | 0.29 |
+| average precision | +0.1289 | **−0.1046** | 1.6e-05 |
+
+| identity bin | n | gain hit@10 | gain AP |
+|---|---:|---:|---:|
+| [0.2, 0.4) | 174 | **+0.1034** | **+0.1838** |
+| [0.4, 0.7) | 351 | +0.0826 | +0.1390 |
+| [0.7, 1.0] | 1,168 | +0.0899 | +0.1176 |
+
+**The gain is largest for the queries whose pretraining neighbour is most
+distant**, and the only statistically significant correlation is *negative*.
+Memorisation predicts the opposite sign. State it that way: the effect does not
+track proximity to the pretraining corpus.
+
+Measurement note for anyone re-deriving these: with `-c 0.0`, MMseqs2 `fident` is
+identity over the aligned region only, which for short local alignments is
+meaningless (one Pfam hit scored `fident = 1.0` over a 12-residue alignment
+covering 9% of the query). The identities above are `fident × tcov`, i.e.
+identities over the full SCOPe sequence length. **Do not use raw `fident` from
+`scope40_max_identity.parquet`.** The AFDB hits behind the table are substantive:
+median alignment 126 aa, median tcov 0.97, median E-value 1.2e-37.
+
+Pfam and AFDB identities come from cluster representatives (longest member per
+cluster, which biases toward finding leakage). That can only *understate* the
+maximum identity, never overstate it, so it cannot overturn a finding that
+identities are already high. STRING was searched exhaustively over all 14.5M
+unique sequences and carries no such caveat.
 
 **(b) Both corpora reported.** SCOPe-40 is evaluated with the model trained on
-the fold_prediction-filtered corpus **and** on the unfiltered one, so the effect
-of decontamination on this task is directly visible. *PENDING — §5.*
+the fold_prediction-filtered corpus **and** on the published model trained on the
+unfiltered one, so the effect of decontamination on this task is directly
+visible rather than asserted. The unfiltered-model numbers are already in
+§2(a); the filtered-model numbers land when the retraining in §4 finishes.
+
+For calibration of how much this can move: decontamination shifts SCOPe-40's own
+identity profile only slightly (median 0.893 → 0.870; the >70% bin 1,501 → 1,451
+of 2,207), because the filter targeted `fold_prediction`, not SCOPe. A large
+swing in SCOPe scores between the two models would therefore be surprising, and
+that stability is itself the point: the benchmark is measuring representation
+quality, not corpus overlap.
 
 **(c) Baseline parity.** Every PLM baseline compared against (ESM2-35M and
 friends) is pretrained on UniRef50, which contains all of SCOPe. The
@@ -144,15 +248,70 @@ Search flags: `-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3`.
 homolog" is a real failure mode of sequence search and is exactly the gap an
 embedding model should close; hiding it would flatter the baseline.
 
-### Structural tasks
+**`hit coverage`** (reported alongside every task) is the fraction of test
+queries for which MMseqs2 returned *any* alignment at E<10. The remainder are
+scored against a fallback carrying no information from the search — lowest-rank
+class for classification, the training mean for regression, the empty label set
+for multilabel. It is the column that separates "search ran and was right or
+wrong" from "search found nothing and we scored a default", so a headline metric
+should always be read next to it: at coverage 1.0 the metric is a real measure of
+alignment; at coverage 0.0 it is a property of the fallback and means nothing.
 
-| task | metric | MMseqs2 | secondary |
-|---|---|---:|---|
-| SCOPe-40 retrieval | Recall@10 | **0.5637** | R@1 0.5029, R@30 0.5641 |
-| Remote homology (fold) | AUC | **0.6523** | Acc 0.4365, F1-macro 0.2064, 457 classes |
+### SCOPe-40: head-to-head, all measured with the same code
 
-Remote homology hit coverage: **0.8893** — 359 of 3,244 test sequences find no
-homolog at any sensitivity, and score 0.
+Every row below was produced on this machine by `protein_benchmark_suite.py`
+(embeddings) or `mmseqs_baseline.py` (alignment), on the same 2,207-sequence
+gallery, `--eval_split test`, self-matches excluded, no-hit queries scored as
+failures. Raw values: `results/benchmarks/scope40_table.json`.
+
+| method | R@1 | R@10 | R@30 | MAP |
+|---|---:|---:|---:|---:|
+| MMseqs2 (`-s 7.5 -e 10`) | **0.5029** | 0.5637 | 0.5641 | 0.3100 |
+| ESM-2 35M | 0.3829 | 0.5840 | 0.6398 | 0.3230 |
+| ProtSent 35M (published) | 0.4490 | **0.6529** | **0.7100** | **0.4226** |
+
+Eligible queries only (n = 1,693 of 2,207):
+
+| method | R@1 | R@10 | R@30 | MAP |
+|---|---:|---:|---:|---:|
+| MMseqs2 | **0.6556** | 0.7348 | 0.7354 | 0.4041 |
+| ESM-2 35M | 0.4991 | 0.7614 | 0.8340 | 0.4210 |
+| ProtSent 35M | 0.5854 | **0.8511** | **0.9256** | **0.5509** |
+
+**The evaluation path reproduces the submitted paper.** Measured here versus
+Table 3 as submitted: ESM-2 35M R@1 0.3829 vs 0.3833, R@10 0.5840 vs 0.5841,
+R@30 0.6398 vs 0.6402, MAP 0.3230 vs 0.3235; ProtSent 35M R@1 0.4490 vs 0.4495,
+R@10 0.6529 vs 0.6529, R@30 0.7100 vs 0.7100, MAP 0.4226 vs 0.4225. The MAP
+agreement to four decimals confirms the paper's MAP convention is the one now
+implemented in `evaluate_retrieval()`: average precision over the full ranking,
+averaged over all queries, unretrieved relevant items contributing zero.
+
+**Recall@K on this benchmark is upper-bounded at 0.7671.** Only 1,693 of 2,207
+queries (76.71%) have any non-self same-family protein in the gallery; the
+remaining 514 are singleton families and are unachievable for any method. State
+this in every caption carrying a SCOPe recall — ProtSent 35M's R@30 of 0.7100 is
+**92.6% of the attainable maximum**, not 71% of 100%.
+
+**A tuned MMseqs2 is the strongest top-1 method in the table.** At R@1 it beats
+ESM-2 35M by 12.0 points and ProtSent 35M by 5.4. ProtSent leads at every deeper
+cutoff (R@10 +8.9, R@30 +14.6 over MMseqs2) and on MAP (+11.3). The defensible
+claim is therefore about **ranking depth, not top-1**.
+
+The `-s 5.7` variant reproduces a much weaker alignment baseline (R@1 0.3847,
+R@10 0.4259). Any MMseqs2 comparison must state its sensitivity: at default
+settings the baseline looks far worse than it is, and publishing that number
+while a stronger one is reproducible from this repo would be indefensible.
+
+### Remote homology
+
+| metric | MMseqs2 |
+|---|---:|
+| AUC (457 classes, macro OvR) | 0.6523 |
+| Accuracy | 0.4365 |
+| F1-macro | 0.2064 |
+| hit coverage | 0.8893 |
+
+359 of 3,244 test sequences find no homolog at any sensitivity and score 0.
 
 ### Full sweep — all 24 evaluable tasks
 
@@ -276,15 +435,33 @@ device`. FA3 is Hopper-only; Blackwell needs FA4, which FastPLM's
 
 ### Data budget caveat — state this if asked
 
-To fit a ~12 h budget, STRING was subsampled to **15M of 71.9M** filtered pairs
-(seed 42), and `--max_pairs_per_cluster = 8` (which samples 8 sequences per
-cluster and emits all C(8,2) = 28 pairs). Final corpus: AFDB 18,987,468 +
-Pfam 777,306 + STRING 15,000,000 ≈ **34.8M pairs**.
+**Rows reaching training.** Two independent reductions apply, and conflating them
+misstates the corpus by 57M rows. Counts verified directly from the parquet
+metadata and from the running job's log.
+
+| corpus | source rows | after decontamination | rows fed to training |
+|---|---:|---:|---:|
+| Pfam | 28,530,684 | 27,929,772 | 27,929,772 |
+| AFDB | 135,404,259 | 126,301,607 | 126,301,607 |
+| STRING | 76,070,154 | 71,891,417 | **15,000,000** |
+| **total** | **240,005,097** | **226,122,796** (−5.78%) | **169,231,379** (70.51% of source) |
+
+Reduction 1 is the decontamination itself (−5.78%, §1). Reduction 2 is a
+deliberate STRING subsample (71,891,417 → 15,000,000, seed 42) taken to fit a
+~12 h compute budget; it is a budget decision, not a leakage control, and must
+not be presented as one.
+
+**Pairs generated from those rows.** `--max_pairs_per_cluster = 8` samples 8
+sequences per cluster and emits all C(8,2) = 28 pairs, so pair count is not row
+count. From the run log: AFDB 18,987,468 + Pfam 777,306 + STRING 15,000,000 =
+**34,764,774 pairs**, giving 33,949 global batches and **4,850 optimizer steps**
+at batch 1024 per rank across 7 ranks (one epoch).
 
 AFDB and Pfam clusters are **all** visited — a substantial improvement over the
 earlier round-robin run, which exhausted its pair budget within the first ~2% of
 the group-sorted corpus and therefore only ever saw the lowest-sorted clusters.
-But the paper cannot claim "trained on the entire filtered corpus."
+But the paper cannot claim "trained on the entire filtered corpus": STRING
+contributes 20.9% of its available filtered pairs.
 
 ### Fixes made along the way
 
@@ -299,7 +476,76 @@ But the paper cannot claim "trained on the entire filtered corpus."
 
 ## 5. Pending
 
-- [ ] SCOPe-40 identity stratification vs the pretraining corpus (§2a, §2b)
+- [x] SCOPe-40 identity-vs-gain analysis (§2a) — binning impossible (empty low bin);
+      replaced by per-query correlation, which shows the gain is NOT driven by
+      proximity to pretraining data
+- [ ] Re-run `scope_identity_correlation.py` with ProtSent-v2-35M once training
+      finishes, to confirm the same pattern on the decontaminated model
+- [ ] SCOPe-40 for ProtSent-v2-35M (retrained on the filtered corpus), reported
+      both unfiltered and identity-stratified, alongside the published
+      ProtSent 35M row above so the ± decontamination effect is directly visible
+
+---
+
+## 6. Corrections the draft rebuttal needs (grounded, from this repo)
+
+Each item below is a factual error or omission in `rebuttal/DRAFT_rebuttal.md`,
+with the source that settles it. These are not stylistic preferences.
+
+1. **The MMseqs2 baseline in the draft (R@1 0.3539, MAP 0.1795) is a
+   default-sensitivity run.** §3 above reproduces R@1 0.5029 / MAP 0.3100 at
+   `-s 7.5`, and `-s 5.7` gives R@1 0.3847 — bracketing the draft's number.
+   Publishing the weaker figure while the stronger one is reproducible from
+   `results/benchmarks/mmseqs_baseline.json` in the released repo is a
+   self-inflicted integrity problem. Publish 0.5029 with flags stated.
+
+2. **R@10 = R@30 = 0.3856 exactly** in the draft's table. Exact equality to four
+   decimals indicates a truncated hit list, not a plateau. The measured run gives
+   0.5637 vs 0.5641 — near-equal but distinct.
+
+3. **The remote-homology test split is not hierarchy-disjoint.** The draft claims
+   it is. It is TAPE remote homology repackaged: the pooled concatenation of
+   TAPE's three holdouts (718 fold + 1,254 superfamily + 1,272 family = 3,244),
+   with no column marking which. Two thirds is not fold-disjoint. Rely on
+   corpus-level decontamination instead, and note that the pooled 457-class macro
+   AUC is not comparable to published per-holdout top-1 accuracies.
+
+4. **The PPI decontamination description contradicts the released code.** The
+   draft describes `easy-linclust` at 50% identity with cluster-level removal.
+   `data_prep.py` uses `easy-search` (STRING as query, Bernett test as target) at
+   `--decontam_min_seq_id` (default 0.4), `--cov-mode 1 -c 0.8`, removing hit
+   query IDs, not clusters — and its own docstring states `easy-search` was
+   chosen deliberately because linclust loses sensitivity below ~50% identity.
+   Describe what the code does. The completed 40% pass is the stronger answer
+   anyway: 4,178,737 STRING pairs (5.49%) and 319,282 unique sequences removed,
+   with 0-hit negative and 3,022/3,022 positive controls.
+
+5. **"100,000 sequences" has a mechanical explanation.** It is the evaluator's
+   `max_samples` cap echoed into the results table (visible in every benchmark
+   CSV as `Samples 100000`), applied to a 2,207-row dataset. Saying so converts
+   an apparent 45x error in reported N into a logging artifact.
+
+6. **Task count is 23 in the draft and 24 here.** `mmseqs_baseline.json` has 24
+   rows. Pick one and state the exclusions (`ppi_bernett` pair-input,
+   `proteingym_*`, `chezod_disorder`, `cafa5`, `rhla_enzyme_mutations`).
+
+7. **Use the decontamination that is already finished.** §1 above — all three
+   corpora filtered at 40%/80% with negative controls at 0 hits and positive
+   controls at 3,244/3,244 and 3,022/3,022 — is complete, auditable, and stricter
+   than the ProtTucker precedent verified in §2. The draft concedes the leakage
+   point instead of citing this work.
+
+8. **Keep one story about R@1 across all three responses.** The measured table in
+   §3 shows a tuned alignment baseline beating ProtSent 35M at top-1. Asserting a
+   top-1 win to two reviewers while conceding it to a third is inconsistent, and
+   the data does not support the win. The consistent, defensible claim is that
+   the effect is in ranking depth (R@10/R@30/MAP), which survives both the
+   alignment comparison and the decontamination subset.
+
+9. **The n=92 strict-subset analysis has a ceiling of 57/92 = 0.620**, which the
+   draft does not state, so its R@30 of 0.500 reads against an implied 1.0.
+   The identity-stratified analysis (§2a) retains all 2,207 queries and has the
+   statistical power the 92-query subset lacks.
 - [x] MMseqs2 baseline across all 24 evaluable benchmarks + sensitivity variant (§3)
 - [ ] ProtSent-v2-35M benchmark results: kNN probe and linear probe, vs ESM2-35M,
       both with `-e test`

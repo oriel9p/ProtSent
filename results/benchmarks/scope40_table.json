@@ -1,0 +1,41 @@
+[
+  {
+    "method": "ESM-2 35M",
+    "Recall@1": 0.38287,
+    "Recall@10": 0.58405,
+    "Recall@30": 0.63978,
+    "MAP": 0.32295,
+    "eligible_Recall@1": 0.49911,
+    "eligible_Recall@10": 0.76137,
+    "eligible_Recall@30": 0.83402,
+    "eligible_MAP": 0.421,
+    "n_queries": 2207,
+    "n_eligible_queries": 1693
+  },
+  {
+    "method": "ProtSent 35M (published)",
+    "Recall@1": 0.44903,
+    "Recall@10": 0.65292,
+    "Recall@30": 0.71001,
+    "MAP": 0.4226,
+    "eligible_Recall@1": 0.58535,
+    "eligible_Recall@10": 0.85115,
+    "eligible_Recall@30": 0.92558,
+    "eligible_MAP": 0.5509,
+    "n_queries": 2207,
+    "n_eligible_queries": 1693
+  },
+  {
+    "method": "MMseqs2 (-s 7.5 -e 10)",
+    "Recall@1": 0.5029451744449479,
+    "Recall@10": 0.5636610783869506,
+    "Recall@30": 0.5641141821477118,
+    "MAP": 0.3100189162833511,
+    "eligible_Recall@1": 0.6556408741878322,
+    "eligible_Recall@10": 0.7347903130537508,
+    "eligible_Recall@30": 0.735380980507974,
+    "eligible_MAP": 0.40414161148101346,
+    "n_queries": 2207,
+    "n_eligible_queries": 1693
+  }
+]

@@ -1,0 +1,2 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,BenchmarkSeed,Recall@1,Recall@10,Recall@30,MAP,eligible_Recall@1,eligible_Recall@10,eligible_Recall@30,eligible_MAP,n_queries,n_eligible_queries
+oriel9p/protsent-esm2-35M,SCOPe-40 Structural Retrieval,100000,2026-07-28,linear,standard,test,retrieval_unchanged,42,0.44903,0.65292,0.71001,0.4226,0.58535,0.85115,0.92558,0.5509,2207,1693
