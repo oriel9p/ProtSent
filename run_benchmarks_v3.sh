@@ -75,6 +75,14 @@ if ! ls "$MODEL_NEW"/*.safetensors "$MODEL_NEW"/pytorch_model.bin >/dev/null 2>&
   exit 1
 fi
 
+# Training saves ESM2 checkpoints with FastPLM's custom-code identity
+# (model_type "fast_esm", tokenizer_class "FastEsmTokenizer"), which
+# SentenceTransformer cannot load: "Unrecognized processing class". Rewrite the
+# metadata to the plain-ESM form the published checkpoint uses. Weights untouched,
+# idempotent, originals kept as *.fastplm.
+uv run --no-sync python make_checkpoint_loadable.py "$MODEL_NEW" || {
+  echo "ERROR: could not normalise $MODEL_NEW for loading" >&2; exit 1; }
+
 # Three arms so the +/- decontamination effect is directly visible:
 #   esm2_35m     the untuned starting point
 #   protsent_old the published paper model (trained on the UNfiltered corpus)
