@@ -135,3 +135,48 @@ if __name__ == "__main__":
     import sys
 
     pytest.main([__file__, "-v", "-m", "slow"] + sys.argv[1:])
+
+
+class _FakeResidueTokenizer:
+    """Module-level so it pickles; mirrors FastEsmTokenizer's lookup behaviour."""
+
+    unk_token_id = 3
+
+    def __init__(self):
+        # ESM2's real alphabet: every letter except J.
+        self._token_to_id = {
+            c: i for i, c in enumerate("ACDEFGHIKLMNPQRSTVWYXBUZO", start=4)
+        }
+
+    def convert(self, token):
+        return self._token_to_id[token]
+
+
+def test_patch_unknown_residue_tokens_maps_missing_letters_and_pickles():
+    """Guards the two ways this broke a 7-GPU run.
+
+    1. ESM2's vocabulary has no 'J' (Leu/Ile ambiguity) and FastPLM raises
+       KeyError rather than falling back to unk, killing a dataloader worker.
+    2. The first fix wrapped the method in a closure, which cannot be pickled --
+       and dataloader workers are spawned, so the tokenizer must pickle.
+    """
+    import pickle
+
+    from model_utils import patch_unknown_residue_tokens
+
+    tok = _FakeResidueTokenizer()
+    x_id = tok._token_to_id["X"]
+
+    with pytest.raises(KeyError):
+        tok.convert("J")
+
+    patch_unknown_residue_tokens(tok)
+    assert tok.convert("J") == x_id
+    assert tok.convert("A") != x_id, "existing residues must not be remapped"
+
+    # The spawn-pickle that PicklingError killed.
+    revived = pickle.loads(pickle.dumps(tok))
+    assert revived.convert("J") == x_id
+
+    patch_unknown_residue_tokens(tok)  # idempotent
+    assert tok.convert("J") == x_id

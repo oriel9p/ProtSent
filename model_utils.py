@@ -17,11 +17,13 @@ import importlib.util
 import json
 import logging
 import os
+from string import ascii_uppercase
 from pathlib import Path
 from typing import Literal
 
 import torch
 import torch.nn as nn
+from transformers.modeling_outputs import BaseModelOutput
 
 logger = logging.getLogger(__name__)
 
@@ -209,14 +211,19 @@ def from_pretrained_with_flash(model_cls, model_name: str, **extra_kwargs):
         extra_kwargs["dtype"] = extra_kwargs.pop("torch_dtype")
 
     kwargs = {"trust_remote_code": True, **extra_kwargs}
+    uses_custom_attention_backend = detect_model_type(model_name) == "esmplusplus"
     # Prefer flash_attention_2 if available, otherwise eagerly enforce PyTorch native SDPA
     # native SDPA prevents standard custom attention masks bugs and operates faster than eager.
-    if HAS_FLASH_ATTN:
+    if uses_custom_attention_backend:
+        # ESM++/ESM-C uses its own transformer.attn_backend switch; avoid passing
+        # HuggingFace's attention implementation flag into the remote code path.
+        pass
+    elif HAS_FLASH_ATTN:
         kwargs["attn_implementation"] = "flash_attention_2"
     else:
         # Simplest stable solution for avoiding custom eager-mode logic leaks
         kwargs["attn_implementation"] = "sdpa"
-        
+
     try:
         return model_cls.from_pretrained(model_name, **kwargs)
     except (TypeError, ValueError):
@@ -395,31 +402,101 @@ def _prepare_amplify_inputs(input_ids, attention_mask, device=None):
 
 
 # =============================================================================
-# ESMplusplus SDPA fix
+# ESMplusplus attention backend
 # =============================================================================
 
 
-def force_sdpa_backend(model):
-    """Ensure SDPA attention backend on ESMplusplus / Synthyra models.
+def patch_unknown_residue_tokens(tokenizer):
+    """Map residue codes missing from the vocabulary onto 'X' instead of raising.
 
-    ESM++ now defaults to SDPA (model card updated Feb 2026), so this is largely
-    a safety net in case the Hub code changes again or an older cached version is
-    loaded. Safe to call on any model — no-op when transformer.attn_backend is
-    absent.
+    The ESM2 vocabulary covers every letter except **J** (the IUPAC ambiguity
+    code for Leu/Ile), and FastPLM's ``_convert_token_to_id``
+    (``fastplms/models/esm2/modeling_fastesm.py:198``) raises ``KeyError`` for an
+    out-of-vocabulary token rather than falling back to ``unk_token``. A single
+    'J' anywhere in the corpus therefore kills a dataloader worker, which takes
+    down the rank and then the whole DDP job -- this happened at step 134 of a
+    4,244-step run.
+
+    'X' is used rather than ``<unk>`` deliberately: ESM2 was pretrained with 'X'
+    as the unknown-residue symbol and has essentially never seen ``<unk>`` in a
+    sequence, so 'X' keeps the input inside the pretraining distribution.
+
+    The fix adds the missing letters to the tokenizer's ``_token_to_id`` dict
+    rather than wrapping ``_convert_token_to_id``. That matters: dataloader
+    workers are spawned, so the tokenizer has to pickle, and a closure over the
+    original method does not (``PicklingError: Can't pickle local object``).
+    A plain dict entry pickles fine.
+
+    Idempotent.
     """
+    table = getattr(tokenizer, "_token_to_id", None)
+    if not isinstance(table, dict):
+        return
+    fallback_id = table.get("X", tokenizer.unk_token_id)
+    if fallback_id is None:
+        return
+    missing = [c for c in ascii_uppercase if c not in table]
+    for c in missing:
+        table[c] = fallback_id
+    if missing:
+        logger.info(
+            "Residues %s absent from the tokenizer vocabulary; mapped to 'X' (id %d)",
+            "".join(missing),
+            fallback_id,
+        )
+
+
+def force_sdpa_backend(model):
+    """Set the ESMplusplus / Synthyra attention backend.
+
+    Defaults to ``kernels_flash`` for ESM-C on B300/Hopper-class GPUs. Set
+    ``PROTSENT_ESMPLUSPLUS_ATTN_BACKEND=sdpa`` to fall back without editing code.
+    Safe to call on any model — no-op when transformer.attn_backend is absent.
+    """
+    backend = (
+        os.environ.get("PROTSENT_ESMPLUSPLUS_ATTN_BACKEND", "kernels_flash").strip()
+        or "kernels_flash"
+    )
     transformer = getattr(model, "transformer", None)
     if transformer is None:
+        # FastPLM ESM2 exposes attn_backend directly on the model, but routes it to
+        # HuggingFace's attention interface, which spells flash differently than
+        # ESM++ does ("flash_attention_2", not "kernels_flash"). Try the requested
+        # name first, then equivalents, so one env var works across both families.
+        if hasattr(model, "attn_backend"):
+            candidates = {
+                "kernels_flash": ("kernels_flash", "flash_attention_2", "sdpa"),
+                "flash_attention_2": ("flash_attention_2", "kernels_flash", "sdpa"),
+                "flex": ("flex", "flex_attention", "sdpa"),
+            }.get(backend, (backend, "sdpa"))
+            for candidate in candidates:
+                try:
+                    model.attn_backend = candidate
+                except (ValueError, AssertionError, KeyError, NotImplementedError):
+                    continue
+                if candidate != backend:
+                    logger.info(
+                        "   FastPLM does not accept '%s'; using '%s'", backend, candidate
+                    )
+                logger.info("   Forced FastPLM attention backend: %s", candidate)
+                return
+            logger.warning(
+                "   Could not set any attention backend from %s; leaving model default",
+                candidates,
+            )
         return
     if hasattr(transformer, "attn_backend"):
-        transformer.attn_backend = "sdpa"
+        # The ESM++ transformer's attn_backend setter resolves the string to an
+        # AttentionBackend enum and propagates it to every block's attention. Do NOT
+        # also assign the raw string per block: block.attn._attn compares against the
+        # enum, so a leaked string raises "Unsupported resolved backend: <str>".
+        transformer.attn_backend = backend
     for block in getattr(transformer, "blocks", []):
         attn = getattr(block, "attn", None)
-        if attn is not None:
-            if hasattr(attn, "attn_backend"):
-                attn.attn_backend = "sdpa"
-            if hasattr(attn, "flex_attention"):
-                attn.flex_attention = None
-    logger.info("   Forced SDPA attention backend (flex_attention disabled)")
+        if attn is not None and backend == "sdpa" and hasattr(attn, "flex_attention"):
+            attn.flex_attention = None
+    flex_note = " (flex_attention disabled)" if backend == "sdpa" else ""
+    logger.info("   Forced ESM++ attention backend: %s%s", backend, flex_note)
 
 
 # =============================================================================
@@ -450,7 +527,9 @@ class _PLMWrapperBase(nn.Module):
         model_kwargs, orig_len = self._prepare_inputs(input_ids, attention_mask)
         outputs = self.model(**model_kwargs)
         embedding = outputs.hidden_states[-1][:, :orig_len, :]
-        return (embedding,)
+        # Must match ESMplusplusWrapper: sentence-transformers >=5.4 reads
+        # `last_hidden_state` off the module output, so a bare tuple fails.
+        return BaseModelOutput(last_hidden_state=embedding)
 
     def save_pretrained(self, *args, **kwargs):
         return self.model.save_pretrained(*args, **kwargs)
@@ -491,7 +570,11 @@ class ESMplusplusWrapper(_PLMWrapperBase):
             embedding = outputs.last_hidden_state[:, :orig_len, :]
         else:
             embedding = outputs.hidden_states[-1][:, :orig_len, :]
-        return (embedding,)
+        # sentence-transformers >=5.4 Transformer.forward reads `last_hidden_state`
+        # from the model output (attribute/index); a bare tuple no longer works.
+        # BaseModelOutput also indexes as [0]==last_hidden_state, so older callers
+        # remain compatible.
+        return BaseModelOutput(last_hidden_state=embedding)
 
 
 class FastPLMESM2Wrapper(ESMplusplusWrapper):
@@ -500,11 +583,29 @@ class FastPLMESM2Wrapper(ESMplusplusWrapper):
     FastPLM ESM2 (Synthyra/ESM2-*) is a bug-fixed ESM2 that correctly handles
     attention_mask in embeddings (unlike HuggingFace transformers >=5.x).
     Identical to ESMplusplusWrapper but raises on missing hidden states.
+
+    Runs the bare encoder (``model.esm``) rather than the ForMaskedLM head, and
+    does not ask for ``output_hidden_states``. Only the last layer is ever used
+    (see below), so requesting all 13 pinned every intermediate activation for
+    the backward pass, and the ``lm_head`` vocabulary projection ran on every
+    forward while receiving no gradient. Neither is needed to embed.
     """
+
+    def __init__(self, model):
+        super().__init__(model)
+        # Keep self.model as the full model so save_pretrained/get_input_embeddings
+        # still round-trip the lm_head; only the forward path skips it.
+        self._encoder = getattr(model, "esm", None) or model
+
+    def _prepare_inputs(self, input_ids, attention_mask):
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }, input_ids.shape[1]
 
     def forward(self, input_ids=None, attention_mask=None, **kwargs):
         model_kwargs, orig_len = self._prepare_inputs(input_ids, attention_mask)
-        outputs = self.model(**model_kwargs)
+        outputs = self._encoder(**model_kwargs)
         if (
             hasattr(outputs, "last_hidden_state")
             and outputs.last_hidden_state is not None
@@ -514,7 +615,9 @@ class FastPLMESM2Wrapper(ESMplusplusWrapper):
             embedding = outputs.hidden_states[-1][:, :orig_len, :]
         else:
             raise RuntimeError("FastPLM ESM2 model returned no hidden states")
-        return (embedding,)
+        # Must match ESMplusplusWrapper: sentence-transformers >=5.4 reads
+        # `last_hidden_state` off the module output, so a bare tuple fails.
+        return BaseModelOutput(last_hidden_state=embedding)
 
 
 class DPLM2Wrapper(ESMplusplusWrapper):
@@ -537,7 +640,9 @@ class DPLM2Wrapper(ESMplusplusWrapper):
             embedding = outputs.hidden_states[-1][:, :orig_len, :]
         else:
             raise RuntimeError("DPLM2 model returned no hidden states")
-        return (embedding,)
+        # Must match ESMplusplusWrapper: sentence-transformers >=5.4 reads
+        # `last_hidden_state` off the module output, so a bare tuple fails.
+        return BaseModelOutput(last_hidden_state=embedding)
 
 
 class ProfluentE1Wrapper(ESMplusplusWrapper):
@@ -560,7 +665,9 @@ class ProfluentE1Wrapper(ESMplusplusWrapper):
             embedding = outputs.hidden_states[-1][:, :orig_len, :]
         else:
             raise RuntimeError("Profluent-E1 model returned no hidden states")
-        return (embedding,)
+        # Must match ESMplusplusWrapper: sentence-transformers >=5.4 reads
+        # `last_hidden_state` off the module output, so a bare tuple fails.
+        return BaseModelOutput(last_hidden_state=embedding)
 
 
 class AMPLIFYWrapper(_PLMWrapperBase):
@@ -581,7 +688,9 @@ class AMPLIFYWrapper(_PLMWrapperBase):
         # Apply final layer norm — AMPLIFY excludes it from hidden_states
         if hasattr(self.model, "layer_norm_2"):
             embedding = self.model.layer_norm_2(embedding)
-        return (embedding,)
+        # Must match ESMplusplusWrapper: sentence-transformers >=5.4 reads
+        # `last_hidden_state` off the module output, so a bare tuple fails.
+        return BaseModelOutput(last_hidden_state=embedding)
 
     def _prepare_inputs(self, input_ids, attention_mask):
         input_ids, additive_mask, orig_len, _ = _prepare_amplify_inputs(

@@ -1,34 +1,23 @@
-# Python-generated files
+# Python
 __pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Local tools / agents
+claude/
+agents/
+
+# Local caches
+.cache/
+.cache*/
+hf_datasets_cache/
+
+# Trained checkpoints and run logs (GBs; artifacts live on /storage)
 models/
 logs/
-results/
-wandb/
-embed_cache/
+data/
 
-# Large local and downloaded data artifacts
-data/**/*.parquet
-data/**/*.arrow
-data/**/*.fasta
-data/**/*.fa
-data/**/*.gz
-!data/**/*.meta.json
-
-# Local tooling artifacts
-tools/mmseqs/bin/mmseqs
-tools/mmseqs/userguide.pdf
-tools/mmseqs/examples/DB.fasta
-
-# Local editor and environment overrides
-.vscode/settings.json
-.env
-.env.*
-!.env.example
-
-# Virtual environments
-.venv
+# mmseqs binary: symlink to /storage/users/ddofer/software/mmseqs
+tools/

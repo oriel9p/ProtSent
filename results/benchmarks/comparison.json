@@ -1,0 +1,1064 @@
+{
+  "naming": {
+    "ProtSent-V1": "oriel9p/protsent-esm2-35M (published, unfiltered corpus)",
+    "ProtSent-V2": "ProtSent-V2-35M (decontaminated); on disk protsent_esm2_35m_v3 / tag protsent_v3"
+  },
+  "tie_tol": 0.005,
+  "arms": {
+    "mmseqs": "MMseqs2",
+    "esm2_35m": "ESM-2 35M",
+    "protsent_old": "ProtSent-V1",
+    "protsent_v3": "ProtSent-V2"
+  },
+  "tables": {
+    "knn": [
+      {
+        "task_key": "binary_subcellular_localization",
+        "task": "Binary Subcellular Localization",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6833982645178726,
+          "esm2_35m": null,
+          "protsent_old": 0.90886,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "material_production",
+        "task": "Material Production",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.5796436135390605,
+          "esm2_35m": null,
+          "protsent_old": 0.77159,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "metal_ion_binding",
+        "task": "Metal Ion Binding",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.7238573032491951,
+          "esm2_35m": null,
+          "protsent_old": 0.8015,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "peptide_hla",
+        "task": "Peptide-HLA Binding",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6374484376366069,
+          "esm2_35m": null,
+          "protsent_old": 0.78598,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "profet_np_sp_cleaved",
+        "task": "Neuropeptide Precursor Prediction (ProFET/NeuroPID)",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.9010262725779967,
+          "esm2_35m": null,
+          "protsent_old": 0.95844,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "signalp_binary",
+        "task": "Signal Peptide Prediction (SignalP/ProteinBERT)",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.7961100977232046,
+          "esm2_35m": null,
+          "protsent_old": 0.97772,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "solubility",
+        "task": "Solubility (DeepSol)",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.4184977522477522,
+          "esm2_35m": null,
+          "protsent_old": 0.54126,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "antibiotic_resistance",
+        "task": "Antibiotic Resistance",
+        "problem_type": "multiclass",
+        "main_metric": "AUC",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.9543746762905106,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [
+          "protsent_old"
+        ],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "remote_homology",
+        "task": "Remote Homology (Fold)",
+        "problem_type": "multiclass",
+        "main_metric": "AUC",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6522876960846462,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [
+          "protsent_old"
+        ],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "subcellular_loc",
+        "task": "Subcellular Localisation",
+        "problem_type": "multiclass",
+        "main_metric": "AUC",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6828278382299967,
+          "esm2_35m": null,
+          "protsent_old": 0.82462,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "temperature_stability",
+        "task": "Temperature Stability",
+        "problem_type": "multiclass",
+        "main_metric": "AUC",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6852530271675003,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [
+          "protsent_old"
+        ],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "ec_classification",
+        "task": "EC Classification",
+        "problem_type": "multilabel",
+        "main_metric": "F1_Macro",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": true,
+        "values": {
+          "mmseqs": 0.710252865931774,
+          "esm2_35m": null,
+          "protsent_old": 0.56166,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "go_mf",
+        "task": "Molecular Function (GO)",
+        "problem_type": "multilabel",
+        "main_metric": "F1_Macro",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": true,
+        "values": {
+          "mmseqs": 0.584953707648861,
+          "esm2_35m": null,
+          "protsent_old": 0.44342,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "aav_flip",
+        "task": "AAV Fitness (FLIP)",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split_column"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.4024100601203913,
+          "esm2_35m": null,
+          "protsent_old": 0.55532,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "beta_lactamase_peer",
+        "task": "beta-lactamase-PEER",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split_column"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.8026020318144645,
+          "esm2_35m": null,
+          "protsent_old": 0.76763,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "cloning_clf",
+        "task": "Cloning Classification",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.17068702696215293,
+          "esm2_35m": null,
+          "protsent_old": 0.37739,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "enzyme_catalytic_efficiency",
+        "task": "Enzyme Catalytic Efficiency",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6322069418592415,
+          "esm2_35m": null,
+          "protsent_old": 0.6826,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "fluorescence",
+        "task": "Fluorescence (TAPE)",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.3863257944210319,
+          "esm2_35m": null,
+          "protsent_old": 0.45103,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "optimal_ph",
+        "task": "Optimal pH",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.5462031014630815,
+          "esm2_35m": null,
+          "protsent_old": 0.5742,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "stability",
+        "task": "Stability (Biomap)",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.5816822197266279,
+          "esm2_35m": null,
+          "protsent_old": 0.56378,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "thermostability",
+        "task": "Thermostability (FLIP)",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_random_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.4798753815432825,
+          "esm2_35m": null,
+          "protsent_old": 0.47536,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "variant_effect",
+        "task": "Variant Effect (GB1)",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "knn",
+        "eval_strategies": [
+          "test_split"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.7166439493464695,
+          "esm2_35m": null,
+          "protsent_old": 0.71075,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "scope40_retrieval",
+        "task": "SCOPe-40 Structural Retrieval",
+        "problem_type": "retrieval",
+        "main_metric": "Recall@10",
+        "probe": "knn",
+        "eval_strategies": [
+          "retrieval_unchanged"
+        ],
+        "probe_ignored": true,
+        "values": {
+          "mmseqs": 0.5636610783869506,
+          "esm2_35m": 0.58405,
+          "protsent_old": 0.65292,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": 0.06886999999999999,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {
+          "esm2_35m": "from scope40_table.json (standalone retrieval run)"
+        }
+      }
+    ],
+    "linear": [
+      {
+        "task_key": "binary_subcellular_localization",
+        "task": "Binary Subcellular Localization",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6833982645178726,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "material_production",
+        "task": "Material Production",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.5796436135390605,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "metal_ion_binding",
+        "task": "Metal Ion Binding",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.7238573032491951,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "peptide_hla",
+        "task": "Peptide-HLA Binding",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6374484376366069,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "profet_np_sp_cleaved",
+        "task": "Neuropeptide Precursor Prediction (ProFET/NeuroPID)",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.9010262725779967,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "signalp_binary",
+        "task": "Signal Peptide Prediction (SignalP/ProteinBERT)",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.7961100977232046,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "solubility",
+        "task": "Solubility (DeepSol)",
+        "problem_type": "binary",
+        "main_metric": "AUC",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.4184977522477522,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "antibiotic_resistance",
+        "task": "Antibiotic Resistance",
+        "problem_type": "multiclass",
+        "main_metric": "AUC",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.9543746762905106,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "remote_homology",
+        "task": "Remote Homology (Fold)",
+        "problem_type": "multiclass",
+        "main_metric": "AUC",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6522876960846462,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "subcellular_loc",
+        "task": "Subcellular Localisation",
+        "problem_type": "multiclass",
+        "main_metric": "AUC",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6828278382299967,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "temperature_stability",
+        "task": "Temperature Stability",
+        "problem_type": "multiclass",
+        "main_metric": "AUC",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6852530271675003,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "ec_classification",
+        "task": "EC Classification",
+        "problem_type": "multilabel",
+        "main_metric": "F1_Macro",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.710252865931774,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "go_mf",
+        "task": "Molecular Function (GO)",
+        "problem_type": "multilabel",
+        "main_metric": "F1_Macro",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.584953707648861,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "aav_flip",
+        "task": "AAV Fitness (FLIP)",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.4024100601203913,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "beta_lactamase_peer",
+        "task": "beta-lactamase-PEER",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.8026020318144645,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "cloning_clf",
+        "task": "Cloning Classification",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.17068702696215293,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "enzyme_catalytic_efficiency",
+        "task": "Enzyme Catalytic Efficiency",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.6322069418592415,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "fluorescence",
+        "task": "Fluorescence (TAPE)",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.3863257944210319,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "optimal_ph",
+        "task": "Optimal pH",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.5462031014630815,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "stability",
+        "task": "Stability (Biomap)",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.5816822197266279,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "thermostability",
+        "task": "Thermostability (FLIP)",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.4798753815432825,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "variant_effect",
+        "task": "Variant Effect (GB1)",
+        "problem_type": "regression",
+        "main_metric": "Spearman",
+        "probe": "linear",
+        "eval_strategies": [],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.7166439493464695,
+          "esm2_35m": null,
+          "protsent_old": null,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": null,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {}
+      },
+      {
+        "task_key": "scope40_retrieval",
+        "task": "SCOPe-40 Structural Retrieval",
+        "problem_type": "retrieval",
+        "main_metric": "Recall@10",
+        "probe": "linear",
+        "eval_strategies": [
+          "retrieval_unchanged"
+        ],
+        "probe_ignored": false,
+        "values": {
+          "mmseqs": 0.5636610783869506,
+          "esm2_35m": 0.58405,
+          "protsent_old": 0.65292,
+          "protsent_v3": null
+        },
+        "ran_but_no_main_metric": [],
+        "delta_v1_minus_esm2": 0.06886999999999999,
+        "delta_v2_minus_esm2": null,
+        "source_notes": {
+          "esm2_35m": "from scope40_table.json (standalone retrieval run)",
+          "protsent_old": "from scope40_table.json (standalone retrieval run)"
+        }
+      }
+    ]
+  },
+  "summary": {
+    "knn": {
+      "n_tasks": 23,
+      "tie_tol": 0.005,
+      "protsent_old": {
+        "n_compared": 1,
+        "beats": 1,
+        "ties": 0,
+        "loses": 0,
+        "median_delta": 0.06886999999999999
+      },
+      "protsent_v3": {
+        "n_compared": 0,
+        "beats": 0,
+        "ties": 0,
+        "loses": 0,
+        "median_delta": null
+      },
+      "mmseqs_beats_best_embedding": {
+        "n": 5,
+        "tasks": [
+          "ec_classification",
+          "go_mf",
+          "beta_lactamase_peer",
+          "stability",
+          "variant_effect"
+        ]
+      }
+    },
+    "linear": {
+      "n_tasks": 23,
+      "tie_tol": 0.005,
+      "protsent_old": {
+        "n_compared": 1,
+        "beats": 1,
+        "ties": 0,
+        "loses": 0,
+        "median_delta": 0.06886999999999999
+      },
+      "protsent_v3": {
+        "n_compared": 0,
+        "beats": 0,
+        "ties": 0,
+        "loses": 0,
+        "median_delta": null
+      },
+      "mmseqs_beats_best_embedding": {
+        "n": 0,
+        "tasks": []
+      }
+    }
+  },
+  "caveats": {
+    "non_heldout_eval": {
+      "thermostability": [
+        "knn:test_random_split"
+      ]
+    },
+    "protocol_notes": {
+      "scope40_retrieval": [
+        "_",
+        "a",
+        "a",
+        "c",
+        "d",
+        "e",
+        "e",
+        "e",
+        "g",
+        "h",
+        "i",
+        "l",
+        "n",
+        "n",
+        "r",
+        "r",
+        "t",
+        "u",
+        "v"
+      ]
+    },
+    "errored_tasks": {},
+    "probe_ignored": {
+      "ec_classification": [
+        "knn"
+      ],
+      "go_mf": [
+        "knn"
+      ],
+      "scope40_retrieval": [
+        "knn"
+      ]
+    },
+    "ran_but_no_main_metric": {
+      "antibiotic_resistance": [
+        "knn:protsent_old"
+      ],
+      "remote_homology": [
+        "knn:protsent_old"
+      ],
+      "temperature_stability": [
+        "knn:protsent_old"
+      ]
+    },
+    "no_data_tasks": [
+      "rhla_enzyme_mutations"
+    ],
+    "not_literature_comparable": {
+      "remote_homology": "pooled TAPE holdouts (718 fold + 1254 superfamily + 1272 family), 457-class macro AUC; published numbers are per-holdout top-1 accuracy",
+      "thermostability": "seeded 80/20 resplit of train, not the FLIP test set"
+    }
+  }
+}

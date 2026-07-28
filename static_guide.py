@@ -9,7 +9,7 @@ from typing import Sequence, cast
 
 import torch
 from sentence_transformers import SentenceTransformer
-from sentence_transformers.models import StaticEmbedding
+from sentence_transformers.sentence_transformer.modules import StaticEmbedding
 from tokenizers import Tokenizer
 from transformers import (
     AutoModel,
