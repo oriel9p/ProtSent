@@ -70,7 +70,10 @@ mkdir -p logs/bench_v3
 # A bare directory is not a model: the trainer creates $MODEL_NEW/debug_traces
 # at startup, so `-d` alone is true within seconds of launch and the sweep will
 # happily run against a checkpoint that does not exist. Require actual weights.
-if ! ls "$MODEL_NEW"/*.safetensors "$MODEL_NEW"/pytorch_model.bin >/dev/null 2>&1; then
+# Check each candidate separately: `ls a b` exits non-zero when EITHER is absent,
+# so testing both in one ls rejects a perfectly good safetensors-only checkpoint.
+if ! compgen -G "$MODEL_NEW"/*.safetensors >/dev/null \
+   && [[ ! -f "$MODEL_NEW/pytorch_model.bin" ]]; then
   echo "ERROR: no model weights under $MODEL_NEW -- training did not finish" >&2
   exit 1
 fi
