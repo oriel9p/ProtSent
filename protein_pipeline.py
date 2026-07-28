@@ -229,6 +229,7 @@ from model_utils import (
     detect_model_type,
     disable_esm2_token_dropout,
     force_sdpa_backend,
+    patch_unknown_residue_tokens,
     from_pretrained_with_flash,
     get_torch_compile_settings,
     uses_hf_esm_rotary_embeddings,
@@ -758,6 +759,12 @@ def _attach_backbone(word_embedding_model, hf_model, tokenizer) -> None:
         word_embedding_model.model = hf_model
     else:
         word_embedding_model.auto_model = hf_model
+
+    # 'J' (Leu/Ile ambiguity) is absent from the ESM2 vocabulary and FastPLM
+    # raises KeyError rather than using unk_token, killing a dataloader worker
+    # and with it the whole DDP run. Map unknown residues to 'X' here, the one
+    # point every model branch routes its tokenizer through.
+    patch_unknown_residue_tokens(tokenizer)
 
     if isinstance(getattr(type(word_embedding_model), "tokenizer", None), property):
         word_embedding_model.processor = cast(Any, tokenizer)

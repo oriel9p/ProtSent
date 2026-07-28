@@ -258,3 +258,26 @@ def test_compare_benchmarks_uses_latest_historical_row(tmp_path) -> None:
     comparison_df = compare_benchmarks(str(model1), str(model2))
 
     assert comparison_df.loc[0, "Best_AUC"] == pytest.approx(0.95)
+
+
+@pytest.mark.slow
+def test_task_datasets_are_reachable_on_the_hub() -> None:
+    """Every task must point at a dataset repo that actually resolves.
+
+    Two tasks shipped pointing at `anonymous-protsent/*` review-anonymised repos
+    that are not published, so the benchmark sweep died on them with
+    DatasetNotFoundError only after the rest of the suite had already run.
+    """
+    from datasets import get_dataset_split_names
+
+    from benchmark_tasks import TASKS
+
+    checked = {"signalp_binary", "profet_np_sp_cleaved"}
+    for key in sorted(checked):
+        cfg = TASKS[key]
+        assert not cfg.dataset.startswith("anonymous-"), (
+            f"{key} still points at an unpublished anonymised repo: {cfg.dataset}"
+        )
+        splits = get_dataset_split_names(cfg.dataset)
+        assert cfg.train_split in splits, f"{key}: {cfg.train_split} not in {splits}"
+        assert cfg.test_split in splits, f"{key}: {cfg.test_split} not in {splits}"

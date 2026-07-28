@@ -86,9 +86,42 @@ friends) is pretrained on UniRef50, which contains all of SCOPe. The
 contamination is common to every model in the table, so the **delta** is the
 quantity being measured, and it is measured fairly.
 
-> Open item: confirm the precedent citation (ProtTucker / TM-Vec / DGEB) for
-> what the field accepts here before quoting it in the response letter. Not yet
-> verified against the primary sources.
+**Precedent (verified).** ProtTucker (Heinzinger *et al.*, *NAR Genom. Bioinform.*
+4(2):lqac043, 2022, doi:10.1093/nargab/lqac043) is the closest published analogue
+and takes exactly posture (c):
+
+- Data: CATH v4.3 sequence-unique set, CATH-S100 (123k domains). `test300`
+  (300 proteins) and `val200` (200) were **randomly split off** from CATH-S100,
+  constrained so that every homologous superfamily appears at most once *within*
+  the held-out sets and every held-out protein carries an SSG annotation.
+- Redundancy reduction: proteins sharing **>20% PIDE** with any val/test protein
+  were removed **from the training set**, using MMseqs2 iterative profile search
+  (`--num-iterations 3 -s 7.5 --cov-mode 0`). Result: `train66k`, lookup set
+  `lookup69k`, query set `test219` (test300 minus queries with no same-H protein
+  left in the lookup set).
+- **The holdout is at the sequence-identity level, not the H level.** Training
+  and lookup sets deliberately still contain the *same* homologous superfamilies
+  as the queries — they must, since the task is transferring an H-level label
+  from lookup to query by embedding kNN. So "no H-level leakage" is not what
+  ProtTucker claims; it claims no >20%-PIDE sequence leakage.
+- **They applied no decontamination to the underlying pLM's pretraining corpus.**
+  ProtTucker is a 2-layer FNN (1024→256→tanh→128) on frozen ProtT5-XL-U50
+  embeddings; ProtT5 was pretrained on BFD + UniRef50, which contains CATH in
+  full. No statement addressing this overlap appears in the paper. *(Established
+  by repeated search of the methods text; the journal/bioRxiv hosts are blocked
+  by this cluster's firewall, so confirm by eye before quoting an absence in the
+  response letter.)*
+- Eval: embedding-based annotation transfer (EAT), Euclidean 1-NN from lookup to
+  query, accuracy reported per CATH level (C/A/T/H); queries whose top hit came
+  from a different level counted wrong; sequence-search baselines (MMseqs2,
+  HMMER) scored as incorrect when no hit at E<10, and the headline claim is
+  performance in the "midnight zone" (<20% PIDE).
+
+The field's accepted standard is therefore identity-based decontamination of the
+*supervised* split plus low-identity stratification — not removal of the
+benchmark from the self-supervised pretraining corpus. §1 (40% PIDE filtering of
+the pretraining corpora) is *stricter* than this precedent; §2a is the same
+midnight-zone stratification.
 
 ---
 
@@ -121,20 +154,97 @@ embedding model should close; hiding it would flatter the baseline.
 Remote homology hit coverage: **0.8893** — 359 of 3,244 test sequences find no
 homolog at any sensitivity, and score 0.
 
-### Other benchmarks
+### Full sweep — all 24 evaluable tasks
 
-*PENDING* — sweep running across the binary / multiclass / regression /
-multilabel tasks, plus a low-sensitivity (`-s 5.7`) variant to document the
-speed-vs-accuracy tradeoff.
+All rows on the **test** split (`--eval_split test`), sorted by task type.
+Raw JSON: `results/benchmarks/mmseqs_baseline.json`.
 
-Excluded by construction: `ppi_bernett` (pair-input, not single-sequence), all
-`proteingym_*` (mutant-vs-WT scoring), `chezod_disorder` (local data dir).
+| task | type | metric | MMseqs2 | secondary | hit cov. | n train/test |
+|---|---|---|---:|---|---:|---|
+| profet_np_sp_cleaved | binary | AUC | **0.9010** | Acc 0.9228; F1m 0.9127 | 0.9555 | 2,727/337 |
+| signalp_binary | binary | AUC | 0.7961 | Acc 0.9345; F1m 0.8728 | 0.7695 | 16,606/4,152 |
+| metal_ion_binding | binary | AUC | 0.7239 | Acc 0.7755; F1m 0.7755 | 0.9542 | 6,000/1,332 |
+| binary_subcellular_localization | binary | AUC | 0.6834 | Acc 0.7176; F1m 0.7167 | 0.8954 | 5,184/1,749 |
+| peptide_hla | binary | AUC | 0.6374 | Acc 0.7761; F1m 0.7761 | 1.0000 | 57,357/8,406 |
+| material_production | binary | AUC | 0.5796 | Acc 0.6577; F1m 0.5964 | 0.9643 | 23,339/4,791 |
+| solubility | binary | AUC | **0.4185** | Acc 0.4183; F1m 0.4116 | 0.9505 | 62,478/2,001 |
+| antibiotic_resistance | multiclass | AUC | **0.9544** | Acc 0.9821; F1m 0.9199 | 0.9948 | 2,072/1,344 |
+| temperature_stability | multiclass | AUC | 0.6853 | Acc 0.8552; F1m 0.8552 | 0.9717 | 283,057/73,205 |
+| subcellular_loc | multiclass | AUC | 0.6828 | Acc 0.5304; F1m 0.3988 | 0.8974 | 6,622/1,842 |
+| **remote_homology** | multiclass | AUC | **0.6523** | Acc 0.4365; F1m 0.2064 (457 cls) | 0.8893 | 12,312/3,244 |
+| ec_classification | multilabel | F1_Macro | 0.7103 | F1_Micro 0.8777 | 0.9900 | 13,090/1,604 |
+| go_mf | multilabel | F1_Macro | 0.5850 | F1_Micro 0.6406 | 0.9555 | 22,081/3,350 |
+| beta_lactamase_peer | regression | Spearman | **0.8026** | MSE 0.0380 | 1.0000 | 4,158/520 |
+| variant_effect | regression | Spearman | 0.7166 | MSE 1.0326 | 1.0000 | 6,289/1,745 |
+| enzyme_catalytic_efficiency | regression | Spearman | 0.6322 | MSE 17.79 | 0.9941 | 13,470/1,684 |
+| stability | regression | Spearman | 0.5817 | MSE 0.3503 | 1.0000 | 53,614/12,851 |
+| optimal_ph | regression | Spearman | 0.5462 | MSE 1.0000 | 0.9868 | 7,124/1,971 |
+| thermostability | regression | Spearman | 0.4799 | MSE 0.0448 | 0.9933 | 5,377/1,345 |
+| aav_flip | regression | Spearman | 0.4024 | MSE 11.65 | 1.0000 | 22,246/50,432 |
+| fluorescence | regression | Spearman | 0.3863 | MSE 2.0808 | 1.0000 | 21,446/27,217 |
+| cloning_clf | regression | Spearman | 0.1707 | MSE 0.3969 | 0.9666 | 23,375/4,791 |
+| rhla_enzyme_mutations | regression | Spearman | *n/a* | MSE 0.2045 | **0.0000** | 942/511 |
+| **scope40_retrieval** | retrieval | Recall@10 | **0.5637** | R@1 0.5029; R@30 0.5641 | n/a | 2,207/2,207 |
 
-> **Comparability caveat.** `mmseqs_baseline.py` evaluates on each task's
-> declared **test** split. `protein_benchmark_suite.py` defaults to
-> `--eval_split validation`, which falls back to 4-fold CV on train when a task
-> has no validation split. Those protocols are **not** comparable — the model
-> side must be run with `--eval_split test` for the table to be honest.
+Reading of these numbers:
+
+- **`antibiotic_resistance` (0.954) and `beta_lactamase_peer` (0.803) are close to
+  saturated by alignment alone.** These are the tasks where an embedding model has
+  to justify its existence; a PLM that merely matches these adds nothing.
+- **`solubility` at AUC 0.4185 is *below chance*** — the nearest homolog's
+  solubility label is anti-correlated. Solubility is not conserved by homology, so
+  a sequence-similarity prior actively misleads. Good evidence that some tasks
+  cannot be solved by retrieval.
+- **`rhla_enzyme_mutations` has 0% hit coverage** and no Spearman. Its `protein`
+  column holds 6-residue mutation-site strings, not proteins; MMseqs2 reports
+  `No k-mer could be extracted`. Structurally incompatible with alignment search
+  — not a bug, and not a task where this baseline means anything.
+- `peptide_hla` inputs are pipe-joined `HLA_pseudoseq|peptide` strings (~44 chars).
+  MMseqs2 treats `|` as an unknown residue. It is the *same* string the model side
+  embeds, so the comparison is fair, but it is not a biologically meaningful
+  alignment.
+
+Excluded by construction: `ppi_bernett` (pair input, not single-sequence), all
+`proteingym_*` (mutant-vs-WT scoring), `chezod_disorder` (local data dir),
+`cafa5` (size).
+
+### Sensitivity variant
+
+Documenting the speed/accuracy trade, since a cheaper search was considered:
+
+| task | metric | `-s 7.5` | `-s 5.7` | Δ |
+|---|---|---:|---:|---:|
+| scope40_retrieval | Recall@10 | 0.5637 | 0.4259 | **−0.1378** |
+| scope40_retrieval | Recall@1 | 0.5029 | 0.3847 | −0.1182 |
+| remote_homology | AUC | 0.6523 | 0.6262 | −0.0261 |
+| remote_homology | hit coverage | 0.8893 | 0.6233 | **−0.2660** |
+
+MMseqs2 search time 4.09 s → 3.40 s (scope40) and 5.34 s → 3.62 s
+(remote_homology). `-s 5.7` saves ~1.7 s on a 5 s search and costs 13.8 points of
+Recall@10 — plainly the wrong trade at this scale. `-s 7.5` is used throughout.
+
+### Split protocol — read before comparing any number here to a model number
+
+Everything above is the **test** split. The benchmark suite defaults to
+`--eval_split validation`, which falls back to 4-fold CV on *train* when a task
+declares no validation split, so the default is **not** comparable to this table.
+`run_benchmarks_v3.sh` therefore passes `-e test` for both models.
+
+Two specifics worth stating in the paper:
+
+- These 6 tasks have **no validation split** and would hit CV-on-train under the
+  suite default: `metal_ion_binding`, `material_production`, `subcellular_loc`,
+  `antibiotic_resistance`, `cloning_clf`, `thermostability`.
+- **`thermostability` has no real test split either.** Under `-e test` the suite
+  takes a seeded 80/20 split of train (`eval_strategy=test_random_split`). The
+  MMseqs2 row uses that same seeded split, so the pairing is self-consistent, but
+  it is not an official held-out set and should not be presented as one.
+- `remote_homology`'s test split (3,244) is TAPE remote homology repackaged: the
+  *pooled* concatenation of TAPE's three holdouts (718 fold + 1,254 superfamily +
+  1,272 family), with no column marking which. Published work reports per-holdout
+  top-1 accuracy on those three separately, so **our pooled 457-class macro AUC is
+  not comparable to a published TAPE number** — say so rather than let a reviewer
+  attempt the comparison.
 
 ---
 
@@ -190,6 +300,24 @@ But the paper cannot claim "trained on the entire filtered corpus."
 ## 5. Pending
 
 - [ ] SCOPe-40 identity stratification vs the pretraining corpus (§2a, §2b)
-- [ ] MMseqs2 baseline across the remaining benchmarks + sensitivity variant (§3)
-- [ ] ProtSent-v2-35M benchmark results: kNN probe and linear probe, vs ESM2-35M
-- [ ] Verify the ProtTucker / TM-Vec / DGEB precedent citation (§2)
+- [x] MMseqs2 baseline across all 24 evaluable benchmarks + sensitivity variant (§3)
+- [ ] ProtSent-v2-35M benchmark results: kNN probe and linear probe, vs ESM2-35M,
+      both with `-e test`
+- [ ] **Additional metrics to match the comparison papers.** The table in §3
+      reports each task's declared `main_metric` plus whatever the evaluator
+      emits. Papers we are compared against may report different quantities
+      (e.g. per-holdout top-1 accuracy for TAPE remote homology; Foldseek/TM-Vec
+      style "sensitivity up to the first false positive" for SCOPe rather than
+      Recall@K; alignment/embedding-geometry diagnostics such as
+      alignment-vs-uniformity, embedding anisotropy, or TM-score correlation).
+      Decide which are actually needed for the response letter before adding
+      them — each one is a separate evaluator, and the ones above are not
+      currently computed by either `mmseqs_baseline.py` or the benchmark suite.
+- [x] Verify the ProtTucker precedent citation (§2) — done, see §2
+- [ ] Optional: run ProtTucker as a second baseline. **Blocked, not recommended.**
+      The `ProtTucker_ProtT5.pt` checkpoint is served only from `rostlab.org` and
+      `zenodo.org`, both unreachable from this cluster (NETWORK_WHITELIST.md), and
+      is not mirrored on HF. Even with the weights, embedding both task sets with
+      ProtT5-XL (1.2B-param encoder, 3.07M residues) is ~4-8 h of CPU. No
+      published SCOPe-40 or fold-prediction number is protocol-comparable to ours
+      (see below), so there is nothing to cite in its place either.
