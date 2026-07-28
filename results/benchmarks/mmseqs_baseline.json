@@ -1,0 +1,36 @@
+[
+  {
+    "Model": "MMseqs2 (alignment baseline)",
+    "Task": "SCOPe-40 Structural Retrieval",
+    "task_key": "scope40_retrieval",
+    "main_metric": "Recall@10",
+    "mmseqs_flags": "-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3 --format-output query,target,fident,alnlen,evalue,bits",
+    "Recall@1": 0.5029451744449479,
+    "Recall@10": 0.5636610783869506,
+    "Recall@30": 0.5641141821477118
+  },
+  {
+    "Model": "MMseqs2 (alignment baseline)",
+    "Task": "Remote Homology (Fold)",
+    "task_key": "remote_homology",
+    "main_metric": "AUC",
+    "mmseqs_flags": "-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3 --format-output query,target,fident,alnlen,evalue,bits",
+    "Accuracy": 0.436498150431566,
+    "F1_macro": 0.20637292623481301,
+    "hit_coverage": 0.8893341553637485,
+    "AUC": 0.6522876960846462,
+    "AUC_n_classes": 457
+  },
+  {
+    "Model": "MMseqs2 (alignment baseline)",
+    "Task": "Metal Ion Binding",
+    "task_key": "metal_ion_binding",
+    "main_metric": "AUC",
+    "mmseqs_flags": "-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3 --format-output query,target,fident,alnlen,evalue,bits",
+    "Accuracy": 0.7755255255255256,
+    "F1_macro": 0.7755041416416064,
+    "hit_coverage": 0.9542042042042042,
+    "AUC": 0.7238573032491951,
+    "AUC_n_classes": 2
+  }
+]

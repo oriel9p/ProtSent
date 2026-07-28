@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Local tools / agents
+claude/
+agents/
+
+# Local caches
+.cache/
+.cache*/
+hf_datasets_cache/
+
+# Trained checkpoints and run logs (GBs; artifacts live on /storage)
+models/
+logs/
+data/
+
+# mmseqs binary: symlink to /storage/users/ddofer/software/mmseqs
+tools/
