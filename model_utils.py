@@ -17,6 +17,7 @@ import importlib.util
 import json
 import logging
 import os
+from string import ascii_uppercase
 from pathlib import Path
 from typing import Literal
 
@@ -403,6 +404,46 @@ def _prepare_amplify_inputs(input_ids, attention_mask, device=None):
 # =============================================================================
 # ESMplusplus attention backend
 # =============================================================================
+
+
+def patch_unknown_residue_tokens(tokenizer):
+    """Map residue codes missing from the vocabulary onto 'X' instead of raising.
+
+    The ESM2 vocabulary covers every letter except **J** (the IUPAC ambiguity
+    code for Leu/Ile), and FastPLM's ``_convert_token_to_id``
+    (``fastplms/models/esm2/modeling_fastesm.py:198``) raises ``KeyError`` for an
+    out-of-vocabulary token rather than falling back to ``unk_token``. A single
+    'J' anywhere in the corpus therefore kills a dataloader worker, which takes
+    down the rank and then the whole DDP job -- this happened at step 134 of a
+    4,244-step run.
+
+    'X' is used rather than ``<unk>`` deliberately: ESM2 was pretrained with 'X'
+    as the unknown-residue symbol and has essentially never seen ``<unk>`` in a
+    sequence, so 'X' keeps the input inside the pretraining distribution.
+
+    The fix adds the missing letters to the tokenizer's ``_token_to_id`` dict
+    rather than wrapping ``_convert_token_to_id``. That matters: dataloader
+    workers are spawned, so the tokenizer has to pickle, and a closure over the
+    original method does not (``PicklingError: Can't pickle local object``).
+    A plain dict entry pickles fine.
+
+    Idempotent.
+    """
+    table = getattr(tokenizer, "_token_to_id", None)
+    if not isinstance(table, dict):
+        return
+    fallback_id = table.get("X", tokenizer.unk_token_id)
+    if fallback_id is None:
+        return
+    missing = [c for c in ascii_uppercase if c not in table]
+    for c in missing:
+        table[c] = fallback_id
+    if missing:
+        logger.info(
+            "Residues %s absent from the tokenizer vocabulary; mapped to 'X' (id %d)",
+            "".join(missing),
+            fallback_id,
+        )
 
 
 def force_sdpa_backend(model):

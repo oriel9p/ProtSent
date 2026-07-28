@@ -217,7 +217,7 @@ TASKS: Dict[str, TaskConfig] = {
     ),
     "signalp_binary": TaskConfig(
         name="Signal Peptide Prediction (SignalP/ProteinBERT)",
-        dataset="anonymous-protsent/SignalP_Binary",  # anonymized HF dataset
+        dataset="GrimSqueaker/SignalP_Binary",
         input_map={"seq": "seq"},
         label_col="label",
         problem_type="binary",
@@ -227,7 +227,7 @@ TASKS: Dict[str, TaskConfig] = {
     ),
     "profet_np_sp_cleaved": TaskConfig(
         name="Neuropeptide Precursor Prediction (ProFET/NeuroPID)",
-        dataset="anonymous-protsent/ProFET_NP_SP_Cleaved",  # anonymized HF dataset
+        dataset="GrimSqueaker/ProFET_NP_SP_Cleaved",
         input_map={"seq": "seq"},
         label_col="label",
         problem_type="binary",

@@ -83,6 +83,7 @@ Usage:
 import argparse
 import gc
 import hashlib
+import inspect
 import logging
 import os
 import shutil
@@ -1234,6 +1235,26 @@ def embed_sequences(
         has_embed_dataset = hasattr(model, "embed_dataset") and callable(
             model.embed_dataset
         )
+        if has_embed_dataset:
+            # Only the legacy ESM++ signature (sequences=, max_len=, pooling_types=,
+            # save_path=) is understood below. Current FastPLM builds ship
+            # embed_dataset(inputs, *, pooling=, max_length=, output=, ...) which
+            # returns an EmbeddingResult rather than dict[seq -> tensor]; calling it
+            # with the old keywords raises "missing 1 required positional argument:
+            # 'inputs'". That exception is caught per task and recorded as an Error
+            # row, so the sweep exits 0 with an empty results table -- silent, and
+            # only discovered by reading the CSV. Detect the signature instead and
+            # fall through to the generic batched path, which handles any HF model.
+            try:
+                _params = inspect.signature(model.embed_dataset).parameters
+                has_embed_dataset = "sequences" in _params
+            except (TypeError, ValueError):
+                has_embed_dataset = False
+            if not has_embed_dataset:
+                logger.info(
+                    "embed_dataset() has a non-legacy signature; using the generic "
+                    "batched embedding path"
+                )
 
         if has_embed_dataset:
             # embed_dataset handles batching/sorting internally; returns dict[seq->tensor]
