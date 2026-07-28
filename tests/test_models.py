@@ -153,12 +153,15 @@ class _FakeResidueTokenizer:
 
 
 def test_patch_unknown_residue_tokens_maps_missing_letters_and_pickles():
-    """Guards the two ways this broke a 7-GPU run.
+    """Guards the three ways this broke real runs.
 
     1. ESM2's vocabulary has no 'J' (Leu/Ile ambiguity) and FastPLM raises
        KeyError rather than falling back to unk, killing a dataloader worker.
     2. The first fix wrapped the method in a closure, which cannot be pickled --
        and dataloader workers are spawned, so the tokenizer must pickle.
+    3. Benchmark sequence fields carry non-residue characters: '|' (Peptide-HLA)
+       and '#' (Thermostability FLIP) each errored a whole task. Enumerating A-Z
+       does not cover those.
     """
     import pickle
 
@@ -166,17 +169,26 @@ def test_patch_unknown_residue_tokens_maps_missing_letters_and_pickles():
 
     tok = _FakeResidueTokenizer()
     x_id = tok._token_to_id["X"]
+    true_vocab_size = len(tok._token_to_id)
 
-    with pytest.raises(KeyError):
-        tok.convert("J")
+    for bad in ("J", "|", "#"):
+        with pytest.raises(KeyError):
+            tok.convert(bad)
 
     patch_unknown_residue_tokens(tok)
-    assert tok.convert("J") == x_id
+    for bad in ("J", "|", "#"):
+        assert tok.convert(bad) == x_id
     assert tok.convert("A") != x_id, "existing residues must not be remapped"
+
+    # Fallback must not inflate the reported vocabulary -- the embedding matrix
+    # has only true_vocab_size rows, and a resize would be triggered otherwise.
+    assert len(tok._token_to_id) == true_vocab_size
+    assert "J" not in tok._token_to_id
 
     # The spawn-pickle that PicklingError killed.
     revived = pickle.loads(pickle.dumps(tok))
     assert revived.convert("J") == x_id
+    assert revived.convert("|") == x_id
 
     patch_unknown_residue_tokens(tok)  # idempotent
     assert tok.convert("J") == x_id

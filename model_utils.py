@@ -406,44 +406,67 @@ def _prepare_amplify_inputs(input_ids, attention_mask, device=None):
 # =============================================================================
 
 
-def patch_unknown_residue_tokens(tokenizer):
-    """Map residue codes missing from the vocabulary onto 'X' instead of raising.
+class _FallbackVocab(dict):
+    """Vocabulary dict that returns a fallback id for any unknown token.
 
-    The ESM2 vocabulary covers every letter except **J** (the IUPAC ambiguity
-    code for Leu/Ile), and FastPLM's ``_convert_token_to_id``
+    Defined at module level, with ``__reduce__``, so it survives pickling into
+    spawned dataloader workers.
+
+    ``__missing__`` fires only on ``[]`` lookup, so ``in``, ``len()`` and
+    ``get_vocab()`` still report the true vocabulary -- nothing downstream sees
+    a larger vocab than the embedding matrix has rows.
+    """
+
+    def __init__(self, mapping, fallback_id):
+        super().__init__(mapping)
+        self.fallback_id = fallback_id
+
+    def __missing__(self, key):
+        return self.fallback_id
+
+    def __reduce__(self):
+        return (_FallbackVocab, (dict(self), self.fallback_id))
+
+
+def patch_unknown_residue_tokens(tokenizer):
+    """Map any token missing from the vocabulary onto 'X' instead of raising.
+
+    FastPLM's ``_convert_token_to_id``
     (``fastplms/models/esm2/modeling_fastesm.py:198``) raises ``KeyError`` for an
-    out-of-vocabulary token rather than falling back to ``unk_token``. A single
-    'J' anywhere in the corpus therefore kills a dataloader worker, which takes
-    down the rank and then the whole DDP job -- this happened at step 134 of a
-    4,244-step run.
+    out-of-vocabulary token rather than falling back to ``unk_token``. Stock
+    ``EsmTokenizer`` does not -- so this only bites checkpoints saved with
+    FastPLM's tokenizer identity.
+
+    Two families of offender show up in practice:
+
+    * **residue codes**: 'J' (IUPAC ambiguity code for Leu/Ile) is the one letter
+      absent from the ESM2 vocabulary. A single 'J' killed a dataloader worker at
+      step 134 of a 4,244-step run, which took down the rank and then the DDP job.
+    * **non-residue characters** carried in benchmark sequence fields: '|' in
+      Peptide-HLA and '#' in Thermostability (FLIP) each errored a whole task in
+      the ESM-2 35M benchmark arm.
+
+    Enumerating A-Z covers the first family only, so the fallback is installed for
+    every unknown key instead.
 
     'X' is used rather than ``<unk>`` deliberately: ESM2 was pretrained with 'X'
     as the unknown-residue symbol and has essentially never seen ``<unk>`` in a
     sequence, so 'X' keeps the input inside the pretraining distribution.
 
-    The fix adds the missing letters to the tokenizer's ``_token_to_id`` dict
-    rather than wrapping ``_convert_token_to_id``. That matters: dataloader
-    workers are spawned, so the tokenizer has to pickle, and a closure over the
-    original method does not (``PicklingError: Can't pickle local object``).
-    A plain dict entry pickles fine.
-
     Idempotent.
     """
     table = getattr(tokenizer, "_token_to_id", None)
-    if not isinstance(table, dict):
+    if not isinstance(table, dict) or isinstance(table, _FallbackVocab):
         return
     fallback_id = table.get("X", tokenizer.unk_token_id)
     if fallback_id is None:
         return
-    missing = [c for c in ascii_uppercase if c not in table]
-    for c in missing:
-        table[c] = fallback_id
-    if missing:
-        logger.info(
-            "Residues %s absent from the tokenizer vocabulary; mapped to 'X' (id %d)",
-            "".join(missing),
-            fallback_id,
-        )
+    tokenizer._token_to_id = _FallbackVocab(table, fallback_id)
+    logger.info(
+        "Tokenizer will map out-of-vocabulary tokens (e.g. %s) to 'X' (id %d)",
+        ", ".join(repr(c) for c in ascii_uppercase if c not in table) or "'|', '#'",
+        fallback_id,
+    )
 
 
 def force_sdpa_backend(model):

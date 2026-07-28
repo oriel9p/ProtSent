@@ -154,6 +154,7 @@ from model_utils import (
     from_pretrained_with_flash,
     get_torch_compile_settings,
     needs_esm2_token_dropout_workaround,
+    patch_unknown_residue_tokens,
     _prepare_amplify_inputs,
 )
 
@@ -404,6 +405,35 @@ def _fix_sbert_tokenizer(model) -> None:
 
 
 def load_model(
+    model_name: str, device: str = "cuda", torch_dtype: Optional[torch.dtype] = None
+):
+    """Load a model, then make its tokenizer tolerant of unknown characters.
+
+    FastPLM's tokenizer raises ``KeyError`` on any out-of-vocabulary token
+    instead of falling back to unk. Benchmark sequence fields are not all clean
+    residue strings: '|' (Peptide-HLA) and '#' (Thermostability FLIP) each
+    errored a whole task in the ESM-2 35M arm, and 'J' is absent from the ESM2
+    alphabet entirely. Stock ``EsmTokenizer`` is unaffected, so this is a no-op
+    for the published ProtSent checkpoint.
+
+    Patching here rather than inside ``_load_model_impl`` covers every one of its
+    return paths -- the base ESM-2 35M checkpoint takes the FastPLM-ESM2 branch,
+    not the SentenceTransformer or generic AutoModel ones.
+    """
+    obj, is_sbert, dev = _load_model_impl(model_name, device, torch_dtype)
+
+    tokenizer = None
+    if is_sbert:
+        tokenizer = getattr(obj, "tokenizer", None)
+    elif isinstance(obj, tuple):
+        tokenizer = obj[0]
+    if tokenizer is not None:
+        patch_unknown_residue_tokens(tokenizer)
+
+    return obj, is_sbert, dev
+
+
+def _load_model_impl(
     model_name: str, device: str = "cuda", torch_dtype: Optional[torch.dtype] = None
 ):
     """
