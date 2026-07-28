@@ -98,14 +98,13 @@ def build_probe_rows(bench: Path, probe: str) -> list:
 
     # Task registry: the mmseqs baseline declares task_key/name/metric/type for
     # every paired task. Anything a CSV reports that is not in it still gets a row.
-    by_name = {r["Task"]: k for k, r in mmseqs.items()}
     meta = {
         k: (r["Task"], r["problem_type"], r["main_metric"]) for k, r in mmseqs.items()
     }
+    paired_names = {r["Task"] for r in mmseqs.values()}
     for tag in EMBED_ARMS:
         for name in arms[tag]:
-            if name not in by_name:
-                by_name[name] = name
+            if name not in paired_names:  # no MMseqs2 row: key the task by its name
                 meta.setdefault(name, (name, "?", "?"))
 
     scope_fallback = load_scope_fallback(bench)
@@ -113,6 +112,7 @@ def build_probe_rows(bench: Path, probe: str) -> list:
     out = []
     for key, (name, ptype, metric) in meta.items():
         vals, strategies, notes, recorded_probes, no_metric = {}, [], {}, [], []
+        errors = {}
         m = mmseqs.get(key)
         vals["mmseqs"] = _num(m.get(metric)) if m else None
         for tag in EMBED_ARMS:
@@ -122,6 +122,8 @@ def build_probe_rows(bench: Path, probe: str) -> list:
                 strategies.append(str(r["EvalStrategy"]))
             if r is not None and "Probe" in r:
                 recorded_probes.append(str(r["Probe"]))
+            if r is not None and isinstance(r.get("Error"), str) and r["Error"].strip():
+                errors[tag] = r["Error"].strip()
             if vals[tag] is None and key == "scope40_retrieval":
                 fb = scope_fallback.get(tag)
                 if fb is not None:
@@ -153,6 +155,7 @@ def build_probe_rows(bench: Path, probe: str) -> list:
                 "probe_ignored": bool(recorded_probes) and probe not in recorded_probes,
                 "values": vals,
                 "ran_but_no_main_metric": no_metric,
+                "errors": errors,
                 "delta_v1_minus_esm2": _delta(vals["protsent_old"], vals["esm2_35m"]),
                 "delta_v2_minus_esm2": _delta(vals["protsent_v3"], vals["esm2_35m"]),
                 "source_notes": notes,
@@ -272,12 +275,21 @@ def caveats(all_rows: dict, bench: Path) -> dict:
             if r["probe_ignored"]:
                 probe_ignored.setdefault(r["task_key"], set()).add(probe)
             for tag in r["ran_but_no_main_metric"]:
-                no_metric.setdefault(r["task_key"], set()).add(f"{probe}:{tag}")
+                # A crash and an uncomputable metric are both a blank cell but
+                # have nothing else in common; report each under its own heading.
+                if tag in r["errors"]:
+                    errored.setdefault(r["task_key"], {})[f"{probe}:{tag}"] = r["errors"][tag]
+                else:
+                    no_metric.setdefault(r["task_key"], set()).add(f"{probe}:{tag}")
             for st in r["eval_strategies"]:
                 if st == "task_exception":
                     # The suite catches per-task errors and still exits 0: a run
-                    # can look clean while a task never produced a number.
-                    errored.setdefault(r["task_key"], set()).add(probe)
+                    # can look clean while a task never produced a number. The
+                    # Error column above normally names the arm; this only backstops
+                    # a task_exception row that carried no Error text.
+                    ent = errored.setdefault(r["task_key"], {})
+                    if not any(k.startswith(f"{probe}:") for k in ent):
+                        ent[f"{probe}:?"] = "task_exception (no Error text in CSV)"
                 elif st in PROTOCOL_STRATEGIES:
                     protocol.setdefault(r["task_key"], st)
                 elif st not in HELD_OUT_STRATEGIES:
@@ -375,10 +387,25 @@ def render_md(all_rows: dict, summaries: dict, bench: Path) -> str:
             )
         A("")
     if errored:
-        A("### Tasks that errored during the sweep (cell is `--`, not a result)\n")
+        A("### Tasks that crashed during the sweep (`n/a` cell, no number produced)\n")
         for k in sorted(errored):
-            A(f"- **{k}** -- `EvalStrategy = task_exception` in: {', '.join(sorted(errored[k]))}.")
-        A("")
+            for where, msg in sorted(errored[k].items()):
+                A(f"- **{k}** -- `{where}` raised `{msg}`.")
+        A(
+            "\nThe suite catches per-task exceptions, writes them into an `Error` column "
+            "and still exits 0, so a crashed task does **not** show up as a failed run. "
+            "The `KeyError: '|'` / `KeyError: '#'` crashes are a tokenizer-vocabulary "
+            "problem, not a model-quality result: `embed_sequences` -> FastPLM "
+            "`modeling_fastesm._convert_token_to_id` **raises** on an out-of-vocab "
+            "character instead of mapping it to `<unk>`. `peptide_hla` sequences contain "
+            "`|` (the peptide/HLA separator) and `thermostability` contains `#`. The arm "
+            "scored nothing, not badly -- do not read it as ESM-2 losing. It is also not "
+            "consistent across arms: in this sweep both tasks crashed for "
+            "`/storage/models/ESM2-35M` under the kNN probe and scored normally for the "
+            "same checkpoint under the linear probe, which shares the embedding code "
+            "path. Re-run the affected task/probe before concluding anything from an "
+            "empty cell here.\n"
+        )
     if no_metric:
         A("### Main metric unavailable (`n/a` cells) -- do NOT read these as a model failure\n")
         for k in sorted(no_metric):
@@ -502,8 +529,10 @@ def selfcheck() -> None:
         csv("protsent_old", "knn", hdr
             + "o,T AUC,2026-07-02,knn,test,test_split,0.80,\n"
             + "o,T Spear,2026-07-02,knn,test,test_random_split,,0.45\n")
-        # V2 arm: T AUC errored (suite writes the row and still exits 0).
-        csv("protsent_v3", "knn", hdr + "v,T AUC,2026-07-02,knn,test,task_exception,,\n")
+        # V2 arm: T AUC crashed (suite writes the row, Error column, and exits 0).
+        csv("protsent_v3", "knn",
+            hdr.rstrip("\n") + ",Error\n"
+            + "v,T AUC,2026-07-02,knn,test,task_exception,,,KeyError: '|'\n")
 
         rows = build_probe_rows(tmp, "knn")
         got = {r["task_key"]: r for r in rows}
@@ -545,13 +574,19 @@ def selfcheck() -> None:
         # Caveat bucketing: an errored arm must not be hidden by a healthy one,
         # and a seeded train resplit must be flagged as not-held-out.
         cav = caveats({"knn": rows}, tmp)
-        assert cav["errored_tasks"] == {"t_auc": {"knn"}}, cav
-        # V2 ran T AUC but wrote no AUC -> "n/a", not "not run yet".
-        assert cav["ran_but_no_main_metric"] == {"t_auc": {"knn:protsent_v3"}}, cav
+        # A crash is reported with its Error text, not as an uncomputable metric.
+        assert cav["errored_tasks"] == {"t_auc": {"knn:protsent_v3": "KeyError: '|'"}}, cav
+        assert cav["ran_but_no_main_metric"] == {}, cav
         assert _cell(got["t_auc"], "protsent_v3") == "n/a"
         assert _cell(got["t_spear"], "protsent_v3") == "--", "absent arm stays --"
         assert cav["non_heldout_eval"] == {"t_spear": {"knn:test_random_split"}}, cav
         assert cav["protocol_notes"] == {} and cav["no_data_tasks"] == ["t_empty"], cav
+        # Backstop: a task_exception row that carried no Error text still reports.
+        bare = dict(got["t_auc"], errors={}, ran_but_no_main_metric=["protsent_v3"],
+                    eval_strategies=["task_exception"])
+        assert caveats({"knn": [bare]}, tmp)["errored_tasks"] == {
+            "t_auc": {"knn:?": "task_exception (no Error text in CSV)"}
+        }
         # A CSV row recording a different probe than its directory must be flagged.
         assert cav["probe_ignored"] == {}, cav
         csv("esm2_35m", "linear", hdr + "e,T AUC,2026-07-02,linear,test,test_split,0.70,\n")

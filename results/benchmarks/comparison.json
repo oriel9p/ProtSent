@@ -24,12 +24,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.6833982645178726,
-          "esm2_35m": null,
+          "esm2_35m": 0.88096,
           "protsent_old": 0.90886,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.027900000000000036,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -45,12 +46,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.5796436135390605,
-          "esm2_35m": null,
+          "esm2_35m": 0.76836,
           "protsent_old": 0.77159,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.003229999999999955,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -66,12 +68,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.7238573032491951,
-          "esm2_35m": null,
+          "esm2_35m": 0.79569,
           "protsent_old": 0.8015,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.005809999999999982,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -82,6 +85,7 @@
         "main_metric": "AUC",
         "probe": "knn",
         "eval_strategies": [
+          "task_exception",
           "test_split"
         ],
         "probe_ignored": false,
@@ -91,7 +95,12 @@
           "protsent_old": 0.78598,
           "protsent_v3": null
         },
-        "ran_but_no_main_metric": [],
+        "ran_but_no_main_metric": [
+          "esm2_35m"
+        ],
+        "errors": {
+          "esm2_35m": "'|'"
+        },
         "delta_v1_minus_esm2": null,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
@@ -108,12 +117,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.9010262725779967,
-          "esm2_35m": null,
+          "esm2_35m": 0.95786,
           "protsent_old": 0.95844,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.0005799999999999139,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -129,12 +139,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.7961100977232046,
-          "esm2_35m": null,
+          "esm2_35m": 0.97804,
           "protsent_old": 0.97772,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.00031999999999998696,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -150,12 +161,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.4184977522477522,
-          "esm2_35m": null,
+          "esm2_35m": 0.53208,
           "protsent_old": 0.54126,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.009179999999999966,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -176,8 +188,10 @@
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [
+          "esm2_35m",
           "protsent_old"
         ],
+        "errors": {},
         "delta_v1_minus_esm2": null,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
@@ -199,8 +213,10 @@
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [
+          "esm2_35m",
           "protsent_old"
         ],
+        "errors": {},
         "delta_v1_minus_esm2": null,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
@@ -217,12 +233,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.6828278382299967,
-          "esm2_35m": null,
+          "esm2_35m": 0.80147,
           "protsent_old": 0.82462,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.023150000000000004,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -243,8 +260,10 @@
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [
+          "esm2_35m",
           "protsent_old"
         ],
+        "errors": {},
         "delta_v1_minus_esm2": null,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
@@ -261,12 +280,13 @@
         "probe_ignored": true,
         "values": {
           "mmseqs": 0.710252865931774,
-          "esm2_35m": null,
+          "esm2_35m": 0.59837,
           "protsent_old": 0.56166,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.03670999999999991,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -282,12 +302,13 @@
         "probe_ignored": true,
         "values": {
           "mmseqs": 0.584953707648861,
-          "esm2_35m": null,
+          "esm2_35m": 0.45903,
           "protsent_old": 0.44342,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.015610000000000013,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -303,12 +324,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.4024100601203913,
-          "esm2_35m": null,
+          "esm2_35m": 0.46665,
           "protsent_old": 0.55532,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.08867000000000003,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -324,12 +346,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.8026020318144645,
-          "esm2_35m": null,
+          "esm2_35m": 0.72717,
           "protsent_old": 0.76763,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.04046000000000005,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -345,12 +368,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.17068702696215293,
-          "esm2_35m": null,
+          "esm2_35m": 0.39058,
           "protsent_old": 0.37739,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.01318999999999998,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -366,12 +390,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.6322069418592415,
-          "esm2_35m": null,
+          "esm2_35m": 0.69152,
           "protsent_old": 0.6826,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.008920000000000039,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -387,12 +412,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.3863257944210319,
-          "esm2_35m": null,
+          "esm2_35m": 0.37359,
           "protsent_old": 0.45103,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.07744000000000001,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -408,12 +434,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.5462031014630815,
-          "esm2_35m": null,
+          "esm2_35m": 0.58209,
           "protsent_old": 0.5742,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.007889999999999953,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -429,12 +456,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.5816822197266279,
-          "esm2_35m": null,
+          "esm2_35m": 0.64346,
           "protsent_old": 0.56378,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.07968000000000008,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -445,6 +473,7 @@
         "main_metric": "Spearman",
         "probe": "knn",
         "eval_strategies": [
+          "task_exception",
           "test_random_split"
         ],
         "probe_ignored": false,
@@ -454,7 +483,12 @@
           "protsent_old": 0.47536,
           "protsent_v3": null
         },
-        "ran_but_no_main_metric": [],
+        "ran_but_no_main_metric": [
+          "esm2_35m"
+        ],
+        "errors": {
+          "esm2_35m": "'#'"
+        },
         "delta_v1_minus_esm2": null,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
@@ -471,12 +505,13 @@
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.7166439493464695,
-          "esm2_35m": null,
+          "esm2_35m": 0.6582,
           "protsent_old": 0.71075,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.052549999999999986,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -497,11 +532,10 @@
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
+        "errors": {},
         "delta_v1_minus_esm2": 0.06886999999999999,
         "delta_v2_minus_esm2": null,
-        "source_notes": {
-          "esm2_35m": "from scope40_table.json (standalone retrieval run)"
-        }
+        "source_notes": {}
       }
     ],
     "linear": [
@@ -511,16 +545,19 @@
         "problem_type": "binary",
         "main_metric": "AUC",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.6833982645178726,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.95724,
+          "protsent_old": 0.94042,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.016819999999999946,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -530,16 +567,19 @@
         "problem_type": "binary",
         "main_metric": "AUC",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.5796436135390605,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.83987,
+          "protsent_old": 0.82441,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.01546000000000003,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -549,16 +589,19 @@
         "problem_type": "binary",
         "main_metric": "AUC",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.7238573032491951,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.79029,
+          "protsent_old": 0.75987,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.030420000000000003,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -568,16 +611,19 @@
         "problem_type": "binary",
         "main_metric": "AUC",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.6374484376366069,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.86278,
+          "protsent_old": 0.81868,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.04410000000000003,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -587,16 +633,19 @@
         "problem_type": "binary",
         "main_metric": "AUC",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.9010262725779967,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.97479,
+          "protsent_old": 0.97631,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.0015199999999999658,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -606,16 +655,19 @@
         "problem_type": "binary",
         "main_metric": "AUC",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.7961100977232046,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.9942,
+          "protsent_old": 0.99492,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.0007200000000000539,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -625,16 +677,19 @@
         "problem_type": "binary",
         "main_metric": "AUC",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.4184977522477522,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.69629,
+          "protsent_old": 0.69295,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.0033400000000000096,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -644,7 +699,9 @@
         "problem_type": "multiclass",
         "main_metric": "AUC",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.9543746762905106,
@@ -652,7 +709,11 @@
           "protsent_old": null,
           "protsent_v3": null
         },
-        "ran_but_no_main_metric": [],
+        "ran_but_no_main_metric": [
+          "esm2_35m",
+          "protsent_old"
+        ],
+        "errors": {},
         "delta_v1_minus_esm2": null,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
@@ -663,7 +724,9 @@
         "problem_type": "multiclass",
         "main_metric": "AUC",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.6522876960846462,
@@ -671,7 +734,11 @@
           "protsent_old": null,
           "protsent_v3": null
         },
-        "ran_but_no_main_metric": [],
+        "ran_but_no_main_metric": [
+          "esm2_35m",
+          "protsent_old"
+        ],
+        "errors": {},
         "delta_v1_minus_esm2": null,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
@@ -682,16 +749,19 @@
         "problem_type": "multiclass",
         "main_metric": "AUC",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.6828278382299967,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.9116,
+          "protsent_old": 0.90569,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.005909999999999971,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -701,7 +771,9 @@
         "problem_type": "multiclass",
         "main_metric": "AUC",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.6852530271675003,
@@ -709,7 +781,11 @@
           "protsent_old": null,
           "protsent_v3": null
         },
-        "ran_but_no_main_metric": [],
+        "ran_but_no_main_metric": [
+          "esm2_35m",
+          "protsent_old"
+        ],
+        "errors": {},
         "delta_v1_minus_esm2": null,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
@@ -720,16 +796,19 @@
         "problem_type": "multilabel",
         "main_metric": "F1_Macro",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.710252865931774,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.59837,
+          "protsent_old": 0.56166,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.03670999999999991,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -739,16 +818,19 @@
         "problem_type": "multilabel",
         "main_metric": "F1_Macro",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.584953707648861,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.45903,
+          "protsent_old": 0.44342,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.015610000000000013,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -758,16 +840,19 @@
         "problem_type": "regression",
         "main_metric": "Spearman",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split_column"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.4024100601203913,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.56395,
+          "protsent_old": 0.43618,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.12776999999999994,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -777,16 +862,19 @@
         "problem_type": "regression",
         "main_metric": "Spearman",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split_column"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.8026020318144645,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.66393,
+          "protsent_old": 0.5762,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.08772999999999997,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -796,16 +884,19 @@
         "problem_type": "regression",
         "main_metric": "Spearman",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.17068702696215293,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.47804,
+          "protsent_old": 0.442,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.036040000000000016,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -815,16 +906,19 @@
         "problem_type": "regression",
         "main_metric": "Spearman",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.6322069418592415,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.54558,
+          "protsent_old": 0.5122,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.033379999999999965,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -834,16 +928,19 @@
         "problem_type": "regression",
         "main_metric": "Spearman",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.3863257944210319,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.59134,
+          "protsent_old": 0.59117,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.00017000000000000348,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -853,16 +950,19 @@
         "problem_type": "regression",
         "main_metric": "Spearman",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.5462031014630815,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.48639,
+          "protsent_old": 0.47396,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": -0.012429999999999997,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -872,16 +972,19 @@
         "problem_type": "regression",
         "main_metric": "Spearman",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.5816822197266279,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.43951,
+          "protsent_old": 0.51096,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.07144999999999996,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -891,16 +994,19 @@
         "problem_type": "regression",
         "main_metric": "Spearman",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_random_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.4798753815432825,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.54126,
+          "protsent_old": 0.56604,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.024780000000000024,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -910,16 +1016,19 @@
         "problem_type": "regression",
         "main_metric": "Spearman",
         "probe": "linear",
-        "eval_strategies": [],
+        "eval_strategies": [
+          "test_split"
+        ],
         "probe_ignored": false,
         "values": {
           "mmseqs": 0.7166439493464695,
-          "esm2_35m": null,
-          "protsent_old": null,
+          "esm2_35m": 0.81629,
+          "protsent_old": 0.82469,
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
-        "delta_v1_minus_esm2": null,
+        "errors": {},
+        "delta_v1_minus_esm2": 0.008400000000000074,
         "delta_v2_minus_esm2": null,
         "source_notes": {}
       },
@@ -940,12 +1049,10 @@
           "protsent_v3": null
         },
         "ran_but_no_main_metric": [],
+        "errors": {},
         "delta_v1_minus_esm2": 0.06886999999999999,
         "delta_v2_minus_esm2": null,
-        "source_notes": {
-          "esm2_35m": "from scope40_table.json (standalone retrieval run)",
-          "protsent_old": "from scope40_table.json (standalone retrieval run)"
-        }
+        "source_notes": {}
       }
     ]
   },
@@ -954,11 +1061,11 @@
       "n_tasks": 23,
       "tie_tol": 0.005,
       "protsent_old": {
-        "n_compared": 1,
-        "beats": 1,
-        "ties": 0,
-        "loses": 0,
-        "median_delta": 0.06886999999999999
+        "n_compared": 18,
+        "beats": 9,
+        "ties": 3,
+        "loses": 6,
+        "median_delta": 0.0045199999999999685
       },
       "protsent_v3": {
         "n_compared": 0,
@@ -968,12 +1075,11 @@
         "median_delta": null
       },
       "mmseqs_beats_best_embedding": {
-        "n": 5,
+        "n": 4,
         "tasks": [
           "ec_classification",
           "go_mf",
           "beta_lactamase_peer",
-          "stability",
           "variant_effect"
         ]
       }
@@ -982,11 +1088,11 @@
       "n_tasks": 23,
       "tie_tol": 0.005,
       "protsent_old": {
-        "n_compared": 1,
-        "beats": 1,
-        "ties": 0,
-        "loses": 0,
-        "median_delta": 0.06886999999999999
+        "n_compared": 20,
+        "beats": 4,
+        "ties": 4,
+        "loses": 12,
+        "median_delta": -0.013945000000000013
       },
       "protsent_v3": {
         "n_compared": 0,
@@ -996,15 +1102,23 @@
         "median_delta": null
       },
       "mmseqs_beats_best_embedding": {
-        "n": 0,
-        "tasks": []
+        "n": 6,
+        "tasks": [
+          "ec_classification",
+          "go_mf",
+          "beta_lactamase_peer",
+          "enzyme_catalytic_efficiency",
+          "optimal_ph",
+          "stability"
+        ]
       }
     }
   },
   "caveats": {
     "non_heldout_eval": {
       "thermostability": [
-        "knn:test_random_split"
+        "knn:test_random_split",
+        "linear:test_random_split"
       ]
     },
     "protocol_notes": {
@@ -1030,7 +1144,14 @@
         "v"
       ]
     },
-    "errored_tasks": {},
+    "errored_tasks": {
+      "peptide_hla": [
+        "knn:esm2_35m"
+      ],
+      "thermostability": [
+        "knn:esm2_35m"
+      ]
+    },
     "probe_ignored": {
       "ec_classification": [
         "knn"
@@ -1044,13 +1165,22 @@
     },
     "ran_but_no_main_metric": {
       "antibiotic_resistance": [
-        "knn:protsent_old"
+        "knn:esm2_35m",
+        "knn:protsent_old",
+        "linear:esm2_35m",
+        "linear:protsent_old"
       ],
       "remote_homology": [
-        "knn:protsent_old"
+        "knn:esm2_35m",
+        "knn:protsent_old",
+        "linear:esm2_35m",
+        "linear:protsent_old"
       ],
       "temperature_stability": [
-        "knn:protsent_old"
+        "knn:esm2_35m",
+        "knn:protsent_old",
+        "linear:esm2_35m",
+        "linear:protsent_old"
       ]
     },
     "no_data_tasks": [

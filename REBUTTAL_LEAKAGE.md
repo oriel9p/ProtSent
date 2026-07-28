@@ -424,8 +424,23 @@ hardware (8× NVIDIA B300, sm_103), not assumed.
 | torch.compile | off | measured 8.87 vs 8.89 s/it — no effect |
 | gradient checkpointing | off | not needed at 35M; it also forced `dataloader_num_workers=0` |
 | Matryoshka dims | 64 / 128 / 256 (+ native 480) | |
-| steps | 4,244 (1 epoch, proportional) | pfam 759 + afdb 18,542 + string 14,648 batches |
-| throughput | ~8.4 s/it → **~10 h** | |
+| LR schedule | `cosine_with_min_lr`, 2e-4 peak, 1,000-step warmup, `num_cycles=3.0`, `min_lr_rate=0.05` | repository defaults, not overridden |
+| steps | 4,850 (1 epoch, proportional) | pfam 759 + afdb 18,542 + string 14,648 batches |
+| throughput | ~8.0 s/it → **~11 h** | measured over the first 1,900 steps of the live run |
+
+**The LR schedule runs three cosine cycles and therefore ends at peak LR.** With
+`num_cycles=3.0`, HuggingFace's `cosine_with_min_lr` lambda sweeps its cosine
+argument through 6π across the post-warmup span. The schedule troughs at steps
+1,642 / 2,925 / 4,208 (LR 1e-5, the 0.05 floor) and climbs back to the full 2e-4
+at the final step. Verified against the live run: the lambda predicts 3.195e-5 at
+step 1,500 where `trainer_state.json` logs 3.2248e-5, and the logged LR turns
+upward after step 1,642 as predicted.
+
+This is the repository default (`--lr_num_cycles 3.0`, `protein_pipeline.py`) and
+was not overridden here, so the ±decontamination comparison is not confounded by
+it. It does mean the final checkpoint is taken at the top of a cycle rather than
+annealed, so the last-step checkpoint should not be presented as a converged
+optimum without also reporting a near-trough checkpoint.
 
 **FlashAttention-3 is not usable on this hardware.** The pinned
 `kernels-community/flash-attn3` build contains `sm_80, sm_90a` only and fails on
