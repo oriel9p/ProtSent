@@ -100,7 +100,7 @@ That is a narrower paper than we submitted and a better-supported one. If it is 
 
 ## Response to Reviewer jVGf
 
-<!-- character count of the pasted body below: 8854 (limit 10,000) -->
+<!-- character count of the pasted body below: 8812 (limit 10,000) -->
 <!-- BEGIN jVGf -->
 Structural supervision is the single largest contributor, as you suspected, and our own Table 4 says so against the paper's own text. Removing AlphaFold DB drops improved tasks from 16 of 23 to 13 and the mean relative gain from +6.7% to +3.2%, while removing Pfam drops them to 15 and +4.6%. The sentence calling Pfam "the dominant contrastive signal" is contradicted by the table beneath it. That is our error, and no reviewer caught it.
 
@@ -134,7 +134,7 @@ Paired bootstrap, 10,000 resamples, the same queries scoring every method. We do
 
 Two limits on that depth result, both ours.
 
-First, part of the margin is candidate coverage rather than ranking. 691 of 2,207 queries return no phmmer hit at all and score zero at every K, and both tools flatten from Recall@10 to Recall@30 (both +0.017) where the embeddings do not (+0.073 for ESM-2 35M, +0.041 for V2). We did not re-run either tool with the threshold lifted, so the depth margin is an upper bound.
+First, part of the margin is candidate coverage rather than ranking. 691 of 2,207 queries return no phmmer hit at all and score zero at every K, and both tools flatten from Recall@10 to Recall@30 (both +0.017) where the embeddings do not (+0.073 for ESM-2 35M, +0.041 for V2). Part of the depth margin is therefore an upper bound.
 
 Second, SCOPe-40 cannot be filtered at corpus level, so we filtered the benchmark. On the 164 eligible queries below 40% identity to our corpus, V2 minus HMMER holds at +0.116 [+0.049, +0.189] Recall@10 and +0.140 [+0.075, +0.207] MAP. That bounds identity-level exposure only: supervision is Foldseek-cluster and Pfam-family co-membership, so a training pair sharing a query's fold at 15% identity survives any identity threshold. We did not run that fold-exclusion control.
 
