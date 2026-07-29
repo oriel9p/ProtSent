@@ -98,10 +98,19 @@ mkdir -p logs/bench_v3
 # happily run against a checkpoint that does not exist. Require actual weights.
 # Check each candidate separately: `ls a b` exits non-zero when EITHER is absent,
 # so testing both in one ls rejects a perfectly good safetensors-only checkpoint.
+# SentenceTransformerTrainer writes the finished model to <output_dir>/final, not
+# to <output_dir> itself, so resolve that before deciding training failed. The
+# first version of this guard checked only the parent and aborted the whole sweep
+# on a run that had completed normally.
 if ! compgen -G "$MODEL_NEW"/*.safetensors >/dev/null \
    && [[ ! -f "$MODEL_NEW/pytorch_model.bin" ]]; then
-  echo "ERROR: no model weights under $MODEL_NEW -- training did not finish" >&2
-  exit 1
+  if compgen -G "$MODEL_NEW/final"/*.safetensors >/dev/null; then
+    MODEL_NEW="$MODEL_NEW/final"
+    echo "note: using finished model at $MODEL_NEW"
+  else
+    echo "ERROR: no model weights under $MODEL_NEW or $MODEL_NEW/final" >&2
+    exit 1
+  fi
 fi
 
 # Training saves ESM2 checkpoints with FastPLM's custom-code identity

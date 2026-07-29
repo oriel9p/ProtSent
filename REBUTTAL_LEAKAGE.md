@@ -139,24 +139,44 @@ advantage came from memorising pretraining neighbours, queries with a *closer*
 pretraining neighbour would gain *more*. Measured per query on the **published**
 ProtSent 35M (trained on the unfiltered corpus — the model under scrutiny),
 against ESM-2 35M, over the 1,693 eligible queries
-(`scope_identity_correlation.py`, `results/benchmarks/scope_identity_correlation.json`):
+(`scope_identity_correlation.py`). Both models were measured against the same
+identity table and the same 1,693 eligible queries, so the two columns are
+directly comparable — ProtSent-v1 is the published model trained on the
+**unfiltered** corpus, ProtSent-v2 the retrain on the **decontaminated** one
+(`results/benchmarks/scope_identity_correlation_v1.json`, `..._v2.json`):
 
-| metric | mean gain | Spearman r | p |
-|---|---:|---:|---:|
-| hit@1 | +0.0868 | −0.0152 | 0.53 |
-| hit@10 | +0.0898 | −0.0259 | 0.29 |
-| average precision | +0.1289 | **−0.1046** | 1.6e-05 |
+| metric | v1 mean gain | v1 Spearman r (p) | v2 mean gain | v2 Spearman r (p) |
+|---|---:|---:|---:|---:|
+| hit@1 | +0.0868 | −0.021 (0.39) | **+0.1855** | −0.012 (0.63) |
+| hit@10 | +0.0898 | −0.038 (0.12) | **+0.1607** | −0.038 (0.12) |
+| average precision | +0.1289 | **−0.114** (2.8e-06) | **+0.2232** | **−0.116** (1.6e-06) |
 
-| identity bin | n | gain hit@10 | gain AP |
-|---|---:|---:|---:|
-| [0.2, 0.4) | 174 | **+0.1034** | **+0.1838** |
-| [0.4, 0.7) | 351 | +0.0826 | +0.1390 |
-| [0.7, 1.0] | 1,168 | +0.0899 | +0.1176 |
+| identity bin | n | v1 gain hit@10 | v1 gain AP | v2 gain hit@10 | v2 gain AP |
+|---|---:|---:|---:|---:|---:|
+| [0.2, 0.4) | 164 | +0.0915 | +0.1856 | **+0.1524** | **+0.2859** |
+| [0.4, 0.7) | 315 | +0.1016 | +0.1453 | +0.1810 | +0.2417 |
+| [0.7, 1.0] | 1,214 | +0.0865 | +0.1169 | +0.1565 | +0.2099 |
 
 **The gain is largest for the queries whose pretraining neighbour is most
-distant**, and the only statistically significant correlation is *negative*.
-Memorisation predicts the opposite sign. State it that way: the effect does not
-track proximity to the pretraining corpus.
+distant**, and the only statistically significant correlation is *negative* — for
+both models. Memorisation predicts the opposite sign. State it that way: the
+effect does not track proximity to the pretraining corpus.
+
+**Decontamination did not cost SCOPe performance; the retrained model is
+stronger.** Over the same 1,693 eligible queries, hit@10 goes ESM-2 0.7614 →
+v1 0.8512 → **v2 0.9220**, and average precision 0.4216 → 0.5505 → **0.6448**.
+(These are eligible-query means, which is why they differ from the all-query
+Recall@10/MAP in §3; the per-bin gains above sum to exactly these totals.)
+Do not attribute that
+improvement to decontamination alone: v2 also changed the effective batch size
+(7×1024 vs the paper's 1×1024), dropped the synthetic hard negatives, and uses
+proportional multi-dataset sampling over one epoch (§4). The defensible claim is
+the narrower one the reviewers asked about — removing the 40%/80%-identity
+overlap does not remove the gain.
+
+An earlier version of this section reported v1 bin counts of 174/351/1,168 against
+a superseded identity table. Both models above use the regenerated table; the
+counts are 164/315/1,214.
 
 Measurement note for anyone re-deriving these: with `-c 0.0`, MMseqs2 `fident` is
 identity over the aligned region only, which for short local alignments is
