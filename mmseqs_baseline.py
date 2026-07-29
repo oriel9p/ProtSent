@@ -276,6 +276,34 @@ def eval_multiclass(hits, train_labels, test_labels) -> dict[str, float]:
     return metrics
 
 
+def score_task(cfg, hits, train_labels, test_labels) -> dict:
+    """The one scoring path. Any search engine that produces the same `hits`
+    dict -- {query_idx: [(target_idx, bitscore), ...]} ranked best-first -- gets
+    scored identically here.
+
+    `hmmer_baseline.py` imports this rather than reimplementing the evaluators:
+    two alignment baselines scored by two copies of the metric code would make
+    the comparison between them meaningless.
+    """
+    if cfg.problem_type == "retrieval":
+        metrics = eval_retrieval(hits, test_labels)
+    elif cfg.problem_type == "regression":
+        metrics = eval_regression(hits, train_labels, test_labels)
+    elif cfg.problem_type == "multilabel":
+        metrics = eval_multilabel(hits, train_labels, test_labels)
+    else:
+        metrics = eval_multiclass(hits, train_labels, test_labels)
+    # Retrieval is the one evaluator that does not report coverage itself, and
+    # it is all-vs-all, so a query's self-hit must not count as coverage.
+    metrics.setdefault(
+        "hit_coverage",
+        float(np.mean([
+            any(t != q for t, _ in hits.get(q, ())) for q in range(len(test_labels))
+        ])),
+    )
+    return metrics
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--task", required=True,
@@ -315,12 +343,7 @@ def main() -> int:
     hits = read_hits(tsv)
     logger.info("%d/%d queries got >=1 hit", len(hits), len(test_seqs))
 
-    evaluator = {
-        "retrieval": lambda: eval_retrieval(hits, test_labels),
-        "regression": lambda: eval_regression(hits, train_labels, test_labels),
-        "multilabel": lambda: eval_multilabel(hits, train_labels, test_labels),
-    }.get(cfg.problem_type, lambda: eval_multiclass(hits, train_labels, test_labels))
-    metrics = evaluator()
+    metrics = score_task(cfg, hits, train_labels, test_labels)
 
     row = {
         "Model": "MMseqs2 (alignment baseline)",

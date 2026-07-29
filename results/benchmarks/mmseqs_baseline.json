@@ -362,6 +362,7 @@
     "eligible_Recall@30": 0.735380980507974,
     "eligible_MAP": 0.40414161148101346,
     "n_queries": 2207,
-    "n_eligible_queries": 1693
+    "n_eligible_queries": 1693,
+    "hit_coverage": 0.881739918441323
   }
 ]

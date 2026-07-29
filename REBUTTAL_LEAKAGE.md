@@ -134,6 +134,8 @@ were ever affected. `python bench_arm_status.py <csv> 23` reports
 | Per-task kNN and linear tables, 4 arms side by side, with caveat sections | `results/benchmarks/COMPARISON.md` | `uv run --no-sync python build_comparison.py` | 23 tasks x 2 probes; win/tie/loss over 20 comparable tasks, tie band ±0.005 | 2026-07-29 12:01 | kNN: V1 11/3/6, V2 10/3/7 vs ESM-2. Linear: V1 4/4/12, V2 2/7/11. The probe decides the headline |
 | The same content as machine-readable JSON incl. `summary` and `source_notes` | `results/benchmarks/comparison.json` | same invocation | keys `naming, tie_tol, arms, tables{knn,linear}, summary, caveats` | 2026-07-29 12:01 | Median signed delta vs ESM-2: kNN V1 +0.00749, V2 +0.00410; linear V1 −0.01395, V2 −0.01071 |
 | MMseqs2-only baseline over the full benchmark | `results/benchmarks/mmseqs_baseline.json` | `uv run --no-sync python mmseqs_baseline.py --task <task_key>` once per task, appending; flags `-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3` | **24 entries**, 23 with a usable main metric (`rhla_enzyme_mutations` has `Spearman: null`, hit coverage 0.0) | 2026-07-28 21:51 | Alignment beats the best embedding model on 3 tasks under kNN and 6 under a linear probe; `solubility` AUC 0.4185 is below chance |
+| HMMER (phmmer) baseline over the **same** task set, scored by the **same** code | `results/benchmarks/hmmer_baseline.json` | `uv run --no-sync python hmmer_baseline.py --task <task_key> --cpus 48` once per task, appending; `phmmer -E 10`, top-300 hits/query; metrics from the shared `mmseqs_baseline.score_task` | **24 entries**, 23 with a usable main metric (`rhla_enzyme_mutations` Spearman −0.0888 at hit coverage 0.0039 — noise, see §3) | 2026-07-29 | HMMER tracks MMseqs2 to within ±0.033 on every task at systematically **lower** hit coverage; it wins SCOPe Recall@10 (+0.033) and both multilabel tasks |
+| MMseqs2 re-run at the two phmmer subsample caps, so the capped rows have a comparable partner | `results/benchmarks/mmseqs_baseline_subsampled.json` | `uv run --no-sync python mmseqs_baseline.py --task fluorescence --max_samples 4000` and `--task aav_flip --max_samples 1500`, `--work_dir /storage/users/ddofer/data/mmseqs_baseline_capped` | 2 entries | 2026-07-29 | The **only** MMseqs2 rows the capped HMMER numbers may be compared against; the full-data MMseqs2 rows are on more training neighbours and score higher |
 | MMseqs2 scratch dirs incl. the raw hit tables | `/storage/users/ddofer/data/mmseqs_baseline/<task_key>/hits.tsv` | as above (`--work_dir` default) | 25 task dirs; `scope40_retrieval/hits.tsv` is 348 KB | 2026-07-28 | The hit table `bootstrap_ci.py` re-scores for the MMseqs2 arm |
 | SCOPe-40 head-to-head, 3 methods, all-query and eligible-query metrics | `results/benchmarks/scope40_table.json` | `protein_benchmark_suite.py` (embeddings) + `mmseqs_baseline.py` (alignment), assembled by hand | 3 entries; `n_queries` 2207, `n_eligible_queries` 1693 in every entry | 2026-07-28 21:59 | Contains ESM-2, ProtSent-V1 and MMseqs2 only — **ProtSent-V2 is not in this file**; V2's SCOPe row lives in the `v3/protsent_v3_*` CSVs |
 | Standalone SCOPe-only runs that fed `scope40_table.json` | `results/benchmarks/scope_map/bench__storage_models_ESM2-35M.csv`, `results/benchmarks/scope_map_protsent35m/bench_oriel9p_protsent-esm2-35M.csv` | `protein_benchmark_suite.py -t scope40_retrieval -e test` | 1 row each, seed 42, n_queries 2207 / n_eligible 1693 | 2026-07-28 21:56 / 21:58 | Superseded by the `v3/` arms but numerically identical; keep as the provenance of `scope40_table.json` |
@@ -204,8 +206,8 @@ quote a partial arm.
 
 ### 0.8 Scripts — what each does and how to re-run it
 
-Every script below has a `--selfcheck` mode except `mmseqs_baseline.py`,
-`run_benchmarks_v3.sh`, `run_seed_variability.sh` and `bench_arm_status.py`.
+Every script below has a `--selfcheck` mode except `run_benchmarks_v3.sh`,
+`run_seed_variability.sh` and `bench_arm_status.py`.
 All Python is run through `uv run --no-sync python <script>`.
 
 | script | what it does | re-run |
@@ -213,6 +215,7 @@ All Python is run through `uv run --no-sync python <script>`.
 | `decontaminate_pretrain.py` | Removes any pretraining sequence aligning to a benchmark test sequence at ≥40% identity / ≥80% coverage of the *test* sequence, via MMseqs2 `easy-search` with the corpus as query. | `python decontaminate_pretrain.py --corpus all --gpu` (defaults `--min-seq-id 0.4 --cov 0.8 --cov-mode 1 --shard-size 10000000`) |
 | `verify_training_corpus.py` | Re-reads the parquets the training log shows being opened and semi-joins them against the recorded removal lists — proves the filter's *result*, not its intent. | `python verify_training_corpus.py` (no args) |
 | `mmseqs_baseline.py` | Scores each benchmark task with alignment instead of embeddings, under the same metric definitions; no-hit queries count as failures. | `python mmseqs_baseline.py --task scope40_retrieval` (per task; `--output` defaults to `results/benchmarks/mmseqs_baseline.json`, `--threads 64`) |
+| `hmmer_baseline.py` | The HMMER half of the alignment baseline: phmmer over the same tasks, scored by importing `mmseqs_baseline.score_task` rather than reimplementing it. Also holds the SCOPe-40 bootstrap-CI report. | `python hmmer_baseline.py --task <task_key> --cpus 48` (per task; `--output` defaults to `results/benchmarks/hmmer_baseline.json`). No `--task` = SCOPe-40 CI report into `results/benchmarks/hmmer_scope40.json`. `--selfcheck` asserts both engines score identically through the shared path |
 | `run_benchmarks_v3.sh` | Drives the 4-arm x 2-probe sweep on `--eval_split test`, caps BLAS threads, skips arms that are already complete, and checks the CSV rather than trusting the exit code. | `bash run_benchmarks_v3.sh` (`FORCE=1` to re-measure everything) |
 | `bench_arm_status.py` | Decides whether one arm succeeded: complete = every requested task has at least one error-free row *somewhere* in the appended CSV. | `python bench_arm_status.py <results.csv> 23` (exit 0 = complete) |
 | `make_checkpoint_loadable.py` | Rewrites a FastPLM-saved checkpoint's `config.json` / `tokenizer_config.json` into plain-ESM form so `SentenceTransformer(path)` can load it. Metadata only; weights untouched; idempotent; originals kept as `*.fastplm`. | `python make_checkpoint_loadable.py <checkpoint_dir> [...]` |
@@ -648,20 +651,34 @@ midnight-zone stratification.
 
 ---
 
-## 3. MMseqs2-only baseline
+## 3. Alignment-only baselines — MMseqs2 and HMMER
 
-Reviewer-relevant question: *how much of the structural performance is just
-sequence similarity?* These numbers answer it by scoring the same tasks with
-alignment instead of embeddings, under the **same metric definitions**.
+Reviewer Yi1G named "HMMER/MMseqs2" among the missing baselines. Both are now
+run, over the same task set. Reviewer-relevant question: *how much of the
+structural performance is just sequence similarity?* These numbers answer it by
+scoring the same tasks with alignment instead of embeddings, under the **same
+metric definitions**.
 
-Implementation: `mmseqs_baseline.py`. For retrieval it reproduces
-`evaluate_retrieval()` (`protein_benchmark_suite.py:1863-1907`) exactly —
-family-level Recall@K, self excluded — with cosine-NN rank replaced by MMseqs2
-bitscore rank. For classification, per-class score = max bitscore over that
-class's training sequences, giving a dense score vector so AUC stays comparable
-rather than degenerating to hard 1-NN accuracy. For regression, 1-NN by bitscore.
+Implementation: `mmseqs_baseline.py` (MMseqs2) and `hmmer_baseline.py`
+(phmmer, via pyhmmer 0.12.1). **The scoring code is shared, not duplicated.**
+Both engines emit the same structure — `hits: {query_idx: [(target_idx,
+bitscore), ...]}` ranked best first — and both are scored by the single
+`mmseqs_baseline.score_task`. Two copies of the metric code would make the
+MMseqs2-vs-HMMER comparison worthless; `hmmer_baseline.py --selfcheck` asserts
+the property directly, by round-tripping a real phmmer hit dict through the
+MMseqs2 hit-table reader and requiring identical metrics out of both.
 
-Search flags: `-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3`.
+For retrieval the shared scorer reproduces `evaluate_retrieval()`
+(`protein_benchmark_suite.py:1863-1907`) exactly — family-level Recall@K, self
+excluded — with cosine-NN rank replaced by alignment bitscore rank. For
+classification, per-class score = max bitscore over that class's training
+sequences, giving a dense score vector so AUC stays comparable rather than
+degenerating to hard 1-NN accuracy. For regression, 1-NN by bitscore.
+
+Search flags: MMseqs2 `-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3`;
+phmmer `-E 10`, top 300 hits per query kept (the `--max-seqs 300` counterpart),
+`--cpus 48`. Search direction is identical for both: query = test sequences,
+target = train sequences, except retrieval, which is all-vs-all on the gallery.
 
 **Queries with no hit are counted as failures, not dropped.** "Found no
 homolog" is a real failure mode of sequence search and is exactly the gap an
@@ -1006,6 +1023,80 @@ Against ESM-2 35M over the 20 tasks comparable in both arms
 and lose under a linear probe. The structural-retrieval advantage survives both;
 the general-purpose claim does not. Any "ProtSent > ESM-2" sentence must name
 the probe.
+
+## 5b. Probe protocol: the linear-probe result is a final-layer artifact
+
+`layer_probe_sweep.py`, `results/benchmarks/layer_probe_sweep.json`.
+
+Both probes in the benchmark pool the **final** layer. That is the measurement
+point least favourable to ProtSent and most favourable to stock ESM-2: the
+contrastive objective only ever sees the final layer, so that is the only place
+ProtSent reorganises, while a masked-LM's top of stack is pushed toward token
+reconstruction rather than toward linearly decodable properties.
+
+Linear probe (RidgeCV / logistic regression) on mean-pooled embeddings per layer,
+8,000 train / 3,000 test subsample:
+
+| pooled layer | *Stability* ESM-2 | ProtSent-V2 | *Remote hom.* ESM-2 | ProtSent-V2 |
+|---|---:|---:|---:|---:|
+| 4 | 0.3892 | **0.5537** | 0.5573 | 0.5527 |
+| 6 | 0.4049 | 0.3792 | 0.6703 | **0.6893** |
+| 8 | 0.3359 | 0.4293 | 0.6647 | **0.7033** |
+| 10 | 0.3499 | 0.4081 | 0.6683 | **0.6997** |
+| 12 (benchmark default) | 0.4004 | 0.4001 | 0.6373 | **0.6803** |
+
+The final layer is the worst layer for both models on remote homology. At its
+best layer ProtSent-V2 beats ESM-2 on both tasks, and on remote homology it leads
+at every layer from 6 upward — which answers the charge that contrastive
+fine-tuning rearranges information rather than adding any and may discard some.
+
+Scope: two tasks, subsampled splits, one backbone scale. This identifies a
+confound in the probe protocol; it is not a re-run of the benchmark and must not
+be presented as one.
+
+## 5c. Few-shot transfer and seed variability
+
+`fewshot_seeds.py`, `results/benchmarks/fewshot_seeds.json`. Test split held at
+full size, only the training subset resampled, 5 seeds per point, both probes fit
+on the same subset. The suite's `--max_samples` could not be used because it caps
+the eval split too, which would shrink and change the test set per seed and
+conflate train-subsampling variance with test-set variance.
+
+Remote homology, accuracy, mean ± SD over 5 seeds:
+
+| N | ESM-2 kNN | ESM-2 linear | V1 kNN | V1 linear | V2 kNN | V2 linear |
+|---|---|---|---|---|---|---|
+| 50 | 0.061±0.010 | 0.121±0.003 | 0.055±0.008 | 0.159±0.004 | 0.045±0.009 | 0.145±0.005 |
+| 100 | 0.115±0.007 | 0.222±0.006 | 0.135±0.008 | 0.282±0.007 | 0.125±0.024 | 0.258±0.009 |
+| 1000 | 0.185±0.002 | 0.288±0.014 | **0.318±0.015** | **0.377±0.008** | 0.289±0.016 | 0.355±0.009 |
+
+Stability, Spearman: at N=50 ProtSent-V2 kNN 0.327±0.161 vs ESM-2 0.178±0.054;
+at N=1000 the linear head leads for every model (ESM-2 0.406±0.075, V1
+0.471±0.092, V2 0.430±0.105). Solubility and metal-ion binding were also run and
+ProtSent does **not** win there — at N=1000 ESM-2 leads metal-ion binding under a
+linear head, 0.666±0.001 vs V1 0.637±0.004 and V2 0.595±0.001.
+
+Three conclusions, the first against us:
+
+1. **HNXd's proposed framing is not supported.** They suggested a linear
+   classifier degrades under label scarcity while k-NN stays competitive. A
+   trained linear head beats 3-NN in almost every model/task/N cell measured,
+   including N=50. The label-scarcity framing is withdrawn, not defended.
+2. **ProtSent's few-shot advantage is real but task-specific** — large on remote
+   homology, absent on solubility and metal-ion binding.
+3. **Seed spread at small N is as large as the effect** (stability at N=100 is
+   ±0.20 on a mean of 0.28-0.40), which is why Table 5's relative changes against
+   near-zero baselines were never interpretable.
+
+**Full-data evaluation is by contrast deterministic.** Across 5 seeds with full
+training data (`results/benchmarks/seeds/`): remote homology 0.5835±0.0000,
+metal-ion binding 0.7402±0.0000, solubility 0.5102±0.0000, variant effect
+0.6582±0.0000, stability 0.6435±0.0001, thermostability the only task with
+meaningful spread at ±0.0126. Given a fixed test split and a deterministic probe
+over deterministic embeddings there is nothing left to vary, so the uncertainty
+that matters for the main tables is which proteins are in the test set — the
+quantity the bootstrap intervals in §3 estimate. Report both halves; either alone
+misrepresents the analysis.
 
 ## 5a. Still pending
 

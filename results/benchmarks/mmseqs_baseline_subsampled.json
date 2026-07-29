@@ -1,0 +1,30 @@
+[
+  {
+    "Model": "MMseqs2 (alignment baseline)",
+    "Task": "Fluorescence (TAPE)",
+    "task_key": "fluorescence",
+    "main_metric": "Spearman",
+    "problem_type": "regression",
+    "eval_split": "test",
+    "n_train": 4000,
+    "n_test": 4000,
+    "mmseqs_flags": "-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3 --format-output query,target,fident,alnlen,evalue,bits",
+    "Spearman": 0.2908971607069336,
+    "MSE": 2.432589982405808,
+    "hit_coverage": 1.0
+  },
+  {
+    "Model": "MMseqs2 (alignment baseline)",
+    "Task": "AAV Fitness (FLIP)",
+    "task_key": "aav_flip",
+    "main_metric": "Spearman",
+    "problem_type": "regression",
+    "eval_split": "test",
+    "n_train": 1500,
+    "n_test": 1500,
+    "mmseqs_flags": "-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3 --format-output query,target,fident,alnlen,evalue,bits",
+    "Spearman": 0.3647361446125829,
+    "MSE": 11.44566184039217,
+    "hit_coverage": 1.0
+  }
+]
