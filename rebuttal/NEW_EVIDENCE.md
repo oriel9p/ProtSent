@@ -272,6 +272,46 @@ blind reader raised it, and it did not change the conclusion. Say so — a
 pre-empted objection that survived its own control is worth more than the raw
 correlation alone.
 
+## 4c. Seed variability — reviewer HNXd's second explicit request
+
+HNXd asked for "a variability analysis with multiple random seeds". Five seeds
+(0-4) x 8 representative tasks x 3 model arms, 3-NN probe, test split, via the
+suite's `--seed_list` (`run_seed_variability.sh`,
+`results/benchmarks/seeds/seed_variability.json`). Mean +/- SD over 5 seeds:
+
+| task | metric | ESM-2 35M | ProtSent-V1 | ProtSent-V2 |
+|---|---|---|---|---|
+| Remote Homology | Accuracy | 0.5835 +/- 0.0000 | 0.6589 +/- 0.0002 | 0.6668 +/- 0.0000 |
+| Variant Effect (GB1) | Spearman | 0.6582 +/- 0.0000 | 0.7108 +/- 0.0000 | 0.7806 +/- 0.0000 |
+| Subcellular Localisation | Accuracy | 0.6243 +/- 0.0000 | 0.6697 +/- 0.0003 | 0.6743 +/- 0.0000 |
+| Metal Ion Binding | Accuracy | 0.7402 +/- 0.0000 | 0.7380 +/- 0.0000 | 0.7522 +/- 0.0000 |
+| Solubility (DeepSol) | Accuracy | 0.5102 +/- 0.0000 | 0.5352 +/- 0.0007 | 0.5381 +/- 0.0009 |
+| Fluorescence (TAPE) | Spearman | 0.3736 +/- 0.0000 | 0.4510 +/- 0.0002 | 0.4568 +/- 0.0000 |
+| Stability (Biomap) | Spearman | 0.6435 +/- 0.0001 | 0.5638 +/- 0.0001 | 0.5961 +/- 0.0000 |
+| Thermostability (FLIP) | Spearman | 0.4427 +/- 0.0126 | 0.4696 +/- 0.0172 | 0.4568 +/- 0.0156 |
+
+**Median SD across all 24 rows is 0.0000.** Explain why rather than just
+asserting it: given fixed embeddings and a fixed test split, a 3-NN probe is
+deterministic — the benchmark seed only moves subsampling and CV-fallback
+splits. Thermostability is the one task that subsamples, and it is the only one
+with visible spread (SD ~0.013-0.017).
+
+**This retires the "that delta is just run-to-run noise" objection.** The
+V1 -> V2 remote-homology gap of +0.0079 is roughly 40x the seed SD on that task.
+
+The two uncertainty analyses are orthogonal and both are needed: seed SD covers
+probe/split randomness (near zero here), and the bootstrap in 4a covers which
+proteins happen to be in the benchmark (the dominant term). Neither covers
+*training*-seed variance, since only one training run per model exists — say so.
+
+**One number here answers HNXd directly.** HNXd noted our Stability (Biomap)
+figure is far below the literature's 69.08% linear / 77.69% LoRA and suspected
+the 3-NN probe was the cause. It is not: on Stability the 3-NN probe scores
+higher than the linear probe for every arm (ESM-2 0.6435 3-NN vs 0.4395 linear).
+The gap to the published number is therefore not a probe artifact, and we do not
+claim it is; a matched comparison would need their split and metric definition,
+which we could not verify within the rebuttal window.
+
 ## 5. MMseqs2-only baseline across the whole benchmark
 
 `mmseqs_baseline.py`, 23 tasks, same metric definitions as the embedding path

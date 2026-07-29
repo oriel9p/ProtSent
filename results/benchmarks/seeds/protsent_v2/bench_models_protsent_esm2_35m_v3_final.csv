@@ -1,0 +1,41 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,BenchmarkSeed,Accuracy,F1_Weighted,F1_Macro,F1,AUC,AP,Spearman,MSE
+models/protsent_esm2_35m_v3/final,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,0,0.66677,0.65198,0.41083,,,,,
+models/protsent_esm2_35m_v3/final,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,0,0.53873,,,0.49535,0.54237,0.53048,,
+models/protsent_esm2_35m_v3/final,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,0,,,,,,,0.59614,0.15918
+models/protsent_esm2_35m_v3/final,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,0,,,,,,,0.44937,0.03553
+models/protsent_esm2_35m_v3/final,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,0,,,,,,,0.45687,1.53775
+models/protsent_esm2_35m_v3/final,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,0,0.75225,,,0.75336,0.8158,0.77608,,
+models/protsent_esm2_35m_v3/final,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,0,0.67427,0.67216,0.53527,,0.82943,,,
+models/protsent_esm2_35m_v3/final,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,0,,,,,,,0.78058,0.66949
+models/protsent_esm2_35m_v3/final,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,1,0.66677,0.65198,0.41083,,,,,
+models/protsent_esm2_35m_v3/final,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,1,0.53823,,,0.49453,0.54263,0.53049,,
+models/protsent_esm2_35m_v3/final,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,1,,,,,,,0.59617,0.15918
+models/protsent_esm2_35m_v3/final,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,1,,,,,,,0.4592,0.03613
+models/protsent_esm2_35m_v3/final,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,1,,,,,,,0.45685,1.5374
+models/protsent_esm2_35m_v3/final,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,1,0.75225,,,0.75336,0.8158,0.77608,,
+models/protsent_esm2_35m_v3/final,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,1,0.67427,0.67216,0.53527,,0.82943,,,
+models/protsent_esm2_35m_v3/final,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,1,,,,,,,0.78058,0.66949
+models/protsent_esm2_35m_v3/final,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,2,0.66677,0.65198,0.41083,,,,,
+models/protsent_esm2_35m_v3/final,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,2,0.53923,,,0.49617,0.54284,0.5312,,
+models/protsent_esm2_35m_v3/final,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,2,,,,,,,0.59615,0.15917
+models/protsent_esm2_35m_v3/final,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,2,,,,,,,0.46653,0.03639
+models/protsent_esm2_35m_v3/final,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,2,,,,,,,0.45683,1.53745
+models/protsent_esm2_35m_v3/final,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,2,0.75225,,,0.75336,0.8158,0.77608,,
+models/protsent_esm2_35m_v3/final,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,2,0.67427,0.67216,0.53527,,0.82943,,,
+models/protsent_esm2_35m_v3/final,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,2,,,,,,,0.78058,0.66949
+models/protsent_esm2_35m_v3/final,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,3,0.66677,0.65198,0.41083,,,,,
+models/protsent_esm2_35m_v3/final,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,3,0.53723,,,0.49454,0.54175,0.53025,,
+models/protsent_esm2_35m_v3/final,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,3,,,,,,,0.59614,0.15918
+models/protsent_esm2_35m_v3/final,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,3,,,,,,,0.47435,0.03505
+models/protsent_esm2_35m_v3/final,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,3,,,,,,,0.45683,1.53749
+models/protsent_esm2_35m_v3/final,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,3,0.75225,,,0.75336,0.8158,0.77608,,
+models/protsent_esm2_35m_v3/final,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,3,0.67427,0.67216,0.53527,,0.82943,,,
+models/protsent_esm2_35m_v3/final,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,3,,,,,,,0.78058,0.66949
+models/protsent_esm2_35m_v3/final,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,4,0.66677,0.65198,0.41083,,,,,
+models/protsent_esm2_35m_v3/final,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,4,0.53723,,,0.49399,0.54164,0.52973,,
+models/protsent_esm2_35m_v3/final,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,4,,,,,,,0.59614,0.15917
+models/protsent_esm2_35m_v3/final,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,4,,,,,,,0.43434,0.03678
+models/protsent_esm2_35m_v3/final,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,4,,,,,,,0.45677,1.5374
+models/protsent_esm2_35m_v3/final,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,4,0.75225,,,0.75336,0.8158,0.77608,,
+models/protsent_esm2_35m_v3/final,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,4,0.67427,0.67216,0.53527,,0.82943,,,
+models/protsent_esm2_35m_v3/final,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,4,,,,,,,0.78058,0.66949

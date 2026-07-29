@@ -1,0 +1,41 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,BenchmarkSeed,Accuracy,F1_Weighted,F1_Macro,F1,AUC,AP,Spearman,MSE
+/storage/models/ESM2-35M,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,0,0.58354,0.56158,0.31729,,,,,
+/storage/models/ESM2-35M,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,0,0.51024,,,0.45006,0.53208,0.51999,,
+/storage/models/ESM2-35M,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,0,,,,,,,0.64342,0.15426
+/storage/models/ESM2-35M,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,0,,,,,,,0.43395,0.03541
+/storage/models/ESM2-35M,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,0,,,,,,,0.37359,1.74005
+/storage/models/ESM2-35M,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,0,0.74024,,,0.74484,0.79569,0.75035,,
+/storage/models/ESM2-35M,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,0,0.62432,0.61984,0.49429,,0.80147,,,
+/storage/models/ESM2-35M,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,0,,,,,,,0.6582,1.04563
+/storage/models/ESM2-35M,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,1,0.58354,0.56158,0.31729,,,,,
+/storage/models/ESM2-35M,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,1,0.51024,,,0.45006,0.53208,0.51999,,
+/storage/models/ESM2-35M,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,1,,,,,,,0.64352,0.15424
+/storage/models/ESM2-35M,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,1,,,,,,,0.44741,0.03769
+/storage/models/ESM2-35M,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,1,,,,,,,0.37359,1.74005
+/storage/models/ESM2-35M,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,1,0.74024,,,0.74484,0.79569,0.75035,,
+/storage/models/ESM2-35M,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,1,0.62432,0.61984,0.49429,,0.80147,,,
+/storage/models/ESM2-35M,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,1,,,,,,,0.6582,1.04563
+/storage/models/ESM2-35M,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,2,0.58354,0.56158,0.31729,,,,,
+/storage/models/ESM2-35M,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,2,0.51024,,,0.45006,0.53208,0.51999,,
+/storage/models/ESM2-35M,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,2,,,,,,,0.64354,0.15426
+/storage/models/ESM2-35M,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,2,,,,,,,0.44514,0.03757
+/storage/models/ESM2-35M,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,2,,,,,,,0.37359,1.74005
+/storage/models/ESM2-35M,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,2,0.74024,,,0.74484,0.79549,0.74999,,
+/storage/models/ESM2-35M,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,2,0.62432,0.61984,0.49429,,0.80147,,,
+/storage/models/ESM2-35M,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,2,,,,,,,0.6582,1.04563
+/storage/models/ESM2-35M,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,3,0.58354,0.56158,0.31729,,,,,
+/storage/models/ESM2-35M,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,3,0.51024,,,0.45006,0.53208,0.51999,,
+/storage/models/ESM2-35M,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,3,,,,,,,0.64347,0.15424
+/storage/models/ESM2-35M,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,3,,,,,,,0.45975,0.03638
+/storage/models/ESM2-35M,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,3,,,,,,,0.37359,1.74005
+/storage/models/ESM2-35M,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,3,0.74024,,,0.74484,0.79549,0.74999,,
+/storage/models/ESM2-35M,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,3,0.62432,0.61984,0.49429,,0.80147,,,
+/storage/models/ESM2-35M,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,3,,,,,,,0.6582,1.04563
+/storage/models/ESM2-35M,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,4,0.58354,0.56158,0.31729,,,,,
+/storage/models/ESM2-35M,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,4,0.51024,,,0.45006,0.53208,0.51999,,
+/storage/models/ESM2-35M,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,4,,,,,,,0.64342,0.15426
+/storage/models/ESM2-35M,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,4,,,,,,,0.42732,0.03651
+/storage/models/ESM2-35M,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,4,,,,,,,0.37359,1.74005
+/storage/models/ESM2-35M,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,4,0.74024,,,0.74484,0.79569,0.75035,,
+/storage/models/ESM2-35M,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,4,0.62432,0.61984,0.49429,,0.80147,,,
+/storage/models/ESM2-35M,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,4,,,,,,,0.6582,1.04563

@@ -1,0 +1,41 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,BenchmarkSeed,Accuracy,F1_Weighted,F1_Macro,F1,AUC,AP,Spearman,MSE
+oriel9p/protsent-esm2-35M,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,0,0.65906,0.64258,0.36831,,,,,
+oriel9p/protsent-esm2-35M,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,0,0.53573,,,0.48928,0.54168,0.53153,,
+oriel9p/protsent-esm2-35M,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,0,,,,,,,0.56381,0.13951
+oriel9p/protsent-esm2-35M,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,0,,,,,,,0.48591,0.03326
+oriel9p/protsent-esm2-35M,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,0,,,,,,,0.45106,1.46665
+oriel9p/protsent-esm2-35M,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,0,0.73799,,,0.74129,0.8015,0.76045,,
+oriel9p/protsent-esm2-35M,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,0,0.66992,0.66652,0.51638,,0.82463,,,
+oriel9p/protsent-esm2-35M,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,0,,,,,,,0.71075,0.8581
+oriel9p/protsent-esm2-35M,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,1,0.65875,0.64234,0.36801,,,,,
+oriel9p/protsent-esm2-35M,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,1,0.53573,,,0.48984,0.54163,0.53107,,
+oriel9p/protsent-esm2-35M,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,1,,,,,,,0.56391,0.13952
+oriel9p/protsent-esm2-35M,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,1,,,,,,,0.45341,0.03689
+oriel9p/protsent-esm2-35M,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,1,,,,,,,0.45078,1.46657
+oriel9p/protsent-esm2-35M,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,1,0.73799,,,0.74129,0.8015,0.76045,,
+oriel9p/protsent-esm2-35M,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,1,0.66992,0.66652,0.51638,,0.82463,,,
+oriel9p/protsent-esm2-35M,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,1,,,,,,,0.71075,0.8581
+oriel9p/protsent-esm2-35M,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,2,0.65875,0.64234,0.36801,,,,,
+oriel9p/protsent-esm2-35M,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,2,0.53423,,,0.48791,0.54182,0.53116,,
+oriel9p/protsent-esm2-35M,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,2,,,,,,,0.56367,0.13956
+oriel9p/protsent-esm2-35M,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,2,,,,,,,0.46486,0.03634
+oriel9p/protsent-esm2-35M,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,2,,,,,,,0.451,1.46661
+oriel9p/protsent-esm2-35M,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,2,0.73799,,,0.74129,0.8015,0.76045,,
+oriel9p/protsent-esm2-35M,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,2,0.66938,0.66606,0.51621,,0.82456,,,
+oriel9p/protsent-esm2-35M,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,2,,,,,,,0.71075,0.8581
+oriel9p/protsent-esm2-35M,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,3,0.65906,0.64263,0.36826,,,,,
+oriel9p/protsent-esm2-35M,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,3,0.53573,,,0.48984,0.5425,0.53139,,
+oriel9p/protsent-esm2-35M,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,3,,,,,,,0.5638,0.13951
+oriel9p/protsent-esm2-35M,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,3,,,,,,,0.48954,0.03469
+oriel9p/protsent-esm2-35M,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,3,,,,,,,0.45119,1.4664
+oriel9p/protsent-esm2-35M,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,3,0.73799,,,0.74129,0.8015,0.76045,,
+oriel9p/protsent-esm2-35M,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,3,0.66992,0.66652,0.51638,,0.82462,,,
+oriel9p/protsent-esm2-35M,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,3,,,,,,,0.71075,0.8581
+oriel9p/protsent-esm2-35M,Remote Homology (Fold),100000,2026-07-29,knn,standard,test,test_split,4,0.65906,0.64246,0.36959,,,,,
+oriel9p/protsent-esm2-35M,Solubility (DeepSol),100000,2026-07-29,knn,standard,test,test_split,4,0.53473,,,0.48762,0.54159,0.53092,,
+oriel9p/protsent-esm2-35M,Stability (Biomap),100000,2026-07-29,knn,standard,test,test_split,4,,,,,,,0.56359,0.13956
+oriel9p/protsent-esm2-35M,Thermostability (FLIP),100000,2026-07-29,knn,standard,test,test_random_split,4,,,,,,,0.4541,0.03683
+oriel9p/protsent-esm2-35M,Fluorescence (TAPE),100000,2026-07-29,knn,standard,test,test_split,4,,,,,,,0.45111,1.46663
+oriel9p/protsent-esm2-35M,Metal Ion Binding,100000,2026-07-29,knn,standard,test,test_split,4,0.73799,,,0.74129,0.8015,0.76045,,
+oriel9p/protsent-esm2-35M,Subcellular Localisation,100000,2026-07-29,knn,standard,test,test_split,4,0.66938,0.66606,0.51621,,0.82456,,,
+oriel9p/protsent-esm2-35M,Variant Effect (GB1),100000,2026-07-29,knn,standard,test,test_split,4,,,,,,,0.71075,0.8581

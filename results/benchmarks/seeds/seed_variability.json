@@ -1,0 +1,194 @@
+[
+  {
+    "task": "Fluorescence (TAPE)",
+    "arm": "ESM-2 35M",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.3736,
+    "sd": 0.0
+  },
+  {
+    "task": "Metal Ion Binding",
+    "arm": "ESM-2 35M",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.7402,
+    "sd": 0.0
+  },
+  {
+    "task": "Remote Homology (Fold)",
+    "arm": "ESM-2 35M",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.5835,
+    "sd": 0.0
+  },
+  {
+    "task": "Solubility (DeepSol)",
+    "arm": "ESM-2 35M",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.5102,
+    "sd": 0.0
+  },
+  {
+    "task": "Stability (Biomap)",
+    "arm": "ESM-2 35M",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.6435,
+    "sd": 0.0001
+  },
+  {
+    "task": "Subcellular Localisation",
+    "arm": "ESM-2 35M",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.6243,
+    "sd": 0.0
+  },
+  {
+    "task": "Thermostability (FLIP)",
+    "arm": "ESM-2 35M",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.4427,
+    "sd": 0.0126
+  },
+  {
+    "task": "Variant Effect (GB1)",
+    "arm": "ESM-2 35M",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.6582,
+    "sd": 0.0
+  },
+  {
+    "task": "Fluorescence (TAPE)",
+    "arm": "ProtSent-V1",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.451,
+    "sd": 0.0002
+  },
+  {
+    "task": "Metal Ion Binding",
+    "arm": "ProtSent-V1",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.738,
+    "sd": 0.0
+  },
+  {
+    "task": "Remote Homology (Fold)",
+    "arm": "ProtSent-V1",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.6589,
+    "sd": 0.0002
+  },
+  {
+    "task": "Solubility (DeepSol)",
+    "arm": "ProtSent-V1",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.5352,
+    "sd": 0.0007
+  },
+  {
+    "task": "Stability (Biomap)",
+    "arm": "ProtSent-V1",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.5638,
+    "sd": 0.0001
+  },
+  {
+    "task": "Subcellular Localisation",
+    "arm": "ProtSent-V1",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.6697,
+    "sd": 0.0003
+  },
+  {
+    "task": "Thermostability (FLIP)",
+    "arm": "ProtSent-V1",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.4696,
+    "sd": 0.0172
+  },
+  {
+    "task": "Variant Effect (GB1)",
+    "arm": "ProtSent-V1",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.7108,
+    "sd": 0.0
+  },
+  {
+    "task": "Fluorescence (TAPE)",
+    "arm": "ProtSent-V2",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.4568,
+    "sd": 0.0
+  },
+  {
+    "task": "Metal Ion Binding",
+    "arm": "ProtSent-V2",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.7522,
+    "sd": 0.0
+  },
+  {
+    "task": "Remote Homology (Fold)",
+    "arm": "ProtSent-V2",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.6668,
+    "sd": 0.0
+  },
+  {
+    "task": "Solubility (DeepSol)",
+    "arm": "ProtSent-V2",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.5381,
+    "sd": 0.0009
+  },
+  {
+    "task": "Stability (Biomap)",
+    "arm": "ProtSent-V2",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.5961,
+    "sd": 0.0
+  },
+  {
+    "task": "Subcellular Localisation",
+    "arm": "ProtSent-V2",
+    "metric": "Accuracy",
+    "n_seeds": 5,
+    "mean": 0.6743,
+    "sd": 0.0
+  },
+  {
+    "task": "Thermostability (FLIP)",
+    "arm": "ProtSent-V2",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.4568,
+    "sd": 0.0156
+  },
+  {
+    "task": "Variant Effect (GB1)",
+    "arm": "ProtSent-V2",
+    "metric": "Spearman",
+    "n_seeds": 5,
+    "mean": 0.7806,
+    "sd": 0.0
+  }
+]
