@@ -14,7 +14,7 @@ BEGIN marker is that body; the comment itself sits outside the paste unit.
 
 ## Response to Reviewer HNXd
 
-<!-- character count of the pasted body below: 9829 (limit 10,000) -->
+<!-- character count of the pasted body below: 9825 (limit 10,000) -->
 <!-- BEGIN HNXd -->
 **Result first.** Retrained on decontaminated corpora, ProtSent-V2 (35M, frozen)
 **ties HMMER at SCOPe-40 family Recall@1** — paired bootstrap -0.012, 95% CI
@@ -67,14 +67,13 @@ R@10 to R@30 (+0.017, +0.017) where the embeddings do not (+0.073 ESM-2,
 margin is an upper bound**.
 
 V2 was retrained on corpora filtered at 40% identity / 80% coverage against the
-remote-homology and PPI test sets (SCOPe-40 was not a filter target), and it
-differs from V1 in more than that filter: proportional sampling, no synthetic
-hard negatives — both favoured by the paper's own ablations — and a true
-1,024-example contrastive batch where V1's loss call saw 64. **V2 - V1 is
-therefore not a decontamination ablation**; no unfiltered retrain at that recipe
-exists. Its SCOPe R@10 gain over ESM-2 is flat in query identity to our corpus
-(+0.152 / +0.181 / +0.157 in bins [0.2,0.4), [0.4,0.7), [0.7,1.0]), which
-bounds identity-level memorisation only; fold-level overlap is untested.
+remote-homology and PPI test sets (SCOPe-40 was not a filter target), using the configuration the paper's own ablations favour. Because the
+recipe changed with the corpus, **V2 - V1 is not a decontamination ablation**;
+no unfiltered retrain at that recipe exists. SCOPe cannot be filtered at corpus level, so we filtered the
+benchmark: on the 164 eligible queries below 40% identity to our corpus, V2 -
+HMMER holds at +0.116 [+0.049, +0.189] R@10 and +0.140 [+0.075, +0.207] MAP. The
+margin does not shrink as queries get cleaner. This bounds identity-level
+exposure only; fold-level overlap is untested.
 
 ### 2. Linear probe on the frozen backbone (Q2)
 
@@ -188,7 +187,7 @@ remains decisive, name it and we will answer it in discussion.
 
 ## Response to Reviewer jVGf
 
-<!-- character count of the pasted body below: 9628 (limit 10,000) -->
+<!-- character count of the pasted body below: 9729 (limit 10,000) -->
 <!-- BEGIN jVGf -->
 **Structural supervision is the single largest contributor, as you suspected.**
 Our own Table 4, re-read: removing AlphaFold DB drops improved tasks from 16/23
@@ -252,7 +251,8 @@ V2 retrains on the filtered corpora with the configuration our own ablations
 favour, so **V2 - V1 is not a decontamination ablation**; no unfiltered retrain
 at that recipe exists.
 
-Paired bootstrap, 10,000 resamples, the same queries scoring every method (reproduces the table to 0.001). **We do not beat alignment at top-1**:
+Paired bootstrap, 10,000 resamples, the same queries scoring every method (it
+reproduces the table to within 0.001). **We do not beat alignment at top-1**:
 V2 - HMMER at R@1 is -0.012 [-0.037, +0.012], unresolved; V1 - HMMER is
 -0.111 [-0.139, -0.083], a clear loss; V2 leads MMseqs2 by +0.029 [+0.004,
 +0.054], clearing zero by 0.004 across three uncorrected comparisons, so we do
@@ -264,12 +264,13 @@ MMseqs2 +0.182 [+0.161, +0.203] and +0.236 [+0.216, +0.255].
 ranking quality: 691 of all 2,207 queries return no phmmer hit at `-E 10` and
 score 0 at every K, and both tools flatten from R@10 to R@30 (+0.017, +0.017)
 where the embeddings do not (+0.073 ESM-2, +0.041 V2). We did not re-run
-either tool with that threshold removed, so the depth margin is an upper bound. And SCOPe-40 was never a decontamination target. Re-scored on
-the 164 eligible queries below 40% identity to our corpus, V2 - HMMER holds at
-+0.116 [+0.049, +0.189] R@10 and +0.140 [+0.075, +0.207] MAP, so identity-level
-memorisation is ruled out — but not fold-level overlap, since supervision is
-Foldseek-cluster and Pfam-family co-membership and a pair sharing a query's fold
-at 15% identity survives any identity filter. That control we did not run.
+either tool with that threshold removed, so the depth margin is an upper bound. And SCOPe-40 was never a decontamination target, so we filtered
+the benchmark instead: on the 164 eligible queries below 40% identity to our
+corpus, V2 - HMMER holds at +0.116 [+0.049, +0.189] R@10 and +0.140 [+0.075,
++0.207] MAP. That rules out identity-level memorisation, not fold-level overlap —
+supervision is Foldseek-cluster and Pfam-family co-membership, and a pair sharing
+a query's fold at 15% identity survives any identity filter. That control we did
+not run.
 
 The trade-off: alignment wins single-best-hit and homology-transferable
 annotation; the embedding wins ranking depth and returns a usable ranked list
@@ -290,11 +291,13 @@ fluorescence from +15.6% to +10.4%. A pure structure-distillation model has no
 PPI dial and no fitness dial.
 
 **We did not run the joint no-AFDB/no-Pfam ablation you asked for**, and the two
-single ablations do not substitute for it. What we can put against it is the non-structural half alone, in absolute
-decontaminated numbers: GB1 variant effect (Spearman, 3-NN, test split, mean of 5 seeds)
+single ablations do not substitute for it. What we can put against it is the
+non-structural half on its own, in absolute decontaminated numbers rather than
+relative ones: GB1 variant effect (Spearman, 3-NN, test split, mean of 5 seeds)
 0.658 (ESM-2 35M) / 0.711 (V1) / 0.781 (V2), SD 0.000. Fitness order and
-interaction are relations no structure teacher supplies, so your ablation would settle how much of the *benchmark aggregate* survives
-without structure, not whether the non-structural sources do anything.
+interaction are relations no structure teacher supplies, so your ablation would
+settle how much of the *benchmark aggregate* survives without structure, not
+whether the non-structural sources do anything.
 
 **The limit on that argument:** single-run relative-percent numbers on the
 default split, the same convention we withdraw for sub-1% cells elsewhere. They
@@ -306,9 +309,9 @@ with the shared space costing something.
 
 ESM-S, S-PLM, ISM and Magneton inject structure into a sequence model by
 distilling a structure encoder or structural tokens — one relation type, one
-teacher. ProtSent supervises a relation *graph* over sequences — Pfam family, Foldseek
-cluster, STRING interaction, DMS fitness order — with no structure encoder at
-training or inference. The claim is that relation *type* is
+teacher. ProtSent supervises a heterogeneous relation *graph* over sequences — Pfam family co-membership,
+Foldseek cluster co-membership, STRING interaction, DMS fitness order — with no
+structure encoder at training or inference. The claim is that relation *type* is
 a design axis — each source moves a different task family, as measured above —
 not that this beats structure distillation: we have **no matched runs against
 any of them and claim no superiority**. ProTrek is the trimodal
@@ -347,7 +350,7 @@ discussion.
 
 ## Response to Reviewer Yi1G
 
-<!-- character count of the pasted body below: 9977 (limit 10,000) -->
+<!-- character count of the pasted body below: 9947 (limit 10,000) -->
 <!-- BEGIN Yi1G -->
 Your leakage objection was correct and we treated it as decisive: all three
 corpora re-filtered at 40% identity / 80% coverage, the model retrained from
@@ -388,11 +391,12 @@ number does not exist: `ppi_bernett` is pair-input, not in the 23-task sweep, so
 the paper's +5.3% AUC stays a pre-decontamination V1 result. That is the open
 half of weakness 1.
 
-**SCOPe-40 cannot be filtered at the corpus level** — no train/test split,
-median maximum identity to our corpus **0.908**, so filtering against it removes
-essentially every structured domain. **So we filtered the benchmark instead**:
-drop the queries with a close pretraining neighbour, re-score every arm on what
-remains. Paired V2 - HMMER, same queries, 10,000 resamples:
+**SCOPe-40 cannot be filtered at the corpus level** — no train/test split
+(leave-one-out over 2,207 domains), median maximum identity to our corpus
+**0.908**, so filtering against it removes essentially every structured domain.
+**So we filtered the benchmark instead**: drop the queries with a close
+pretraining neighbour, re-score every arm on what remains. Paired V2 - HMMER,
+same queries, 10,000 resamples:
 
 | eligible queries kept | R@1 | R@10 | MAP |
 |---|---|---|---|
@@ -408,7 +412,7 @@ control — negative, where memorisation predicts positive.
 
 **What this cannot rule out.** Supervision is Foldseek-cluster and Pfam-family
 co-membership, so a pair sharing a query's *fold* at 15% identity survives any
-identity filter, and identity filtering cannot see that. Excluding queries whose
+identity filter, and identity filtering cannot see it. Excluding queries whose
 fold is among our training clusters would discriminate the two; we did not run
 it, and can in discussion.
 
@@ -466,10 +470,9 @@ one space is item 8's linear-probe record.
 **HMMER (phmmer, `-E 10`, top 300 hits/query, no-hit = failure) was run**, same
 gallery and scoring code as MMseqs2. Those two take the same input we do —
 sequence only — so they bound what a sequence-only encoder has to beat, and
-HMMER is the one that costs us a claim. SCOPe-40, **family** level, 2,207
-domains, leave-one-out; the 1,693 eligible queries have a non-self same-family
-neighbour, so their Recall ceiling is 1.0 (over all 2,207 each method scales by
-0.767). MAP is average precision over the full ranking. R@1 / R@10 / MAP: HMMER **0.697** / 0.781 /
+HMMER is the one that costs us a claim. SCOPe-40, **family** level, 2,207 domains, leave-one-out; the 1,693
+eligible queries are those with a non-self same-family neighbour (over all 2,207
+each method scales by 0.767). R@1 / R@10 / MAP: HMMER **0.697** / 0.781 /
 0.475; MMseqs2 (`-s 7.5 -e 10`) 0.656 / 0.740 / 0.410; ESM-2 35M 0.499 /
 0.761 / 0.421; V1 0.585 / 0.851 / 0.551; V2 0.685 / **0.922** /
 **0.646**.
@@ -483,10 +486,10 @@ zero by 0.004 across three uncorrected comparisons. At depth V2 - HMMER is
 **Alignment remains the better top-1 method.** Against our own depth claim: 691
 of 2,207 queries return no phmmer hit and score 0 at every K, and both tools
 flatten from R@10 to R@30 (+0.017) where the embeddings do not (+0.073 ESM-2,
-+0.041 V2). Part of the depth gap is candidate coverage, not ranking, so until
-both are re-run with the threshold lifted the margin is an upper bound. Over 23
-tasks alignment beats the best embedding arm on 3 under 3-NN, 6 under a linear
-probe.
++0.041 V2), so part of the depth gap is candidate coverage rather than ranking
+and the margin is an upper bound until both are re-run without that threshold.
+Over 23 tasks alignment beats the best embedding arm on 3 under 3-NN, 6 under a
+linear probe.
 
 **Not run: ProtTucker, Foldseek, PLMSearch, DHR, ProTrek, Redl et al. 2023.**
 Foldseek and ProTrek consume structure at query time, so losing to them would
