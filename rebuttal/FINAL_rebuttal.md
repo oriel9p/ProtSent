@@ -9,7 +9,7 @@ decontaminated corpora. There is no 150M model on decontaminated data.
 
 ## Response to Reviewer HNXd
 
-<!-- character count of the pasted body below: 9353 (limit 10,000) -->
+<!-- character count of the pasted body below: 9329 (limit 10,000) -->
 <!-- BEGIN HNXd -->
 All five analyses are run. Two answer against us, so they go first.
 
@@ -57,7 +57,7 @@ Test split, frozen embeddings, scikit-learn defaults (`StandardScaler` plus libl
 
 No setting of the tie band turns the linear record into a win. Three tasks fall outside the 20 because one-vs-rest AUC is undefined when the test split holds a class absent from train, and that drops remote homology, our best task, from the tally. Remote homology separately (457 pooled classes, test split): 3-NN accuracy 0.584 for ESM-2 35M, 0.659 for V1, 0.667 for V2; linear accuracy 0.687, 0.690, 0.702; linear macro-F1 0.441, 0.428, 0.453. V1 sits below the untuned backbone on linear macro-F1. Only V2 improves on both metrics under both probes.
 
-We ran no fine-tuning sweep, and we doubt it rescues the general-purpose claim when a frozen linear probe already beats us on 11 of 20.
+We ran no fine-tuning sweep. It would have to overturn a frozen linear probe that already beats us on 11 of 20.
 
 Your hypothesis about the Stability gap is tested, and the probe is not the cause. The `biomap-research/stability_prediction` labels are continuous floats from -1.680 to 2.150 scored by Spearman, so our 0.588 is a correlation, not the accuracy that the 69.08% linear and 77.69% LoRA figures report. We withdraw that comparison as non-commensurate. And on that task the 3-NN probe scores higher than our linear probe for every arm (ESM-2 35M Spearman 0.643 with 3-NN against 0.440 linear, test split), so the probe change you proposed moves the number the wrong way.
 
@@ -100,7 +100,7 @@ That is a narrower paper than we submitted and a better-supported one. If it is 
 
 ## Response to Reviewer jVGf
 
-<!-- character count of the pasted body below: 8866 (limit 10,000) -->
+<!-- character count of the pasted body below: 8854 (limit 10,000) -->
 <!-- BEGIN jVGf -->
 Structural supervision is the single largest contributor, as you suspected, and our own Table 4 says so against the paper's own text. Removing AlphaFold DB drops improved tasks from 16 of 23 to 13 and the mean relative gain from +6.7% to +3.2%, while removing Pfam drops them to 15 and +4.6%. The sentence calling Pfam "the dominant contrastive signal" is contradicted by the table beneath it. That is our error, and no reviewer caught it.
 
@@ -164,7 +164,7 @@ Our text is wrong: the paper says the DMS loss "operates on single proteins rath
 
 The "?" at line 21 is a broken citation key, not a missing reference. Heinzinger et al. 2022 and Redl et al. 2023 are both in Related Work.
 
-**Where that leaves the paper.** Not "better than structure distillation", which we cannot show, and not a general-purpose encoder, which the linear probe refutes. What is left is a measured point on the curve you asked about: a sequence-only 35M encoder, no structure at inference, that trades general-purpose accuracy for retrieval geometry, and a demonstration that the relation *types* you supervise on are separable knobs. That is the insight we think is worth the page.
+**Where that leaves the paper.** Not "better than structure distillation", which we cannot show, and not a general-purpose encoder, which the linear probe refutes. What is left is a measured point on the curve you asked about: a sequence-only 35M encoder, no structure at inference, that trades general-purpose accuracy for retrieval geometry, and a demonstration that the relation *types* you supervise on are separable knobs. That is the insight worth the page.
 
 We ask you to raise your score on it. If the missing no-AFDB/no-Pfam ablation is the decisive item, say so and we report it in discussion.
 <!-- END jVGf -->
