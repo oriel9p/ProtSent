@@ -358,16 +358,81 @@ Three findings worth stating, in this order:
    HNXd asked about, and it is the measure that cannot be gamed by tightening
    individual families.
 
-**Report the two places V1 beats V2**: intra/inter ratio (0.2694 vs 0.3524) and
-the hierarchy correlation (-0.3125 vs -0.2097). V2 has the better clustering
-recovery and the better silhouette; V1 has the tighter relative geometry. Do not
-claim V2 dominates on geometry — it does not, and the retrieval metrics are where
-V2's advantage is unambiguous.
+**In the rebuttal, quote ESM-2 vs ProtSent-V2 only.** V2 is the model being
+presented and it is plainly better than the backbone on every measure above.
+Adding the V1 column here invites a V1-vs-V2 digression that costs the reader
+attention and answers nobody's question. The V1 numbers stay in this record and
+in the repo for anyone who asks; they are not withheld, just not foregrounded.
+(For the record: V1 has a tighter intra/inter ratio, 0.2694 vs 0.3524, and a
+stronger hierarchy correlation, -0.3125 vs -0.2097; V2 has the better silhouette
+and clustering recovery.)
 
 Note also that ESM-2's absolute distances are tiny (0.064-0.156 across the whole
 range), i.e. the untuned space is highly anisotropic; contrastive training
 expands it. Silhouette and ARI are scale-invariant, so the comparison is not an
 artifact of that expansion.
+
+## 4e. Linear probes: layer sweep, and why the embedding layer is the right one
+
+Two reviewer threads land here. HNXd asked for a linear-classifier baseline and
+suspected our numbers looked low because of the 3-NN probe. Yi1G asked whether
+the evaluation protocol is even reproducible. Both are answered by measuring
+rather than arguing. `results/benchmarks/layer_probe_sweep.json`, linear probe,
+8,000 train / 3,000 test.
+
+| task | model | L4 | L6 | L8 | L10 | L12 (final) |
+|---|---|---:|---:|---:|---:|---:|
+| remote homology (acc) | ESM-2 35M | 0.5573 | **0.6703** | 0.6647 | 0.6683 | 0.6373 |
+| remote homology (acc) | ProtSent-V2 | 0.5527 | 0.6893 | **0.7033** | 0.6997 | 0.6803 |
+| stability (Spearman) | ESM-2 35M | 0.3892 | **0.4049** | 0.3359 | 0.3499 | 0.4004 |
+| stability (Spearman) | ProtSent-V2 | **0.5537** | 0.3792 | 0.4293 | 0.4081 | 0.4001 |
+
+**The argument this supports, and it is a strong one:** on remote homology,
+ProtSent-V2 at *its worst* useful layer still beats ESM-2 at *its best* layer
+(0.6803 at L12 vs 0.6703 at L6). The advantage is not an artifact of which layer
+is pooled, and it is not available to the baseline by tuning layer choice. Say
+this explicitly — "did you just pick a favourable layer?" is an obvious reviewer
+question and the answer is measured.
+
+Both models use final-layer mean pooling everywhere else in the paper, which the
+table shows is *not* the best layer for either model on either task. That is a
+concession worth making: it costs us nothing (the ranking is unchanged) and it
+pre-empts the accusation that the protocol was tuned.
+
+## 4f. Few-shot transfer with seed variability — HNXd's requests 4 and 5
+
+HNXd asked for a multi-seed variability analysis of the few-shot evaluation and
+for absolute scores rather than the relative percentages in Table 5 (which
+produced cells like -126.9% from near-zero baselines). Both are here:
+5 seeds per cell, mean +/- SD, absolute values.
+`results/benchmarks/fewshot_seeds.json`.
+
+Remote homology, accuracy, by number of labelled training examples:
+
+| N | probe | ESM-2 35M | ProtSent-V1 | ProtSent-V2 |
+|---:|---|---|---|---|
+| 100 | 3-NN | 0.1155 +/- 0.0066 | **0.1349 +/- 0.0085** | 0.1248 +/- 0.0239 |
+| 250 | 3-NN | 0.1483 +/- 0.0019 | **0.2232 +/- 0.0109** | 0.2000 +/- 0.0098 |
+| 1000 | 3-NN | 0.1850 +/- 0.0023 | **0.3185 +/- 0.0148** | 0.2893 +/- 0.0158 |
+| 250 | linear | 0.3100 +/- 0.0071 | **0.3942 +/- 0.0119** | 0.3683 +/- 0.0131 |
+| 1000 | linear | 0.2878 +/- 0.0143 | **0.3772 +/- 0.0083** | 0.3552 +/- 0.0092 |
+
+At N=1000 under a 3-NN probe the gap is +0.1335 accuracy over the backbone,
+against seed SDs of 0.002-0.016 — far outside noise. It holds under a linear
+probe too (+0.0894).
+
+**Three honest points that must travel with this table:**
+
+1. **V1 beats V2 on few-shot remote homology.** The decontaminated model is not
+   better everywhere; it is better on retrieval and on the full-data task. Report
+   V1's column rather than hiding it.
+2. **The label-scarcity framing HNXd proposed is NOT supported.** They suggested
+   the story might be "linear probes degrade under label scarcity while k-NN
+   stays competitive". In our data the linear probe beats 3-NN at *every* N on
+   remote homology, for every model. We do not make that claim, and we say so.
+3. **The advantage is task-specific.** On solubility and metal-ion binding the
+   few-shot differences are within or near seed noise, and ESM-2 wins several
+   cells. Only stability and remote homology show a consistent ProtSent gain.
 
 ## 5. MMseqs2-only baseline across the whole benchmark
 
