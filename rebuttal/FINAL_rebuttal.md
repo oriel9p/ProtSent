@@ -167,7 +167,7 @@ We ask you to raise your score on it. If the missing no-AFDB/no-Pfam ablation is
 
 ## Response to Reviewer Yi1G
 
-<!-- character count of the pasted body below: 10046 (limit 10,000) -->
+<!-- character count of the pasted body below: 9995 (limit 10,000) -->
 <!-- BEGIN Yi1G -->
 Your leakage objection was correct and we treated it as decisive: all three pretraining corpora re-filtered at 40% identity / 80% coverage, the model retrained from scratch, benchmarks re-run, and verification on the files training actually opened finding 0 flagged sequences surviving. Running HMMER, as you asked, then cost us a claim. ProtSent-V2 minus phmmer at SCOPe-40 family Recall@1 is -0.012, 95% CI [-0.037, +0.012] — a tie, not a win.
 
@@ -223,7 +223,7 @@ The consequence goes against us and we state it: those ablations were scored on 
 
 ### The single-space assumption, and when ProtSent is reliable
 
-You asked us to address mapping heterogeneous relations into one space. The cost is measurable and it is item 8's linear-probe record: compressing family, structural-cluster, interaction and fitness relations into one metric buys neighbourhood structure and loses decodable property information, so the model beats its backbone under 3-NN and loses under a trained head. The per-source ablations show each relation still moves its own task family, so the space is not collapsing to one signal. ProtSent is reliable where the task is retrieval, clustering or nearest-neighbour transfer over structural and family relationships; it is not where you would otherwise train a head on the backbone.
+The cost of the shared space is measurable, and it is item 8's linear-probe record: compressing family, structural-cluster, interaction and fitness relations into one metric buys neighbourhood structure and loses decodable property information, so the model beats its backbone under 3-NN and loses under a trained head. The per-source ablations show each relation still moves its own task family, so the space is not collapsing to one signal. ProtSent is reliable where the task is retrieval, clustering or nearest-neighbour transfer over structural and family relationships; it is not where you would otherwise train a head on the backbone.
 
 ### 7. Baselines
 
