@@ -371,6 +371,61 @@ This is the single most important honesty constraint on the rebuttal: any
 4. **Eq. 1 is malformed** as the reviewer noted; corrected notation is in the
    revision.
 
+## 7a. Framing decisions made by the authors — follow these
+
+These are decisions, not evidence. Where they conflict with a reviewer's framing,
+these win.
+
+**1. The linear-probe result: report it, do not lead the whole rebuttal with a
+withdrawal.** Give the win/tie/loss table for both probes, stock ESM-2 versus
+ProtSent, and answer it on the merits. Three points make the answer fair rather
+than defensive, and all three are grounded:
+
+- *The two probes measure different things.* A trained linear readout measures
+  whether property information is **present** in the representation and linearly
+  decodable given labels. 3-NN measures whether the information is already
+  **local in the geometry**, with no labels and no fitting. Contrastive
+  fine-tuning reorganises geometry; it is not a claim that it adds information.
+- *Both probes here pool the FINAL layer*, which is the measurement most
+  favourable to a model whose last layer was never reorganised. See
+  `results/benchmarks/layer_probe_sweep.json` for the measured layer dependence
+  before making any claim about it — do not assert a layer effect that the sweep
+  does not show.
+- *The target use case is retrieval, clustering, and zero-/few-shot nearest
+  neighbour transfer*, where no trained head exists and geometry is the whole
+  product. That is where the paper's contribution lives, and it is exactly where
+  ProtSent wins and keeps winning under both alignment baselines.
+
+Do NOT hide the linear-probe losses and do NOT claim general-purpose superiority.
+
+**2. The V1-to-V2 configuration differences are not a confound to apologise
+for.** Yi1G's own criticism was that the ablations do not support the submitted
+defaults. V2 acts on that: proportional sampling and no synthetic hard negatives
+are the settings the paper's own ablations favour. State it once, briefly, as
+having taken the reviewer's point. Do not write a paragraph enumerating
+differences, do not frame V2-vs-V1 as a controlled decontamination ablation, and
+do not concede that the comparison is confounded — the claim being made is the
+sufficient one, that decontamination did not cost performance.
+
+**3. The BIOMAP Stability comparison HNXd raised is not commensurate, and this is
+verified.** `biomap-research/stability_prediction` labels are continuous floats
+(range -1.680 to 2.150, 298 distinct values in a 5,000-row sample; train 53,614 /
+valid 2,512 / test 12,851). It is a **regression** task and the paper's metric is
+Spearman, so "58.8%" is a correlation times 100, not an accuracy. A 69.08%
+"linear classifier" accuracy and a 77.69% LoRA accuracy are therefore not the
+same quantity as our 0.588.
+
+The mechanism HNXd proposed for the gap — that k-NN depresses the numbers — is
+also contradicted by our own measurement: on this task the linear probe scores
+**lower** than 3-NN (ESM-2 35M Spearman 0.4395 linear vs 0.5680 3-NN). Say both
+things: the metrics are not commensurate, and the probe change HNXd suggested
+moves the number the wrong way.
+
+**4. The 150M model: one sentence, no promise.** A decontaminated 150M is
+training on the same pipeline and its results will appear in the camera-ready.
+Never present a number from it, never imply it exists now, and do not make its
+completion a reason to accept.
+
 ## 8. What is NOT available — do not imply otherwise
 
 - No 150M model on the decontaminated data (running next, not ready).
