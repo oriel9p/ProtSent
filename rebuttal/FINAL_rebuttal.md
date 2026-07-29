@@ -9,7 +9,7 @@ decontaminated corpora. There is no 150M model on decontaminated data.
 
 ## Response to Reviewer HNXd
 
-<!-- character count of the pasted body below: 9817 (limit 10,000) -->
+<!-- character count of the pasted body below: 9845 (limit 10,000) -->
 <!-- BEGIN HNXd -->
 All five analyses are run. Two answer against us, so they go first.
 
@@ -30,7 +30,7 @@ Naming: V1 is the submitted 35M model. V2 is a 35M retrained on corpora decontam
 | NMI vs true families | 0.823 | 0.917 |
 | Spearman(distance, shared hierarchy) | -0.105 | -0.210 |
 
-ARI of 0.054 is near chance: clustering the untuned space at the true number of families recovers almost nothing. Silhouette changes sign, so families go from overlapping to separated. Your distance-versus-property-similarity request is the last row, with SCOPe hierarchy depth as the property. Mean pairwise distance by shared levels (0 = different class, 4 = same family) is 0.156, 0.140, 0.146, 0.123, 0.064 for ESM-2 35M — not monotone, since domains sharing two levels sit further apart than domains sharing one. For ProtSent-V2 it is 0.865, 0.821, 0.780, 0.571, 0.299, strictly monotone.
+ARI of 0.054 is near chance: clustering the untuned space at the true number of families recovers almost nothing. Silhouette changes sign, so families go from overlapping to separated. Your distance-versus-property-similarity request is the last row, with SCOPe hierarchy depth as the property. Mean pairwise distance should fall as two domains share more of the hierarchy. For ProtSent-V2 it does, strictly, across all five levels (0.865 down to 0.299). For ESM-2 35M it does not: domains sharing two levels sit further apart (0.146) than domains sharing one (0.140).
 
 Retrieval, same gallery, leave-one-out, self excluded, no-hit scored as a failure. Only 1,693 of 2,207 queries have a non-self same-family neighbour, so every row is those.
 
@@ -75,7 +75,7 @@ Retrieval metrics are per-query means, so resampling the 1,693 eligible queries 
 | V2 - HMMER | -0.012 [-0.037, +0.012] | +0.141 [+0.120, +0.162] | +0.171 [+0.151, +0.191] |
 | V2 - MMseqs2 | +0.029 [+0.004, +0.054] | +0.182 [+0.161, +0.203] | +0.236 [+0.216, +0.255] |
 
-We do not claim to beat alignment at top-1. V2 ties HMMER there, and its +0.029 edge over MMseqs2 clears zero by 0.004 across three uncorrected comparisons, so we do not lean on that either. V1 minus HMMER at Recall@1 is -0.111 [-0.139, -0.083], an outright loss.
+We do not claim to beat alignment at top-1. V2 ties default phmmer there and is behind the filters-off configuration, and its +0.029 edge over MMseqs2 clears zero by 0.004 across three uncorrected comparisons, so we do not lean on that either. V1 minus HMMER at Recall@1 is -0.111 [-0.139, -0.083], an outright loss.
 
 No intervals exist for the 23-task table; your objection stands. The per-task numbers are measurements and we report them as such, but we draw no inferential claim from the aggregate.
 
@@ -102,7 +102,7 @@ That is a narrower paper than we submitted and a better-supported one. If it is 
 
 ## Response to Reviewer jVGf
 
-<!-- character count of the pasted body below: 8866 (limit 10,000) -->
+<!-- character count of the pasted body below: 9274 (limit 10,000) -->
 <!-- BEGIN jVGf -->
 Structural supervision is the single largest contributor, as you suspected, and our own Table 4 says so against the paper's own text. Removing AlphaFold DB drops improved tasks from 16 of 23 to 13 and the mean relative gain from +6.7% to +3.2%, while removing Pfam drops them to 15 and +4.6%. The sentence calling Pfam "the dominant contrastive signal" is contradicted by the table beneath it. That is our error, and no reviewer caught it.
 
@@ -132,7 +132,9 @@ SCOPe-40, family level, 2,207-domain gallery, leave-one-out, self excluded, no-h
 | ProtSent-V1 35M | 0.585 | 0.851 | 0.926 | 0.551 |
 | ProtSent-V2 35M | 0.685 | 0.922 | 0.963 | 0.646 |
 
-Paired bootstrap, 10,000 resamples, the same queries scoring every method. We do not beat alignment at top-1: V2 minus HMMER at Recall@1 is -0.012 [-0.037, +0.012], unresolved, and V1 minus HMMER is -0.111 [-0.139, -0.083], a clear loss. The embedding wins at depth against both: V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP; V2 minus MMseqs2 is +0.182 [+0.161, +0.203] and +0.236 [+0.216, +0.255].
+Paired bootstrap, 10,000 resamples, the same queries scoring every method. One disclosure, since it bears on where we sit on your curve: phmmer's defaults apply HMMER's heuristic prefilters. Disabled, phmmer returns a hit for every query and reaches Recall@1 0.753 and MAP 0.607, and V2 is then behind at top-1 by -0.068 [-0.092, -0.044] while still ahead at depth by +0.024 Recall@10 and +0.039 MAP. The rows below use the default configuration, which is what a practitioner runs.
+
+We do not beat alignment at top-1: V2 minus HMMER at Recall@1 is -0.012 [-0.037, +0.012], unresolved, and V1 minus HMMER is -0.111 [-0.139, -0.083], a clear loss. The embedding wins at depth against both: V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP; V2 minus MMseqs2 is +0.182 [+0.161, +0.203] and +0.236 [+0.216, +0.255].
 
 Two limits on that depth result, both ours.
 
@@ -175,9 +177,9 @@ We ask you to raise your score on it. If the missing no-AFDB/no-Pfam ablation is
 
 ## Response to Reviewer Yi1G
 
-<!-- character count of the pasted body below: 9941 (limit 10,000) -->
+<!-- character count of the pasted body below: 9972 (limit 10,000) -->
 <!-- BEGIN Yi1G -->
-Your leakage objection was correct and we treated it as decisive: all three pretraining corpora re-filtered at 40% identity / 80% coverage, the model retrained from scratch, benchmarks re-run, and verification on the files training actually opened finding 0 flagged sequences surviving. Running HMMER, as you asked, then cost us a claim. ProtSent-V2 minus HMMER at SCOPe-40 family Recall@1 is -0.012, 95% CI [-0.037, +0.012] — a tie, not a win.
+Your leakage objection was correct and we treated it as decisive: all three pretraining corpora re-filtered at 40% identity / 80% coverage, the model retrained from scratch, benchmarks re-run, and verification on the files training actually opened finding 0 flagged sequences surviving. Running HMMER, as you asked, then cost us a claim. Against default phmmer, ProtSent-V2 at SCOPe-40 family Recall@1 is -0.012, 95% CI [-0.037, +0.012] — a tie, not a win. With phmmer's heuristic prefilters disabled it is worse: -0.068 [-0.092, -0.044] at Recall@1, still ahead at depth by +0.024 Recall@10 and +0.039 MAP. We quote the default configuration below and state this one here.
 
 V1 is the submitted 35M model, V2 the retrain on the filtered corpora. Every number below is on `--eval_split test`. All 150M results are withdrawn, because no 150M model exists on the decontaminated corpora.
 
@@ -207,13 +209,13 @@ SCOPe-40 cannot be filtered at corpus level. It has no train/test split, and the
 | below 0.7 (n=479) | -0.027 [-0.073, +0.017] | +0.127 [+0.090, +0.165] | +0.154 [+0.117, +0.190] |
 | all (n=1,693) | -0.012 [-0.037, +0.012] | +0.141 [+0.120, +0.162] | +0.171 [+0.151, +0.191] |
 
-The conclusion does not move. On the 164 queries furthest from anything we trained on, V2 still ties the best alignment baseline at top-1 and still leads at depth, and the margin does not shrink as the queries get cleaner. Per-query Spearman between maximum identity to the corpus and gain in average precision is -0.116 (p=1.6e-06), and -0.081 (p=9.0e-04) after controlling for baseline score. It is negative where memorisation predicts positive.
+The conclusion does not move. On the 164 queries furthest from anything we trained on, V2 still ties default phmmer at top-1 and still leads at depth, and the margin does not shrink as the queries get cleaner. Per-query Spearman between maximum identity to the corpus and gain in average precision is -0.116 (p=1.6e-06), and -0.081 (p=9.0e-04) after controlling for baseline score. It is negative where memorisation predicts positive.
 
 What this cannot rule out: supervision is Foldseek-cluster and Pfam-family co-membership, so a training pair sharing a query's fold at 15% identity survives any identity filter. Excluding queries whose fold appears in our training clusters would separate the two. We did not run it, and can in discussion.
 
 ### 2. The DMS objective
 
-Implemented as you describe, and our text ("operates on single proteins rather than pairs") is wrong. Rows are wild-type, mutant, and within-assay normalised fitness in [0,1], and CoSENT ranks pairs within a batch: if mutant a outscores mutant b, the loss pushes cos(WT, a) above cos(WT, b). There is no absolute target and nothing collapsing high-fitness variants onto the wild type. The pairing is wild-type-anchored, so mutant-to-mutant distances are constrained only indirectly.
+Implemented as you describe, and our text ("operates on single proteins rather than pairs") is wrong. Rows are wild-type, mutant, and within-assay normalised fitness in [0,1]. CoSENT ranks pairs within a batch: if mutant a outscores b, the loss pushes cos(WT, a) above cos(WT, b). No absolute target, nothing collapsing high-fitness variants onto the wild type. The pairing is wild-type-anchored, so mutant-to-mutant distances are constrained only indirectly.
 
 ### 3. MNRL batch semantics and Eq. 1
 
@@ -221,7 +223,7 @@ Correct, and a real error. The submitted 1,024 is an optimizer batch from gradie
 
 ### 4 and 5. Pair-level tasks and k-NN regression
 
-PPI partners are embedded independently and concatenated before the probe. Peptide-HLA is not two-input here: the dataset supplies one `seq` field holding a pipe-joined `HLA_pseudoseq|peptide` string. k-NN regression is uniform, `KNeighborsRegressor(n_neighbors=3)`, an unweighted mean over 3 neighbours. In the few-shot code the estimator is `n_neighbors = max(1, min(3, train_size))`, so it is a different estimator in the smallest cells, which is one reason Table 5 is replaced by absolute means with seed standard deviations.
+PPI partners are embedded independently and concatenated before the probe. Peptide-HLA is not two-input here: the dataset supplies one `seq` field holding a pipe-joined `HLA_pseudoseq|peptide` string. k-NN regression is uniform, `KNeighborsRegressor(n_neighbors=3)`, an unweighted mean over 3 neighbours. In the few-shot code the estimator is `n_neighbors = max(1, min(3, train_size))`, a different estimator in the smallest cells, which is one reason Table 5 is re-run.
 
 ### 6. The ablations do not support the defaults
 
@@ -241,7 +243,7 @@ HMMER (phmmer, `-E 10`, top 300 hits per query, no-hit scored as failure) was ru
 | ProtSent-V1 35M | 0.585 | 0.851 | 0.926 | 0.551 |
 | ProtSent-V2 35M | 0.685 | 0.922 | 0.963 | 0.646 |
 
-Paired bootstrap, 10,000 resamples. At Recall@1, V2 minus HMMER is -0.012 [-0.037, +0.012], unresolved; V1 minus HMMER is -0.111 [-0.139, -0.083], an outright loss; V2 minus MMseqs2 is +0.029 [+0.004, +0.054], clearing zero by 0.004 across three uncorrected comparisons, so we do not lean on it. At depth, V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP.
+Paired bootstrap, 10,000 resamples. At Recall@1, V1 minus HMMER is -0.111 [-0.139, -0.083], an outright loss, and V2 minus MMseqs2 is +0.029 [+0.004, +0.054], clearing zero by 0.004 across three uncorrected comparisons, so we do not lean on it. At depth, V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP.
 
 Alignment remains the better top-1 method, and 691 of 2,207 queries return no phmmer hit at all, so part of our depth margin is candidate coverage rather than ranking. Across the benchmark alignment beats the best embedding arm on 3 of 23 tasks under 3-NN and 6 under a linear probe, including EC classification F1-macro 0.723 for HMMER against 0.598 for ESM-2 35M.
 
@@ -249,7 +251,7 @@ Not run: ProtTucker, Foldseek, PLMSearch, DHR, ProTrek, Redl et al. 2023. Foldse
 
 ### 8. Statistical evidence
 
-On Table 2 you are right: no intervals, one seed per cell, and a 0.005 tie band narrower than the 0.005 to 0.008 spread between V2's final checkpoint and a near-trough checkpoint. A 5-seed sweep gives median SD 0.000 across 24 rows, which shows only that a 3-NN probe is deterministic on fixed embeddings; training-seed variance is unmeasured, since one training run exists per model. Over the 20 tasks whose metric is defined for all arms, V1 beats ESM-2 35M 11 win / 3 tie / 6 lose under 3-NN but 4 / 4 / 12 under a linear probe; V2 is 10 / 3 / 7 and 2 / 7 / 11. The general-purpose claim is withdrawn on that basis.
+On Table 2 you are right: no intervals, one seed per cell, and a 0.005 tie band narrower than the 0.005 to 0.008 spread between V2's final and near-trough checkpoints. A 5-seed sweep gives median SD 0.000 across 24 rows, which shows only that a 3-NN probe is deterministic on fixed embeddings; training-seed variance is unmeasured, since one training run exists per model. Over the 20 tasks scorable for all arms, V1 beats ESM-2 35M 11/3/6 under 3-NN but 4/4/12 under a linear probe, and V2 is 10/3/7 and 2/7/11. The general-purpose claim is withdrawn on that basis.
 
 ### Errors in our own submission
 
