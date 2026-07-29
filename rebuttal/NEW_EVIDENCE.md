@@ -332,6 +332,62 @@ rather than asserted.
 One caveat worth a sentence: MMseqs2 solubility AUC is 0.4185, below chance —
 alignment label-transfer is anti-correlated on DeepSol.
 
+## 5a. Both alignment baselines across the whole benchmark — and the coverage gap
+
+`mmseqs_baseline.py` (24 tasks) and `hmmer_baseline.py` (23 tasks; temperature
+stability, 283k train / 73k test, did not finish in the window). Both score
+through the same code path, so they cannot diverge in how they are measured.
+Main metric per task, with **hit coverage** — the fraction of test queries the
+search returns any alignment for:
+
+| task | metric | MMseqs2 | cov | HMMER | cov |
+|---|---|---:|---:|---:|---:|
+| ec_classification | F1_Macro | 0.7103 | 0.990 | **0.7229** | 0.945 |
+| go_mf | F1_Macro | 0.5850 | 0.956 | **0.6047** | 0.901 |
+| beta_lactamase_peer | Spearman | **0.8026** | 1.000 | 0.7974 | 1.000 |
+| variant_effect | Spearman | 0.7166 | 1.000 | **0.7169** | 1.000 |
+| enzyme_catalytic_efficiency | Spearman | 0.6322 | 0.994 | **0.6462** | 0.991 |
+| stability | Spearman | 0.5817 | 1.000 | **0.5969** | 1.000 |
+| optimal_ph | Spearman | 0.5462 | 0.987 | **0.5541** | 0.937 |
+| remote_homology | AUC | **0.6523** | 0.889 | 0.6439 | **0.524** |
+| scope40_retrieval | Recall@10 | 0.5637 | 0.882 | **0.5963** | 0.687 |
+| signalp_binary | AUC | 0.7961 | 0.770 | **0.8115** | 0.675 |
+| solubility | AUC | 0.4185 | 0.951 | 0.4150 | 0.951 |
+| aav_flip | Spearman | **0.4024** | 1.000 | 0.3698 | 1.000 |
+| fluorescence | Spearman | **0.3863** | 1.000 | 0.2845 | 1.000 |
+| rhla_enzyme_mutations | Spearman | n/a | **0.000** | -0.0888 | **0.004** |
+
+HMMER beats MMseqs2 on 12 of the 22 tasks both completed, so neither is the
+"weak" baseline — quoting only one would be a fair criticism, and both are
+reported. **Always report the alignment number as the better of the two**, so no
+reviewer can claim the easier opponent was chosen.
+
+### The coverage gap is the generality argument, measured
+
+This is the concrete answer to jVGf's generality-accuracy question, and it is
+stronger than the accuracy comparison. Alignment search **returns nothing at all**
+for a large share of queries, and that share grows exactly where the task is
+hard:
+
+- remote homology: HMMER returns no hit for **47.6%** of test queries (coverage
+  0.524); MMseqs2 for 11.1%
+- SCOPe-40 retrieval: HMMER no-hit for **31.3%**, MMseqs2 for 11.8%
+- `rhla_enzyme_mutations` (6-residue mutation-site strings): coverage 0.000 and
+  0.004 — both alignment methods fail completely on the task
+- signalp, subcellular localisation, metal-ion binding: HMMER coverage 0.675,
+  0.680, 0.832
+
+An embedding model always returns a ranked list. Its metric is never a property
+of a fallback. When an alignment metric is quoted at coverage 0.524, roughly half
+of it is the fallback, not the search — which is why every alignment number in
+this document carries its coverage, and why any rebuttal sentence quoting one
+must carry it too.
+
+**Where alignment genuinely wins, say so plainly:** enzyme-class prediction
+(F1_Macro 0.7229 vs the best embedding model's 0.598) and GO molecular function
+(0.6047 vs 0.459) are decisive alignment wins at near-full coverage. Those are
+not close, and conceding them is what makes the retrieval claim credible.
+
 ## 6. Both probes, reported separately, on the test split
 
 23 tasks x 4 model arms x {3-NN, linear probe}, `--eval_split test`
