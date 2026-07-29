@@ -9,7 +9,7 @@ decontaminated corpora. There is no 150M model on decontaminated data.
 
 ## Response to Reviewer HNXd
 
-<!-- character count of the pasted body below: 9845 (limit 10,000) -->
+<!-- character count of the pasted body below: 9458 (limit 10,000) -->
 <!-- BEGIN HNXd -->
 All five analyses are run. Two answer against us, so they go first.
 
@@ -42,8 +42,6 @@ Retrieval, same gallery, leave-one-out, self excluded, no-hit scored as a failur
 | ProtSent-V1 35M | 0.585 | 0.851 | 0.926 | 0.551 |
 | ProtSent-V2 35M | 0.685 | 0.922 | 0.963 | 0.646 |
 
-One disclosure on that baseline. phmmer's defaults apply HMMER's heuristic prefilters. Disabled (F1=F2=F3=1, no bias filter), phmmer returns a hit for every query and reaches R@1 0.753 and MAP 0.607, and V2 is then behind at top-1 by -0.068 [-0.092, -0.044] and ahead at depth by +0.024 R@10 and +0.039 MAP. We report the default configuration as the operating point a practitioner runs, and state the other so you do not have to find it.
-
 Alignment is the better top-1 method, and the submitted V1 loses top-1 to both tools. Our advantage is ranking depth, and it holds on precision as well as recall: precision@10 is 0.367 for V2 against 0.245 for phmmer and 0.279 for ESM-2 35M, on an attainable ceiling of 0.516. Depth is not bought by returning more candidates. Part of that depth margin is candidate coverage rather than ranking quality: 691 of the 2,207 queries return no phmmer hit at all and score zero at every K. We state that as a limit on our own result.
 
 The gain is not proximity to pretraining data. SCOPe-40 cannot be filtered at corpus level, so we filtered the benchmark instead: on the 164 eligible queries below 40% identity to our corpus, V2 minus HMMER is +0.116 [+0.049, +0.189] Recall@10 and +0.140 [+0.075, +0.207] MAP. The margin does not shrink as the queries get cleaner.
@@ -75,7 +73,7 @@ Retrieval metrics are per-query means, so resampling the 1,693 eligible queries 
 | V2 - HMMER | -0.012 [-0.037, +0.012] | +0.141 [+0.120, +0.162] | +0.171 [+0.151, +0.191] |
 | V2 - MMseqs2 | +0.029 [+0.004, +0.054] | +0.182 [+0.161, +0.203] | +0.236 [+0.216, +0.255] |
 
-We do not claim to beat alignment at top-1. V2 ties default phmmer there and is behind the filters-off configuration, and its +0.029 edge over MMseqs2 clears zero by 0.004 across three uncorrected comparisons, so we do not lean on that either. V1 minus HMMER at Recall@1 is -0.111 [-0.139, -0.083], an outright loss.
+We do not claim to beat alignment at top-1. V2 ties default phmmer there, and trails phmmer run with its heuristic prefilters disabled (detailed in our response to Yi1G), and its +0.029 edge over MMseqs2 clears zero by 0.004 across three uncorrected comparisons, so we do not lean on that either. V1 minus HMMER at Recall@1 is -0.111 [-0.139, -0.083], an outright loss.
 
 No intervals exist for the 23-task table; your objection stands. The per-task numbers are measurements and we report them as such, but we draw no inferential claim from the aggregate.
 
@@ -102,7 +100,7 @@ That is a narrower paper than we submitted and a better-supported one. If it is 
 
 ## Response to Reviewer jVGf
 
-<!-- character count of the pasted body below: 9274 (limit 10,000) -->
+<!-- character count of the pasted body below: 8948 (limit 10,000) -->
 <!-- BEGIN jVGf -->
 Structural supervision is the single largest contributor, as you suspected, and our own Table 4 says so against the paper's own text. Removing AlphaFold DB drops improved tasks from 16 of 23 to 13 and the mean relative gain from +6.7% to +3.2%, while removing Pfam drops them to 15 and +4.6%. The sentence calling Pfam "the dominant contrastive signal" is contradicted by the table beneath it. That is our error, and no reviewer caught it.
 
@@ -132,9 +130,7 @@ SCOPe-40, family level, 2,207-domain gallery, leave-one-out, self excluded, no-h
 | ProtSent-V1 35M | 0.585 | 0.851 | 0.926 | 0.551 |
 | ProtSent-V2 35M | 0.685 | 0.922 | 0.963 | 0.646 |
 
-Paired bootstrap, 10,000 resamples, the same queries scoring every method. One disclosure, since it bears on where we sit on your curve: phmmer's defaults apply HMMER's heuristic prefilters. Disabled, phmmer returns a hit for every query and reaches Recall@1 0.753 and MAP 0.607, and V2 is then behind at top-1 by -0.068 [-0.092, -0.044] while still ahead at depth by +0.024 Recall@10 and +0.039 MAP. The rows below use the default configuration, which is what a practitioner runs.
-
-We do not beat alignment at top-1: V2 minus HMMER at Recall@1 is -0.012 [-0.037, +0.012], unresolved, and V1 minus HMMER is -0.111 [-0.139, -0.083], a clear loss. The embedding wins at depth against both: V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP; V2 minus MMseqs2 is +0.182 [+0.161, +0.203] and +0.236 [+0.216, +0.255].
+Paired bootstrap, 10,000 resamples, the same queries scoring every method. We do not beat alignment at top-1: V2 minus HMMER at Recall@1 is -0.012 [-0.037, +0.012], unresolved, and worse against phmmer with its prefilters disabled (see our response to Yi1G), and V1 minus HMMER is -0.111 [-0.139, -0.083], a clear loss. The embedding wins at depth against both: V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP; V2 minus MMseqs2 is +0.182 [+0.161, +0.203] and +0.236 [+0.216, +0.255].
 
 Two limits on that depth result, both ours.
 
