@@ -9,7 +9,7 @@ decontaminated corpora. There is no 150M model on decontaminated data.
 
 ## Response to Reviewer HNXd
 
-<!-- character count of the pasted body below: 9458 (limit 10,000) -->
+<!-- character count of the pasted body below: 9353 (limit 10,000) -->
 <!-- BEGIN HNXd -->
 All five analyses are run. Two answer against us, so they go first.
 
@@ -73,7 +73,7 @@ Retrieval metrics are per-query means, so resampling the 1,693 eligible queries 
 | V2 - HMMER | -0.012 [-0.037, +0.012] | +0.141 [+0.120, +0.162] | +0.171 [+0.151, +0.191] |
 | V2 - MMseqs2 | +0.029 [+0.004, +0.054] | +0.182 [+0.161, +0.203] | +0.236 [+0.216, +0.255] |
 
-We do not claim to beat alignment at top-1. V2 ties default phmmer there, and trails phmmer run with its heuristic prefilters disabled (detailed in our response to Yi1G), and its +0.029 edge over MMseqs2 clears zero by 0.004 across three uncorrected comparisons, so we do not lean on that either. V1 minus HMMER at Recall@1 is -0.111 [-0.139, -0.083], an outright loss.
+We do not claim to beat alignment at top-1. V2 ties phmmer there, and its +0.029 edge over MMseqs2 clears zero by 0.004 across three uncorrected comparisons, so we do not lean on that either. V1 minus HMMER at Recall@1 is -0.111 [-0.139, -0.083], an outright loss.
 
 No intervals exist for the 23-task table; your objection stands. The per-task numbers are measurements and we report them as such, but we draw no inferential claim from the aggregate.
 
@@ -100,7 +100,7 @@ That is a narrower paper than we submitted and a better-supported one. If it is 
 
 ## Response to Reviewer jVGf
 
-<!-- character count of the pasted body below: 8948 (limit 10,000) -->
+<!-- character count of the pasted body below: 8866 (limit 10,000) -->
 <!-- BEGIN jVGf -->
 Structural supervision is the single largest contributor, as you suspected, and our own Table 4 says so against the paper's own text. Removing AlphaFold DB drops improved tasks from 16 of 23 to 13 and the mean relative gain from +6.7% to +3.2%, while removing Pfam drops them to 15 and +4.6%. The sentence calling Pfam "the dominant contrastive signal" is contradicted by the table beneath it. That is our error, and no reviewer caught it.
 
@@ -130,7 +130,7 @@ SCOPe-40, family level, 2,207-domain gallery, leave-one-out, self excluded, no-h
 | ProtSent-V1 35M | 0.585 | 0.851 | 0.926 | 0.551 |
 | ProtSent-V2 35M | 0.685 | 0.922 | 0.963 | 0.646 |
 
-Paired bootstrap, 10,000 resamples, the same queries scoring every method. We do not beat alignment at top-1: V2 minus HMMER at Recall@1 is -0.012 [-0.037, +0.012], unresolved, and worse against phmmer with its prefilters disabled (see our response to Yi1G), and V1 minus HMMER is -0.111 [-0.139, -0.083], a clear loss. The embedding wins at depth against both: V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP; V2 minus MMseqs2 is +0.182 [+0.161, +0.203] and +0.236 [+0.216, +0.255].
+Paired bootstrap, 10,000 resamples, the same queries scoring every method. We do not beat alignment at top-1: V2 minus HMMER at Recall@1 is -0.012 [-0.037, +0.012], unresolved, and V1 minus HMMER is -0.111 [-0.139, -0.083], a clear loss. The embedding wins at depth against both: V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP; V2 minus MMseqs2 is +0.182 [+0.161, +0.203] and +0.236 [+0.216, +0.255].
 
 Two limits on that depth result, both ours.
 
@@ -173,9 +173,9 @@ We ask you to raise your score on it. If the missing no-AFDB/no-Pfam ablation is
 
 ## Response to Reviewer Yi1G
 
-<!-- character count of the pasted body below: 9972 (limit 10,000) -->
+<!-- character count of the pasted body below: 9736 (limit 10,000) -->
 <!-- BEGIN Yi1G -->
-Your leakage objection was correct and we treated it as decisive: all three pretraining corpora re-filtered at 40% identity / 80% coverage, the model retrained from scratch, benchmarks re-run, and verification on the files training actually opened finding 0 flagged sequences surviving. Running HMMER, as you asked, then cost us a claim. Against default phmmer, ProtSent-V2 at SCOPe-40 family Recall@1 is -0.012, 95% CI [-0.037, +0.012] — a tie, not a win. With phmmer's heuristic prefilters disabled it is worse: -0.068 [-0.092, -0.044] at Recall@1, still ahead at depth by +0.024 Recall@10 and +0.039 MAP. We quote the default configuration below and state this one here.
+Your leakage objection was correct and we treated it as decisive: all three pretraining corpora re-filtered at 40% identity / 80% coverage, the model retrained from scratch, benchmarks re-run, and verification on the files training actually opened finding 0 flagged sequences surviving. Running HMMER, as you asked, then cost us a claim. ProtSent-V2 minus phmmer at SCOPe-40 family Recall@1 is -0.012, 95% CI [-0.037, +0.012] — a tie, not a win.
 
 V1 is the submitted 35M model, V2 the retrain on the filtered corpora. Every number below is on `--eval_split test`. All 150M results are withdrawn, because no 150M model exists on the decontaminated corpora.
 
@@ -205,7 +205,7 @@ SCOPe-40 cannot be filtered at corpus level. It has no train/test split, and the
 | below 0.7 (n=479) | -0.027 [-0.073, +0.017] | +0.127 [+0.090, +0.165] | +0.154 [+0.117, +0.190] |
 | all (n=1,693) | -0.012 [-0.037, +0.012] | +0.141 [+0.120, +0.162] | +0.171 [+0.151, +0.191] |
 
-The conclusion does not move. On the 164 queries furthest from anything we trained on, V2 still ties default phmmer at top-1 and still leads at depth, and the margin does not shrink as the queries get cleaner. Per-query Spearman between maximum identity to the corpus and gain in average precision is -0.116 (p=1.6e-06), and -0.081 (p=9.0e-04) after controlling for baseline score. It is negative where memorisation predicts positive.
+The conclusion does not move. On the 164 queries furthest from anything we trained on, V2 still ties phmmer at top-1 and still leads at depth, and the margin does not shrink as the queries get cleaner. Per-query Spearman between maximum identity to the corpus and gain in average precision is -0.116 (p=1.6e-06), and -0.081 (p=9.0e-04) after controlling for baseline score. It is negative where memorisation predicts positive.
 
 What this cannot rule out: supervision is Foldseek-cluster and Pfam-family co-membership, so a training pair sharing a query's fold at 15% identity survives any identity filter. Excluding queries whose fold appears in our training clusters would separate the two. We did not run it, and can in discussion.
 
