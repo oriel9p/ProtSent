@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # Post-training benchmark sweep: ProtSent-v2-35M vs the ESM2-35M starting point.
 #
-# Runs kNN first, then linear probe, for each model. Both probes reuse the same
-# cached embeddings (--cache_embeddings is on by default), so the second probe
-# costs only the classifier fit -- ordering kNN first is therefore free.
+# Runs kNN first, then linear probe, for each model. --cache_embeddings must be
+# passed explicitly -- it is store_true and OFF by default, and omitting it made
+# every arm recompute embeddings from scratch (~15 min each) instead of the
+# linear pass being a cheap classifier refit. With it on, ordering kNN first is
+# what makes the linear pass nearly free.
+#
+# Arms that already have a complete, error-free result are skipped. Set FORCE=1
+# to re-measure everything regardless.
 #
 # --eval_split test is REQUIRED for comparability with mmseqs_baseline.py, which
 # scores each task's declared test split. The suite otherwise defaults to
@@ -55,15 +60,39 @@ metal_ion_binding optimal_ph peptide_hla profet_np_sp_cleaved remote_homology \
 scope40_retrieval signalp_binary solubility stability subcellular_loc \
 temperature_stability thermostability variant_effect}"
 
+n_tasks() { wc -w <<<"$TASKS"; }
+
+# A completed arm = every requested task has at least one row with an empty Error
+# column. Row count is the wrong test: the suite appends, so a rerun of 23 tasks
+# leaves 46 rows, and a partial arm can still have more rows than tasks.
+arm_is_complete() {
+  local dir="$1" want="$2"
+  local csv
+  csv=$(ls "$dir"/*.csv 2>/dev/null | head -1) || return 1
+  [[ -n "$csv" ]] || return 1
+  uv run --no-sync python -c "
+import sys, pandas as pd
+df = pd.read_csv(sys.argv[1])
+err = next((c for c in df.columns if 'rror' in c), None)
+clean = df[df[err].isna()] if err else df
+sys.exit(0 if clean['Task'].nunique() >= int(sys.argv[2]) else 1)
+" "$csv" "$want" 2>/dev/null
+}
+
 run_one() {
   local model="$1" tag="$2" probe="$3"
   local log="logs/bench_v3/${tag}_${probe}.log"
+  if [[ "${FORCE:-0}" != "1" ]] && arm_is_complete "$OUT/${tag}_${probe}" "$(n_tasks)"; then
+    echo "=== $(date +%H:%M:%S) $tag / $probe -- already complete, skipping ==="
+    return 0
+  fi
   echo "=== $(date +%H:%M:%S) $tag / $probe ==="
   uv run --no-sync python protein_benchmark_suite.py \
     -m "$model" \
     -t $TASKS \
     -p "$probe" \
     -e test \
+    --cache_embeddings \
     -b "$BATCH" \
     --device "$DEVICE" \
     -o "$OUT/${tag}_${probe}" \

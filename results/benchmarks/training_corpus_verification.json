@@ -1,0 +1,37 @@
+{
+  "data_dir": "/storage/users/ddofer/data/protsent-data-dc40",
+  "checks": [
+    {
+      "train_file": "/storage/users/ddofer/data/protsent-data-dc40/pfam_sorted.parquet",
+      "leaked_list": "/storage/users/ddofer/data/protsent-data-dc40/decontam/pfam_leaked_sequences.parquet",
+      "rows": 27929772,
+      "leaked_rows_per_column": {
+        "sequence": 0
+      },
+      "leaked_total": 0,
+      "clean": true
+    },
+    {
+      "train_file": "/storage/users/ddofer/data/protsent-data-dc40/afdb_sorted.parquet",
+      "leaked_list": "/storage/users/ddofer/data/protsent-data-dc40/decontam/afdb_leaked_sequences.parquet",
+      "rows": 126301607,
+      "leaked_rows_per_column": {
+        "sequence": 0
+      },
+      "leaked_total": 0,
+      "clean": true
+    },
+    {
+      "train_file": "/storage/users/ddofer/data/protsent-data-dc40/stringdb_train_15M.parquet",
+      "leaked_list": "/storage/users/ddofer/data/protsent-data-dc40/decontam/stringdb_leaked_sequences.parquet",
+      "rows": 15000000,
+      "leaked_rows_per_column": {
+        "seq1": 0,
+        "seq2": 0
+      },
+      "leaked_total": 0,
+      "clean": true
+    }
+  ],
+  "all_clean": true
+}
