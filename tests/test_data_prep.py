@@ -18,7 +18,6 @@ from data_prep import (
     DataPrep,
     _download_file,
     _load_afdb_foldseek_map_lazy,
-    _resolve_pfam_hard_negative_spec,
 )
 
 
@@ -396,10 +395,5 @@ def test_prep_dms_prefers_explicit_split_column_for_fold_dropping(
     assert len(stage_rows) == 2
 
 
-def test_pfam_hard_negative_spec_uses_single_strict_regime() -> None:
-    spec = _resolve_pfam_hard_negative_spec(-16.0)
-
-    assert spec[0] == "hard_negative"
-    assert spec[1] == -16.0
-    assert spec[2] >= 6
-    assert spec[3] == 50
+# The fixed Delta-S regime this used to assert on is gone; hard negatives are
+# now verified against the family HMM. See tests/test_pfam_hard_negatives.py.

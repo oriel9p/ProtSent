@@ -507,6 +507,26 @@ class TestBuildPairDatasetHardNegatives:
             assert len(ds[i]["sentence_0"]) > 0
             assert len(ds[i]["sentence_1"]) > 0
 
+    def test_null_hard_negative_never_becomes_an_empty_negative(
+        self, cluster_with_hard_negatives_parquet
+    ):
+        """A null hard_negative must drop the pair, not emit sentence_2 == "".
+
+        MNRL pools every sentence_2 in the batch into the candidate set, so an
+        empty string would be a zero-residue negative that the loss pushes all
+        proteins away from. The fixture has 4 of 10 rows per group null.
+        """
+        ds = _build_pair_dataset(
+            [cluster_with_hard_negatives_parquet],
+            "sequence",
+            "group_id",
+            max_pairs_per_cluster=50,
+            max_pairs=0,
+            hard_negatives=True,
+        )
+        assert len(ds) > 0
+        assert all(s2 for s2 in ds["sentence_2"]), "empty-string negative emitted"
+
     def test_hard_negatives_respects_max_pairs(
         self, cluster_with_hard_negatives_parquet
     ):
