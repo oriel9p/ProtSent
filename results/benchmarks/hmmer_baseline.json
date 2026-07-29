@@ -394,5 +394,23 @@
     "Spearman": 0.36978742017869926,
     "MSE": 11.56896593172933,
     "hit_coverage": 1.0
+  },
+  {
+    "Model": "HMMER phmmer (alignment baseline)",
+    "Task": "Temperature Stability",
+    "task_key": "temperature_stability",
+    "main_metric": "AUC",
+    "problem_type": "multiclass",
+    "eval_split": "test",
+    "n_train": 283057,
+    "n_test": 73205,
+    "hmmer_flags": "phmmer -E 10.0 --max-hits 300, rank by bitscore desc",
+    "max_samples": null,
+    "search_seconds": 3935.4,
+    "Accuracy": 0.8502424697766546,
+    "F1_macro": 0.8502359771551815,
+    "hit_coverage": 0.9957789768458438,
+    "AUC": 0.6881339457984672,
+    "AUC_n_classes": 2
   }
 ]

@@ -1,0 +1,74 @@
+{
+  "ProtSent-V2 - phmmer_maxsens/hit1": {
+    "delta": -0.06792675723567632,
+    "lo": -0.0915534554046072,
+    "hi": -0.044300059066745424,
+    "excludes_zero": true
+  },
+  "ProtSent-V2 - phmmer_maxsens/hit10": {
+    "delta": 0.024217365623154165,
+    "lo": 0.008860011813349085,
+    "hi": 0.04016538688718252,
+    "excludes_zero": true
+  },
+  "ProtSent-V2 - phmmer_maxsens/hit30": {
+    "delta": 0.04016538688718252,
+    "lo": 0.026580035440047254,
+    "hi": 0.05375073833431778,
+    "excludes_zero": true
+  },
+  "ProtSent-V2 - phmmer_maxsens/ap": {
+    "delta": 0.03877202507688387,
+    "lo": 0.021396100384408024,
+    "hi": 0.0558682570658757,
+    "excludes_zero": true
+  },
+  "ProtSent-V1 - phmmer_maxsens/hit1": {
+    "delta": -0.16656822209096278,
+    "lo": -0.19314825753101003,
+    "hi": -0.13939751919669227,
+    "excludes_zero": true
+  },
+  "ProtSent-V1 - phmmer_maxsens/hit10": {
+    "delta": -0.04666272888363851,
+    "lo": -0.06556408741878322,
+    "hi": -0.027761370348493797,
+    "excludes_zero": true
+  },
+  "ProtSent-V1 - phmmer_maxsens/hit30": {
+    "delta": 0.0029533372711163615,
+    "lo": -0.012404016538688719,
+    "hi": 0.01831069108092144,
+    "excludes_zero": false
+  },
+  "ProtSent-V1 - phmmer_maxsens/ap": {
+    "delta": -0.05556979312517703,
+    "lo": -0.07476853465756066,
+    "hi": -0.03596953526986301,
+    "excludes_zero": true
+  },
+  "ESM-2-35M - phmmer_maxsens/hit1": {
+    "delta": -0.25339633786178384,
+    "lo": -0.2805670407560543,
+    "hi": -0.22563496751329,
+    "excludes_zero": true
+  },
+  "ESM-2-35M - phmmer_maxsens/hit10": {
+    "delta": -0.1364441819255759,
+    "lo": -0.15888954518606024,
+    "hi": -0.11340815121086828,
+    "excludes_zero": true
+  },
+  "ESM-2-35M - phmmer_maxsens/hit30": {
+    "delta": -0.08800945067926758,
+    "lo": -0.10691080921441229,
+    "hi": -0.06792675723567632,
+    "excludes_zero": true
+  },
+  "ESM-2-35M - phmmer_maxsens/ap": {
+    "delta": -0.18442158335397615,
+    "lo": -0.20450485550888464,
+    "hi": -0.1640892549945501,
+    "excludes_zero": true
+  }
+}

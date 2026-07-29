@@ -492,6 +492,63 @@ rather than asserted.
 One caveat worth a sentence: MMseqs2 solubility AUC is 0.4185, below chance —
 alignment label-transfer is anti-correlated on DeepSol.
 
+## 5-CORRECTION. A maximally-sensitive HMMER is far stronger, and it changes the claim
+
+**Read this before using any number in 5a or in the SCOPe tables above.**
+
+The HMMER runs above use pyhmmer defaults, which apply HMMER's MSV / Viterbi /
+Forward heuristic filters and a bias filter. Those filters prune candidates
+*before* the E-value threshold is applied, so raising `-E` alone changes nothing
+(verified: E=10, E=1e3 and E=1e5 give byte-identical results). Disabling them
+(`F1=F2=F3=1.0, bias_filter=False, E=1e6`) takes 83 s for the full 2,207 x 2,207
+all-vs-all and produces a much stronger baseline:
+
+| phmmer setting | no-hit queries | R@1 | R@10 | R@30 | MAP |
+|---|---:|---:|---:|---:|---:|
+| defaults (`-E 10`) | 691 / 2,207 | 0.6970 | 0.7809 | 0.7980 | 0.4747 |
+| **filters off** | **0 / 2,207** | **0.7525** | **0.8978** | **0.9232** | **0.6067** |
+| ProtSent-V2 (for reference) | 0 | 0.6852 | 0.9220 | 0.9634 | 0.6459 |
+
+Paired bootstrap against max-sensitivity phmmer, eligible queries
+(`results/benchmarks/hmmer_maxsens_paired.json`):
+
+| comparison | R@1 | R@10 | R@30 | MAP |
+|---|---|---|---|---|
+| V2 - HMMER(max) | **-0.0679 [-0.0916, -0.0443]** | +0.0242 [+0.0089, +0.0402] | +0.0402 [+0.0266, +0.0538] | +0.0388 [+0.0214, +0.0559] |
+| V1 - HMMER(max) | -0.1666 [-0.1931, -0.1394] | -0.0467 [-0.0656, -0.0278] | +0.0030 [-0.0124, +0.0183] | -0.0556 [-0.0748, -0.0360] |
+| ESM-2 - HMMER(max) | -0.2534 | -0.1364 | -0.0880 | -0.1844 |
+
+### What this retracts
+
+1. **The coverage-gap argument in 5a is withdrawn.** The 691 no-hit queries were
+   an artifact of default heuristic filters, not a property of alignment search.
+   At full sensitivity HMMER returns a ranked list for every query. Do not use
+   "alignment returns nothing for 47.6% of remote-homology queries" as a
+   generality argument without re-measuring that task with filters off.
+2. **"Decisively ahead at ranking depth" is withdrawn.** Against the strongest
+   alignment baseline the depth margins are +0.024 R@10 and +0.039 MAP — real
+   and statistically resolved, but small, not decisive.
+3. **The submitted model V1 loses to a properly tuned HMMER** on R@1, R@10 and
+   MAP, and ties at R@30.
+
+### What survives, and is defensible
+
+ProtSent-V2 is **behind** max-sensitivity HMMER at top-1 (-0.068, resolved) and
+**modestly ahead** at every deeper cutoff and on MAP (+0.024 to +0.040, all
+resolved). Both statements come from the same paired bootstrap and must be given
+together.
+
+The honest framing is no longer "we beat alignment". It is: a 35M frozen
+embedding gets within a few points of an exhaustively-tuned profile search on
+its own home turf, ahead at ranking depth and behind at top-1, while being a
+single forward pass per sequence that supports indexed sub-linear search — versus
+an all-vs-all profile comparison. Speed and generality are the claim; raw
+retrieval accuracy against a maximally-sensitive HMMER is not.
+
+**Any rebuttal sentence comparing to HMMER must use the filters-off numbers.**
+A reviewer who runs HMMER properly will get them, and quoting the default-filter
+numbers would look like baseline-weakening.
+
 ## 5a. Both alignment baselines across the whole benchmark — and the coverage gap
 
 `mmseqs_baseline.py` (24 tasks) and `hmmer_baseline.py` (23 tasks; temperature
