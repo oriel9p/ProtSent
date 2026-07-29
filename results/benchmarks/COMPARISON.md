@@ -13,32 +13,32 @@ Empty cells: **`--`** = that run has not landed yet (or the task was not in the 
 
 | Task | Problem type | Main metric | MMseqs2 | ESM-2 35M | ProtSent-V1 | ProtSent-V2 | V1-minus-ESM2 | V2-minus-ESM2 |
 |---|---|---|---|---|---|---|---|---|
-| Binary Subcellular Localization | binary | AUC | 0.6834 | 0.8810 | 0.9089 | -- | +0.0279 | -- |
-| Material Production | binary | AUC | 0.5796 | 0.7684 | 0.7716 | -- | +0.0032 | -- |
-| Metal Ion Binding | binary | AUC | 0.7239 | 0.7957 | 0.8015 | -- | +0.0058 | -- |
-| Peptide-HLA Binding | binary | AUC | 0.6374 | n/a | 0.7860 | -- | -- | -- |
-| Neuropeptide Precursor Prediction (ProFET/NeuroPID) | binary | AUC | 0.9010 | 0.9579 | 0.9584 | -- | +0.0006 | -- |
-| Signal Peptide Prediction (SignalP/ProteinBERT) | binary | AUC | 0.7961 | 0.9780 | 0.9777 | -- | -0.0003 | -- |
-| Solubility (DeepSol) | binary | AUC | 0.4185 | 0.5321 | 0.5413 | -- | +0.0092 | -- |
-| Antibiotic Resistance | multiclass | AUC | 0.9544 | n/a | n/a | -- | -- | -- |
-| Remote Homology (Fold) | multiclass | AUC | 0.6523 | n/a | n/a | -- | -- | -- |
-| Subcellular Localisation | multiclass | AUC | 0.6828 | 0.8015 | 0.8246 | -- | +0.0232 | -- |
-| Temperature Stability | multiclass | AUC | 0.6853 | n/a | n/a | -- | -- | -- |
-| EC Classification | multilabel | F1_Macro | 0.7103 | 0.5984 | 0.5617 | -- | -0.0367 | -- |
-| Molecular Function (GO) | multilabel | F1_Macro | 0.5850 | 0.4590 | 0.4434 | -- | -0.0156 | -- |
-| AAV Fitness (FLIP) | regression | Spearman | 0.4024 | 0.4667 | 0.5553 | -- | +0.0887 | -- |
-| beta-lactamase-PEER | regression | Spearman | 0.8026 | 0.7272 | 0.7676 | -- | +0.0405 | -- |
-| Cloning Classification | regression | Spearman | 0.1707 | 0.3906 | 0.3774 | -- | -0.0132 | -- |
-| Enzyme Catalytic Efficiency | regression | Spearman | 0.6322 | 0.6915 | 0.6826 | -- | -0.0089 | -- |
-| Fluorescence (TAPE) | regression | Spearman | 0.3863 | 0.3736 | 0.4510 | -- | +0.0774 | -- |
-| Optimal pH | regression | Spearman | 0.5462 | 0.5821 | 0.5742 | -- | -0.0079 | -- |
-| Stability (Biomap) | regression | Spearman | 0.5817 | 0.6435 | 0.5638 | -- | -0.0797 | -- |
-| Thermostability (FLIP) | regression | Spearman | 0.4799 | n/a | 0.4754 | -- | -- | -- |
-| Variant Effect (GB1) | regression | Spearman | 0.7166 | 0.6582 | 0.7107 | -- | +0.0525 | -- |
-| SCOPe-40 Structural Retrieval | retrieval | Recall@10 | 0.5637 | 0.5840 | 0.6529 | -- | +0.0689 | -- |
+| Binary Subcellular Localization | binary | AUC | 0.6834 | 0.8810 | 0.9089 | 0.8884 | +0.0279 | +0.0075 |
+| Material Production | binary | AUC | 0.5796 | 0.7684 | 0.7716 | 0.7653 | +0.0032 | -0.0031 |
+| Metal Ion Binding | binary | AUC | 0.7239 | 0.7957 | 0.8015 | 0.8158 | +0.0058 | +0.0201 |
+| Peptide-HLA Binding | binary | AUC | 0.6374 | 0.7496 | 0.7860 | 0.8022 | +0.0363 | +0.0525 |
+| Neuropeptide Precursor Prediction (ProFET/NeuroPID) | binary | AUC | 0.9010 | 0.9579 | 0.9584 | 0.9601 | +0.0006 | +0.0022 |
+| Signal Peptide Prediction (SignalP/ProteinBERT) | binary | AUC | 0.7961 | 0.9780 | 0.9777 | 0.9840 | -0.0003 | +0.0060 |
+| Solubility (DeepSol) | binary | AUC | 0.4185 | 0.5321 | 0.5413 | 0.5426 | +0.0092 | +0.0106 |
+| Antibiotic Resistance | multiclass | AUC | 0.9544 | n/a | n/a | n/a | -- | -- |
+| Remote Homology (Fold) | multiclass | AUC | 0.6523 | n/a | n/a | n/a | -- | -- |
+| Subcellular Localisation | multiclass | AUC | 0.6828 | 0.8015 | 0.8246 | 0.8294 | +0.0232 | +0.0280 |
+| Temperature Stability | multiclass | AUC | 0.6853 | n/a | n/a | n/a | -- | -- |
+| EC Classification | multilabel | F1_Macro | 0.7103 | 0.5984 | 0.5617 | 0.5924 | -0.0367 | -0.0060 |
+| Molecular Function (GO) | multilabel | F1_Macro | 0.5850 | 0.4590 | 0.4434 | 0.4547 | -0.0156 | -0.0043 |
+| AAV Fitness (FLIP) | regression | Spearman | 0.4024 | 0.4667 | 0.5553 | 0.5154 | +0.0887 | +0.0487 |
+| beta-lactamase-PEER | regression | Spearman | 0.8026 | 0.7272 | 0.7676 | 0.7153 | +0.0405 | -0.0119 |
+| Cloning Classification | regression | Spearman | 0.1707 | 0.3906 | 0.3774 | 0.3791 | -0.0132 | -0.0115 |
+| Enzyme Catalytic Efficiency | regression | Spearman | 0.6322 | 0.6915 | 0.6826 | 0.6687 | -0.0089 | -0.0228 |
+| Fluorescence (TAPE) | regression | Spearman | 0.3863 | 0.3736 | 0.4510 | 0.4568 | +0.0774 | +0.0832 |
+| Optimal pH | regression | Spearman | 0.5462 | 0.5821 | 0.5742 | 0.5756 | -0.0079 | -0.0065 |
+| Stability (Biomap) | regression | Spearman | 0.5817 | 0.6435 | 0.5638 | 0.5961 | -0.0797 | -0.0473 |
+| Thermostability (FLIP) | regression | Spearman | 0.4799 | 0.4449 | 0.4754 | 0.4367 | +0.0305 | -0.0082 |
+| Variant Effect (GB1) | regression | Spearman | 0.7166 | 0.6582 | 0.7107 | 0.7806 | +0.0525 | +0.1224 |
+| SCOPe-40 Structural Retrieval | retrieval | Recall@10 | 0.5637 | 0.5840 | 0.6529 | 0.7073 | +0.0689 | +0.1232 |
 
 
-**Summary (knn).** **ProtSent-V1 vs ESM-2 35M**: 9 beats / 3 ties / 6 loses (of 18 comparable tasks), median signed delta +0.0045. **ProtSent-V2 vs ESM-2 35M**: 0 beats / 0 ties / 0 loses (of 0 comparable tasks), median signed delta --. **MMseqs2 beats the best embedding model on 4 task(s)** (ec_classification, go_mf, beta_lactamase_peer, variant_effect).
+**Summary (knn).** **ProtSent-V1 vs ESM-2 35M**: 11 beats / 3 ties / 6 loses (of 20 comparable tasks), median signed delta +0.0075. **ProtSent-V2 vs ESM-2 35M**: 10 beats / 3 ties / 7 loses (of 20 comparable tasks), median signed delta +0.0041. **MMseqs2 beats the best embedding model on 3 task(s)** (ec_classification, go_mf, beta_lactamase_peer).
 Beats/ties/loses use a tie band of +/-0.005 on the main metric; tasks with a missing cell in either arm are excluded from the count.
 
 
@@ -46,32 +46,32 @@ Beats/ties/loses use a tie band of +/-0.005 on the main metric; tasks with a mis
 
 | Task | Problem type | Main metric | MMseqs2 | ESM-2 35M | ProtSent-V1 | ProtSent-V2 | V1-minus-ESM2 | V2-minus-ESM2 |
 |---|---|---|---|---|---|---|---|---|
-| Binary Subcellular Localization | binary | AUC | 0.6834 | 0.9572 | 0.9404 | -- | -0.0168 | -- |
-| Material Production | binary | AUC | 0.5796 | 0.8399 | 0.8244 | -- | -0.0155 | -- |
-| Metal Ion Binding | binary | AUC | 0.7239 | 0.7903 | 0.7599 | -- | -0.0304 | -- |
-| Peptide-HLA Binding | binary | AUC | 0.6374 | 0.8628 | 0.8187 | -- | -0.0441 | -- |
-| Neuropeptide Precursor Prediction (ProFET/NeuroPID) | binary | AUC | 0.9010 | 0.9748 | 0.9763 | -- | +0.0015 | -- |
-| Signal Peptide Prediction (SignalP/ProteinBERT) | binary | AUC | 0.7961 | 0.9942 | 0.9949 | -- | +0.0007 | -- |
-| Solubility (DeepSol) | binary | AUC | 0.4185 | 0.6963 | 0.6929 | -- | -0.0033 | -- |
-| Antibiotic Resistance | multiclass | AUC | 0.9544 | n/a | n/a | -- | -- | -- |
-| Remote Homology (Fold) | multiclass | AUC | 0.6523 | n/a | n/a | -- | -- | -- |
-| Subcellular Localisation | multiclass | AUC | 0.6828 | 0.9116 | 0.9057 | -- | -0.0059 | -- |
-| Temperature Stability | multiclass | AUC | 0.6853 | n/a | n/a | -- | -- | -- |
-| EC Classification | multilabel | F1_Macro | 0.7103 | 0.5984 | 0.5617 | -- | -0.0367 | -- |
-| Molecular Function (GO) | multilabel | F1_Macro | 0.5850 | 0.4590 | 0.4434 | -- | -0.0156 | -- |
-| AAV Fitness (FLIP) | regression | Spearman | 0.4024 | 0.5639 | 0.4362 | -- | -0.1278 | -- |
-| beta-lactamase-PEER | regression | Spearman | 0.8026 | 0.6639 | 0.5762 | -- | -0.0877 | -- |
-| Cloning Classification | regression | Spearman | 0.1707 | 0.4780 | 0.4420 | -- | -0.0360 | -- |
-| Enzyme Catalytic Efficiency | regression | Spearman | 0.6322 | 0.5456 | 0.5122 | -- | -0.0334 | -- |
-| Fluorescence (TAPE) | regression | Spearman | 0.3863 | 0.5913 | 0.5912 | -- | -0.0002 | -- |
-| Optimal pH | regression | Spearman | 0.5462 | 0.4864 | 0.4740 | -- | -0.0124 | -- |
-| Stability (Biomap) | regression | Spearman | 0.5817 | 0.4395 | 0.5110 | -- | +0.0714 | -- |
-| Thermostability (FLIP) | regression | Spearman | 0.4799 | 0.5413 | 0.5660 | -- | +0.0248 | -- |
-| Variant Effect (GB1) | regression | Spearman | 0.7166 | 0.8163 | 0.8247 | -- | +0.0084 | -- |
-| SCOPe-40 Structural Retrieval | retrieval | Recall@10 | 0.5637 | 0.5840 | 0.6529 | -- | +0.0689 | -- |
+| Binary Subcellular Localization | binary | AUC | 0.6834 | 0.9572 | 0.9404 | 0.9093 | -0.0168 | -0.0479 |
+| Material Production | binary | AUC | 0.5796 | 0.8399 | 0.8244 | 0.8225 | -0.0155 | -0.0173 |
+| Metal Ion Binding | binary | AUC | 0.7239 | 0.7903 | 0.7599 | 0.7466 | -0.0304 | -0.0437 |
+| Peptide-HLA Binding | binary | AUC | 0.6374 | 0.8628 | 0.8187 | 0.8579 | -0.0441 | -0.0049 |
+| Neuropeptide Precursor Prediction (ProFET/NeuroPID) | binary | AUC | 0.9010 | 0.9748 | 0.9763 | 0.9594 | +0.0015 | -0.0154 |
+| Signal Peptide Prediction (SignalP/ProteinBERT) | binary | AUC | 0.7961 | 0.9942 | 0.9949 | 0.9957 | +0.0007 | +0.0015 |
+| Solubility (DeepSol) | binary | AUC | 0.4185 | 0.6963 | 0.6929 | 0.6976 | -0.0033 | +0.0013 |
+| Antibiotic Resistance | multiclass | AUC | 0.9544 | n/a | n/a | n/a | -- | -- |
+| Remote Homology (Fold) | multiclass | AUC | 0.6523 | n/a | n/a | n/a | -- | -- |
+| Subcellular Localisation | multiclass | AUC | 0.6828 | 0.9116 | 0.9057 | 0.8921 | -0.0059 | -0.0195 |
+| Temperature Stability | multiclass | AUC | 0.6853 | n/a | n/a | n/a | -- | -- |
+| EC Classification | multilabel | F1_Macro | 0.7103 | 0.5984 | 0.5617 | 0.5924 | -0.0367 | -0.0060 |
+| Molecular Function (GO) | multilabel | F1_Macro | 0.5850 | 0.4590 | 0.4434 | 0.4547 | -0.0156 | -0.0043 |
+| AAV Fitness (FLIP) | regression | Spearman | 0.4024 | 0.5639 | 0.4362 | 0.2471 | -0.1278 | -0.3168 |
+| beta-lactamase-PEER | regression | Spearman | 0.8026 | 0.6639 | 0.5762 | 0.6086 | -0.0877 | -0.0554 |
+| Cloning Classification | regression | Spearman | 0.1707 | 0.4780 | 0.4420 | 0.4257 | -0.0360 | -0.0523 |
+| Enzyme Catalytic Efficiency | regression | Spearman | 0.6322 | 0.5456 | 0.5122 | 0.5002 | -0.0334 | -0.0454 |
+| Fluorescence (TAPE) | regression | Spearman | 0.3863 | 0.5913 | 0.5912 | 0.5883 | -0.0002 | -0.0031 |
+| Optimal pH | regression | Spearman | 0.5462 | 0.4864 | 0.4740 | 0.4845 | -0.0124 | -0.0019 |
+| Stability (Biomap) | regression | Spearman | 0.5817 | 0.4395 | 0.5110 | 0.3878 | +0.0714 | -0.0517 |
+| Thermostability (FLIP) | regression | Spearman | 0.4799 | 0.5413 | 0.5660 | 0.5564 | +0.0248 | +0.0151 |
+| Variant Effect (GB1) | regression | Spearman | 0.7166 | 0.8163 | 0.8247 | 0.8126 | +0.0084 | -0.0037 |
+| SCOPe-40 Structural Retrieval | retrieval | Recall@10 | 0.5637 | 0.5840 | 0.6529 | 0.7073 | +0.0689 | +0.1232 |
 
 
-**Summary (linear).** **ProtSent-V1 vs ESM-2 35M**: 4 beats / 4 ties / 12 loses (of 20 comparable tasks), median signed delta -0.0139. **ProtSent-V2 vs ESM-2 35M**: 0 beats / 0 ties / 0 loses (of 0 comparable tasks), median signed delta --. **MMseqs2 beats the best embedding model on 6 task(s)** (ec_classification, go_mf, beta_lactamase_peer, enzyme_catalytic_efficiency, optimal_ph, stability).
+**Summary (linear).** **ProtSent-V1 vs ESM-2 35M**: 4 beats / 4 ties / 12 loses (of 20 comparable tasks), median signed delta -0.0139. **ProtSent-V2 vs ESM-2 35M**: 2 beats / 7 ties / 11 loses (of 20 comparable tasks), median signed delta -0.0107. **MMseqs2 beats the best embedding model on 6 task(s)** (ec_classification, go_mf, beta_lactamase_peer, enzyme_catalytic_efficiency, optimal_ph, stability).
 Beats/ties/loses use a tie band of +/-0.005 on the main metric; tasks with a missing cell in either arm are excluded from the count.
 
 
@@ -90,18 +90,11 @@ Beats/ties/loses use a tie band of +/-0.005 on the main metric; tasks with a mis
 - **scope40_retrieval** -- `EvalStrategy` = `retrieval_unchanged` (no train/test probe fit; the task's own evaluator scores it).
 - **The requested probe was ignored on: `ec_classification`, `go_mf`, `scope40_retrieval`**. Retrieval and multilabel tasks use a built-in linear evaluator regardless of `-p knn`, and the CSV records `Probe=linear` even inside a `*_knn/` directory. Those rows are therefore **identical** in the kNN and linear tables -- they are one measurement printed twice, not two.
 
-### Tasks that crashed during the sweep (`n/a` cell, no number produced)
-
-- **peptide_hla** -- `knn:esm2_35m` raised `'|'`.
-- **thermostability** -- `knn:esm2_35m` raised `'#'`.
-
-The suite catches per-task exceptions, writes them into an `Error` column and still exits 0, so a crashed task does **not** show up as a failed run. The `KeyError: '|'` / `KeyError: '#'` crashes are a tokenizer-vocabulary problem, not a model-quality result: `embed_sequences` -> FastPLM `modeling_fastesm._convert_token_to_id` **raises** on an out-of-vocab character instead of mapping it to `<unk>`. `peptide_hla` sequences contain `|` (the peptide/HLA separator) and `thermostability` contains `#`. The arm scored nothing, not badly -- do not read it as ESM-2 losing. It is also not consistent across arms: in this sweep both tasks crashed for `/storage/models/ESM2-35M` under the kNN probe and scored normally for the same checkpoint under the linear probe, which shares the embedding code path. Re-run the affected task/probe before concluding anything from an empty cell here.
-
 ### Main metric unavailable (`n/a` cells) -- do NOT read these as a model failure
 
-- **antibiotic_resistance** -- no `AUC` from: knn:esm2_35m, knn:protsent_old, linear:esm2_35m, linear:protsent_old.
-- **remote_homology** -- no `AUC` from: knn:esm2_35m, knn:protsent_old, linear:esm2_35m, linear:protsent_old.
-- **temperature_stability** -- no `AUC` from: knn:esm2_35m, knn:protsent_old, linear:esm2_35m, linear:protsent_old.
+- **antibiotic_resistance** -- no `AUC` from: knn:esm2_35m, knn:protsent_old, knn:protsent_v3, linear:esm2_35m, linear:protsent_old, linear:protsent_v3.
+- **remote_homology** -- no `AUC` from: knn:esm2_35m, knn:protsent_old, knn:protsent_v3, linear:esm2_35m, linear:protsent_old, linear:protsent_v3.
+- **temperature_stability** -- no `AUC` from: knn:esm2_35m, knn:protsent_old, knn:protsent_v3, linear:esm2_35m, linear:protsent_old, linear:protsent_v3.
 
 The usual cause is the multiclass AUC path: the probe's `predict_proba` returns one column per class **seen in train**, and `roc_auc_score(..., multi_class='ovr')` refuses when the test set contains a class the probe never saw ("Number of classes in y_true not equal to the number of columns in 'y_score'"). The suite logs a warning, drops AUC, and keeps Accuracy/F1. MMseqs2 scores those same tasks by a different route and does have an AUC, so the MMseqs2 column is populated where the embedding columns are `n/a`. **That is not MMseqs2 winning** -- there is no paired number to compare, and these tasks are excluded from every count in the summary lines. Quote Accuracy / F1_Macro from the raw CSVs if you need those tasks.
 

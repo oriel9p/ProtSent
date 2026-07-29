@@ -68,15 +68,9 @@ n_tasks() { wc -w <<<"$TASKS"; }
 arm_is_complete() {
   local dir="$1" want="$2"
   local csv
-  csv=$(ls "$dir"/*.csv 2>/dev/null | head -1) || return 1
+  csv=$(ls "$dir"/*.csv 2>/dev/null | head -1)
   [[ -n "$csv" ]] || return 1
-  uv run --no-sync python -c "
-import sys, pandas as pd
-df = pd.read_csv(sys.argv[1])
-err = next((c for c in df.columns if 'rror' in c), None)
-clean = df[df[err].isna()] if err else df
-sys.exit(0 if clean['Task'].nunique() >= int(sys.argv[2]) else 1)
-" "$csv" "$want" 2>/dev/null
+  uv run --no-sync python bench_arm_status.py "$csv" "$want" >/dev/null 2>&1
 }
 
 run_one() {
@@ -102,20 +96,16 @@ run_one() {
   # them into an "Error" column, and still exits 0. A whole sweep can report "ok"
   # while every single row is a failure -- which is exactly what happened when
   # embed_dataset()'s signature changed. Check the CSV too.
-  local csv errs
+  local csv status
   csv=$(ls "$OUT/${tag}_${probe}"/*.csv 2>/dev/null | head -1)
-  errs=0
-  if [[ -n "$csv" ]] && head -1 "$csv" | grep -q "Error"; then
-    errs=$(awk -F, 'NR>1 && $NF != "" {n++} END{print n+0}' "$csv")
-  fi
   if [[ $rc -ne 0 ]]; then
     echo "    FAILED rc=$rc -- see $log"
-  elif [[ $errs -gt 0 ]]; then
-    echo "    FAILED: $errs task(s) errored despite rc=0 -- see $csv"
   elif [[ -z "$csv" ]]; then
     echo "    FAILED: no results CSV written -- see $log"
+  elif status=$(uv run --no-sync python bench_arm_status.py "$csv" "$(n_tasks)" 2>&1); then
+    echo "    ok ($status)"
   else
-    echo "    ok ($(($(wc -l < "$csv") - 1)) rows)"
+    echo "    FAILED: $status -- see $csv"
   fi
   return 0   # never let one task kill the sweep
 }

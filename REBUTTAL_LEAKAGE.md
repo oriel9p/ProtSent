@@ -509,16 +509,109 @@ contributes 20.9% of its available filtered pairs.
 
 ---
 
-## 5. Pending
+## 5. ProtSent-V2-35M results — measured, cross-checked
 
-- [x] SCOPe-40 identity-vs-gain analysis (§2a) — binning impossible (empty low bin);
-      replaced by per-query correlation, which shows the gain is NOT driven by
-      proximity to pretraining data
-- [ ] Re-run `scope_identity_correlation.py` with ProtSent-v2-35M once training
-      finishes, to confirm the same pattern on the decontaminated model
-- [ ] SCOPe-40 for ProtSent-v2-35M (retrained on the filtered corpus), reported
-      both unfiltered and identity-stratified, alongside the published
-      ProtSent 35M row above so the ± decontamination effect is directly visible
+Training finished 2026-07-29 08:03: 4,850 steps, `train_runtime` 39,170 s
+(10 h 53 m), 887.5 samples/s, clean exit. Model at
+`models/protsent_esm2_35m_v3/final` (the `v3` string is an internal RUN_NAME;
+the paper name is ProtSent-V2-35M).
+
+### The corpus it trained on contains zero flagged sequences
+
+Not asserted from the filtering job's own report, which records only intent.
+`verify_training_corpus.py` re-reads the exact parquet files the training log
+shows being opened and semi-joins them against the recorded removal lists:
+
+| training file | rows | sequences flagged by MMseqs2 that survived |
+|---|---|---|
+| `pfam_sorted.parquet` | 27,929,772 | **0** |
+| `afdb_sorted.parquet` | 126,301,607 | **0** |
+| `stringdb_train_15M.parquet` | 15,000,000 | **0** (both `seq1` and `seq2`) |
+
+The removal lists hold 600,899 / 7,414,137 / 319,282 sequences respectively.
+The STRING row is the load-bearing one: `stringdb_train_15M.parquet` was
+subsampled two days after the filtering run and nothing on disk records which
+parent it came from, so membership is the only way to distinguish a subsample of
+the filtered file from a subsample of the original.
+
+Independently, the row arithmetic closes: 27,929,772 + 126,301,607 + 15,000,000
+= 169,231,379, exactly the `total=` the trainer logged. The log also confirms
+`hard_neg=False`, `sampler=proportional`, `effective_batch=7168`.
+
+### Structural tasks, test split, all four arms
+
+`eligible_*` restricts to the 1,693 of 2,207 SCOPe queries that have at least one
+same-family neighbour; the unrestricted figure counts the other 514 as zero.
+
+| probe | metric | ESM-2 35M | ProtSent-V1 | **ProtSent-V2** | V2 ckpt-4000 |
+|---|---|---|---|---|---|
+| kNN | SCOPe-40 eligible Recall@1 | 0.4991 | 0.5854 | **0.6852** | 0.6775 |
+| kNN | SCOPe-40 eligible Recall@10 | 0.7614 | 0.8512 | **0.9220** | 0.9173 |
+| kNN | SCOPe-40 eligible MAP | 0.4210 | 0.5509 | **0.6459** | 0.6447 |
+| kNN | Remote Homology accuracy | 0.5835 | 0.6587 | **0.6668** | 0.6655 |
+| linear | Remote Homology accuracy | 0.6868 | 0.6899 | **0.7016** | 0.6988 |
+
+**Remote homology is the task the corpus was actually filtered against**, and it
+improved rather than degraded. That is the direct answer to the reviewers'
+question: removing every pretraining sequence within 40% identity / 80% coverage
+of the remote-homology test set did not cost remote-homology performance.
+
+**The SCOPe number is cross-validated.** Two independent implementations —
+`protein_benchmark_suite.evaluate_retrieval` and
+`scope_identity_correlation.compute_per_query` — agree to four decimals
+(V2 0.92203 vs 0.9220; V1 0.85115 vs 0.8512; ESM-2 0.76137 vs 0.7614).
+
+### Identity-vs-gain, both models on the same identity table
+
+Gain over ESM-2 35M, per SCOPe query, binned by maximum identity to the
+pretraining corpus. Both rows use the same identity parquet, the same bins and
+the same eligible set, so V1 and V2 are directly comparable.
+
+| bin | n | V1 ΔRecall@10 | V2 ΔRecall@10 | V1 ΔMAP | V2 ΔMAP |
+|---|---|---|---|---|---|
+| [0.2, 0.4) | 164 | +0.0915 | **+0.1524** | +0.1856 | **+0.2859** |
+| [0.4, 0.7) | 315 | +0.1016 | +0.1810 | +0.1453 | +0.2417 |
+| [0.7, 1.0] | 1,214 | +0.0865 | +0.1565 | +0.1169 | +0.2099 |
+
+Per-query Spearman between max identity and gain stays null-to-negative for both
+models: Recall@10 −0.038 (V1) / −0.038 (V2), MAP −0.114 / −0.116 (p < 3e-6).
+The advantage does not grow with proximity to pretraining data — it shrinks
+slightly. Memorization predicts the opposite sign.
+
+### Caveat to state plainly
+
+**V2 differs from V1 in more than decontamination**: 7x1024 effective batch vs
+1x1024, no synthetic hard negatives, proportional sampling, one epoch. The
+improvement therefore cannot be attributed to filtering alone. The claim the
+data does support, and the one the reviewers asked about, is the weaker and
+sufficient one: **removing the contaminated pairs did not cost performance on
+the structural tasks.**
+
+### The LR-schedule caveat is empirically negligible
+
+§4 notes the 3-cycle cosine ends at peak LR. The near-trough checkpoint-4000
+(LR 5.5e-5) and the peak-LR final checkpoint differ by 0.005-0.008 on every
+structural metric above, so quoting the final model is safe.
+
+### Aggregate across all 23 tasks
+
+Against ESM-2 35M over the 20 tasks comparable in both arms
+(`results/benchmarks/COMPARISON.md`):
+
+| probe | ProtSent-V1 | ProtSent-V2 |
+|---|---|---|
+| kNN | 11 win / 3 tie / 6 lose, median +0.0075 | 10 / 3 / 7, median +0.0041 |
+| linear | 4 / 4 / 12, median −0.0139 | 2 / 7 / 11, median −0.0107 |
+
+**The probe decides the headline.** Both ProtSent models beat ESM-2 under kNN
+and lose under a linear probe. The structural-retrieval advantage survives both;
+the general-purpose claim does not. Any "ProtSent > ESM-2" sentence must name
+the probe.
+
+## 5a. Still pending
+
+- [ ] MMseqs2 + MAP on the remaining benchmarks compared against published
+      literature values (needs the target papers named)
 
 ---
 
