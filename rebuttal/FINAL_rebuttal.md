@@ -9,7 +9,7 @@ decontaminated corpora. There is no 150M model on decontaminated data.
 
 ## Response to Reviewer HNXd
 
-<!-- character count of the pasted body below: 9329 (limit 10,000) -->
+<!-- character count of the pasted body below: 9285 (limit 10,000) -->
 <!-- BEGIN HNXd -->
 All five analyses are run. Two answer against us, so they go first.
 
@@ -42,7 +42,7 @@ Retrieval, same gallery, leave-one-out, self excluded, no-hit scored as a failur
 | ProtSent-V1 35M | 0.585 | 0.851 | 0.926 | 0.551 |
 | ProtSent-V2 35M | 0.685 | 0.922 | 0.963 | 0.646 |
 
-Alignment is the better top-1 method, and the submitted V1 loses top-1 to both tools. Our advantage is ranking depth, and it holds on precision as well as recall: precision@10 is 0.367 for V2 against 0.245 for phmmer and 0.279 for ESM-2 35M, on an attainable ceiling of 0.516. Depth is not bought by returning more candidates. Part of that depth margin is candidate coverage rather than ranking quality: 691 of the 2,207 queries return no phmmer hit at all and score zero at every K. We state that as a limit on our own result.
+Alignment is the better top-1 method, and the submitted V1 loses top-1 to both tools. Our advantage is ranking depth, and it holds on precision as well as recall: precision@10 is 0.367 for V2 against 0.245 for phmmer and 0.279 for ESM-2 35M, on an attainable ceiling of 0.516. Depth is not bought by returning more candidates. Part of that depth margin is candidate coverage rather than ranking quality: 691 of the 2,207 queries return no phmmer hit at all and score zero at every K.
 
 The gain is not proximity to pretraining data. SCOPe-40 cannot be filtered at corpus level, so we filtered the benchmark instead: on the 164 eligible queries below 40% identity to our corpus, V2 minus HMMER is +0.116 [+0.049, +0.189] Recall@10 and +0.140 [+0.075, +0.207] MAP. The margin does not shrink as the queries get cleaner.
 
@@ -167,7 +167,7 @@ We ask you to raise your score on it. If the missing no-AFDB/no-Pfam ablation is
 
 ## Response to Reviewer Yi1G
 
-<!-- character count of the pasted body below: 9736 (limit 10,000) -->
+<!-- character count of the pasted body below: 10046 (limit 10,000) -->
 <!-- BEGIN Yi1G -->
 Your leakage objection was correct and we treated it as decisive: all three pretraining corpora re-filtered at 40% identity / 80% coverage, the model retrained from scratch, benchmarks re-run, and verification on the files training actually opened finding 0 flagged sequences surviving. Running HMMER, as you asked, then cost us a claim. ProtSent-V2 minus phmmer at SCOPe-40 family Recall@1 is -0.012, 95% CI [-0.037, +0.012] — a tie, not a win.
 
@@ -185,11 +185,11 @@ MMseqs2 `easy-search`, corpus as query, test set as target, 40% identity / 80% c
 
 Pfam and AFDB were filtered against the `remote_homology` test set (3,244 sequences), STRING against `ppi_bernett` test (3,022 sequences). Those two were the only filter targets; the other 21 benchmark test sets were not filtered, and that is the scope limit. Verification semi-joined the training parquets against the removal lists: 0 flagged sequences survived, in all three files. The row counts sum independently to the 169,231,379 total in the training log.
 
-Removing every pretraining sequence within 40% identity of the remote-homology test set improved that task. Remote homology accuracy, test split: 3-NN 0.584 for ESM-2 35M, 0.659 for V1, 0.667 for V2; linear 0.687, 0.690, 0.702; linear macro-F1 0.441, 0.428, 0.453, where V1 sits below the untuned backbone.
+Removing every pretraining sequence within 40% identity of the remote-homology test set improved that task. Accuracy, test split: 3-NN 0.584 / 0.659 / 0.667 and linear 0.687 / 0.690 / 0.702 for ESM-2 35M / V1 / V2; linear macro-F1 0.441 / 0.428 / 0.453, where V1 sits below the untuned backbone.
 
-What that does not establish: V2 retrains on the filtered corpora with the configuration our own ablations favour, so V1 against V2 is not a controlled decontamination ablation, and no unfiltered retrain at that configuration exists. The supportable claim is the weaker and sufficient one. Decontaminating the corpus did not cost performance on the filtered task.
+What that does not establish: V2 retrains on the filtered corpora with the configuration our own ablations favour, so V1 against V2 is not a controlled decontamination ablation, and no unfiltered retrain at that configuration exists. The supportable claim is the weaker one: decontaminating the corpus did not cost performance on the filtered task.
 
-PPI: the filter you asked for was run, at 40% identity rather than the 50% you named, removing 4,178,737 STRING pairs. The downstream number does not exist, because `ppi_bernett` is pair-input and not in the 23-task sweep, so the paper's +5.3% AUC remains a pre-decontamination V1 result. That is the open half of this weakness.
+PPI: the filter you asked for was run, at 40% identity rather than the 50% you named, removing 4,178,737 STRING pairs. The downstream number does not exist: `ppi_bernett` is pair-input and not in the 23-task sweep, so the paper's +5.3% AUC remains a pre-decontamination V1 result. That is the open half of this weakness.
 
 SCOPe-40 cannot be filtered at corpus level. It has no train/test split, and the median maximum identity of a SCOPe-40 domain to our corpus is 0.908, so filtering against it would remove essentially every structured domain. We filtered the benchmark instead: drop the queries with a close pretraining neighbour, re-score every arm on what remains. Paired V2 minus HMMER, 10,000 resamples:
 
@@ -205,7 +205,7 @@ What this cannot rule out: supervision is Foldseek-cluster and Pfam-family co-me
 
 ### 2. The DMS objective
 
-Implemented as you describe, and our text ("operates on single proteins rather than pairs") is wrong. Rows are wild-type, mutant, and within-assay normalised fitness in [0,1]. CoSENT ranks pairs within a batch: if mutant a outscores b, the loss pushes cos(WT, a) above cos(WT, b). No absolute target, nothing collapsing high-fitness variants onto the wild type. The pairing is wild-type-anchored, so mutant-to-mutant distances are constrained only indirectly.
+Implemented as you describe, and our text ("operates on single proteins rather than pairs") is wrong. Rows are wild-type, mutant, and within-assay normalised fitness in [0,1]; CoSENT ranks those pairs within a batch, with no absolute target and nothing collapsing high-fitness variants onto the wild type. The pairing is wild-type-anchored, so mutant-to-mutant distances are constrained only indirectly. Full mechanism in our response to jVGf, item 4.
 
 ### 3. MNRL batch semantics and Eq. 1
 
@@ -221,23 +221,19 @@ They do not, and we acted on it. Removing synthetic hard negatives improves 20 o
 
 The consequence goes against us and we state it: those ablations were scored on these same benchmarks, so V2's configuration was chosen with benchmark results in view. That is a selection channel the corpus filter does not touch, and we do not call V2's 23-task numbers a clean held-out measurement. SCOPe-40 entered that aggregate as one task of 23, not as the criterion, and both alignment baselines were run after the configuration was fixed.
 
+### The single-space assumption, and when ProtSent is reliable
+
+You asked us to address mapping heterogeneous relations into one space. The cost is measurable and it is item 8's linear-probe record: compressing family, structural-cluster, interaction and fitness relations into one metric buys neighbourhood structure and loses decodable property information, so the model beats its backbone under 3-NN and loses under a trained head. The per-source ablations show each relation still moves its own task family, so the space is not collapsing to one signal. ProtSent is reliable where the task is retrieval, clustering or nearest-neighbour transfer over structural and family relationships; it is not where you would otherwise train a head on the backbone.
+
 ### 7. Baselines
 
-HMMER (phmmer, `-E 10`, top 300 hits per query, no-hit scored as failure) was run on the same gallery through the same scoring code as MMseqs2. Both take sequence only, as we do, so they bound what a sequence-only encoder has to beat. SCOPe-40, family level, leave-one-out over 2,207 domains; the 1,693 eligible queries are those with a non-self same-family neighbour.
-
-| method | R@1 | R@10 | R@30 | MAP |
-|---|---|---|---|---|
-| MMseqs2 (`-s 7.5 -e 10`) | 0.656 | 0.740 | 0.757 | 0.410 |
-| HMMER (phmmer) | 0.697 | 0.781 | 0.798 | 0.475 |
-| ESM-2 35M | 0.499 | 0.761 | 0.834 | 0.421 |
-| ProtSent-V1 35M | 0.585 | 0.851 | 0.926 | 0.551 |
-| ProtSent-V2 35M | 0.685 | 0.922 | 0.963 | 0.646 |
+HMMER (phmmer, `-E 10`, top 300 hits per query, no-hit scored as failure) was run on the same gallery through the same scoring code as MMseqs2. Both take sequence only, as we do, so they bound what a sequence-only encoder has to beat. SCOPe-40 family level, leave-one-out over 2,207 domains, 1,693 eligible queries. R@1 / R@10 / MAP: phmmer 0.697 / 0.781 / 0.475; MMseqs2 0.656 / 0.740 / 0.410; ESM-2 35M 0.499 / 0.761 / 0.421; V1 0.585 / 0.851 / 0.551; V2 0.685 / 0.922 / 0.646.
 
 Paired bootstrap, 10,000 resamples. At Recall@1, V1 minus HMMER is -0.111 [-0.139, -0.083], an outright loss, and V2 minus MMseqs2 is +0.029 [+0.004, +0.054], clearing zero by 0.004 across three uncorrected comparisons, so we do not lean on it. At depth, V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP.
 
-Alignment remains the better top-1 method, and 691 of 2,207 queries return no phmmer hit at all, so part of our depth margin is candidate coverage rather than ranking. Across the benchmark alignment beats the best embedding arm on 3 of 23 tasks under 3-NN and 6 under a linear probe, including EC classification F1-macro 0.723 for HMMER against 0.598 for ESM-2 35M.
+Alignment remains the better top-1 method, and 691 of 2,207 queries return no phmmer hit at all, so part of our depth margin is candidate coverage rather than ranking. Across the benchmark alignment beats the best embedding arm on 3 of 23 tasks under 3-NN and 6 under a linear probe (detail in our response to jVGf).
 
-Not run: ProtTucker, Foldseek, PLMSearch, DHR, ProTrek, Redl et al. 2023. Foldseek and ProTrek consume structure at query time, so losing to them says nothing about a sequence-only encoder. ProtTucker is the real gap, since its protocol is ours.
+Not run: ProtTucker, Foldseek, PLMSearch, DHR, ProTrek, Redl et al. 2023. Foldseek and ProTrek consume structure at query time. ProtTucker is the real gap, since its protocol is ours.
 
 ### 8. Statistical evidence
 
@@ -245,7 +241,7 @@ On Table 2 you are right: no intervals, one seed per cell, and a 0.005 tie band 
 
 ### Errors in our own submission
 
-The PPI decontamination text does not match the code, which uses `easy-search` at 40% identity removing hit query IDs, not `easy-linclust` at 50% with cluster-level removal. The remote-homology test split is not hierarchy-disjoint: it is TAPE's three holdouts pooled (718 fold, 1,254 superfamily, 1,272 family), so its pooled macro AUC is not comparable to published per-holdout accuracies. SCOPe retrieval evaluates the family field over 2,207 sequences, not superfamily over 100,000; the 100,000 is the evaluator's sample cap echoed into the table.
+The PPI decontamination text does not match the code, which uses `easy-search` at 40% identity removing hit query IDs, not `easy-linclust` at 50% with cluster-level removal. The remote-homology test split is not hierarchy-disjoint: it is TAPE's three holdouts pooled (718 fold, 1,254 superfamily, 1,272 family). SCOPe retrieval evaluates the family field over 2,207 sequences, not superfamily over 100,000, which was the evaluator's sample cap echoed into the table.
 
 Weakness 1 now reduces to the residual we name: untested fold-level overlap on SCOPe-40, and no post-filter PPI measurement.
 
