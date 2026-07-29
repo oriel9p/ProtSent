@@ -15,6 +15,13 @@ cd ~/ProtSent
 MODEL_NEW="${MODEL_NEW:-models/protsent_esm2_35m_v3}"
 MODEL_OLD="${MODEL_OLD:-oriel9p/protsent-esm2-35M}"
 MODEL_BASE="${MODEL_BASE:-/storage/models/ESM2-35M}"
+# The LR schedule is a 3-cycle cosine (--lr_num_cycles 3.0), so the final step
+# sits at the full 2e-4 peak rather than annealed. checkpoint-4000 (LR 5.5e-5) is
+# the saved checkpoint nearest the last trough at step 4,208, kept aside by
+# snapshot_ckpt.sh because save_total_limit=2 would otherwise delete it. Run as a
+# fourth arm so the final model is never quoted as a converged optimum without a
+# settled-LR comparison. Skipped if the snapshot is absent.
+MODEL_TROUGH="${MODEL_TROUGH:-models/protsent_esm2_35m_v3_snapshots/checkpoint-4000}"
 OUT="${OUT:-results/benchmarks/v3}"
 BATCH="${BATCH:-64}"
 DEVICE="${DEVICE:-cuda}"
@@ -105,6 +112,13 @@ fi
 uv run --no-sync python make_checkpoint_loadable.py "$MODEL_NEW" || {
   echo "ERROR: could not normalise $MODEL_NEW for loading" >&2; exit 1; }
 
+HAVE_TROUGH=0
+if compgen -G "$MODEL_TROUGH"/*.safetensors >/dev/null; then
+  uv run --no-sync python make_checkpoint_loadable.py "$MODEL_TROUGH" && HAVE_TROUGH=1
+else
+  echo "note: no snapshot at $MODEL_TROUGH -- skipping the near-trough arm"
+fi
+
 # Three arms so the +/- decontamination effect is directly visible:
 #   esm2_35m     the untuned starting point
 #   protsent_old the published paper model (trained on the UNfiltered corpus)
@@ -113,6 +127,7 @@ for probe in knn linear; do
   run_one "$MODEL_NEW"  protsent_v3  "$probe"
   run_one "$MODEL_OLD"  protsent_old "$probe"
   run_one "$MODEL_BASE" esm2_35m     "$probe"
+  [[ $HAVE_TROUGH -eq 1 ]] && run_one "$MODEL_TROUGH" protsent_v3_ckpt4000 "$probe"
 done
 
 echo
