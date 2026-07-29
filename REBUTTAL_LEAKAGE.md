@@ -4,8 +4,13 @@ Working document for the reviewer question on leakage between the **structural
 tasks** (SCOPe-40 retrieval, remote homology) and the ProtSent **pretraining
 corpora** (AFDB, Pfam, STRING).
 
-Status: decontamination complete and audited. ProtSent-v2-35M retraining on the
-filtered corpus in progress. Sections marked *PENDING* are not yet filled.
+Status (2026-07-29): decontamination complete and audited; ProtSent-V2-35M
+retrained, benchmarked and cross-checked (§5). The only thing still running is
+the multi-seed variability sweep (§0.5), which nothing here depends on.
+
+**Start at §0** — it indexes every artifact produced during the rebuttal work
+with its path, the command that made it, and its date. §0a is the list of
+durable conclusions and the numbers that must not be reused.
 
 ---
 
@@ -18,7 +23,7 @@ filtered corpus in progress. Sections marked *PENDING* are not yet filled.
 
 2. **SCOPe-40 cannot be decontaminated by anyone**, so it is reported rather than
    filtered. Median max-identity of a SCOPe-40 sequence to a comprehensive
-   protein corpus is **0.89**, and **no** sequence falls below 20%. SCOPe domains
+   protein corpus is **0.908**, and **no** sequence falls below 20%. SCOPe domains
    come from PDB entries whose parent sequences are in UniProt, and AFDB covers
    essentially all of UniProt. ESM-2 (UniRef50) carries the identical exposure,
    so the model-vs-model **delta** is the valid measurement. → §2
@@ -26,10 +31,11 @@ filtered corpus in progress. Sections marked *PENDING* are not yet filled.
 3. **The gain is not memorisation, and this is measured, not argued.** On the
    published ProtSent-35M vs ESM-2 35M over 1,693 eligible SCOPe-40 queries, the
    advantage is *largest* where the nearest pretraining neighbour is *most
-   distant* (+0.103 hit@10 in the 20–40% identity bin vs +0.090 above 70%), and
+   distant* (+0.0915 hit@10 in the 20–40% identity bin vs +0.0865 above 70%), and
    the only significant gain-vs-identity correlation is **negative**
-   (AP: Spearman r = −0.105, p = 1.6e-05). Memorisation predicts the opposite
-   sign. → §2(a)
+   (AP: Spearman r = −0.114, p = 2.8e-06). Memorisation predicts the opposite
+   sign. It also survives a baseline-headroom control (§0a.3 item 11).
+   → §2(a)
 
 4. **Sequence search alone does not explain the results.** An MMseqs2 alignment
    baseline scored under identical metric definitions reaches Recall@10 0.564 on
@@ -37,6 +43,392 @@ filtered corpus in progress. Sections marked *PENDING* are not yet filled.
 
 5. **A retrained, fully decontaminated model is reported**, so the claim does not
    rest on the argument in (2) alone. → §4
+
+---
+
+## 0. Results index
+
+Every path in this section was checked with `ls` on **2026-07-29** and exists
+unless marked `MISSING`. Relative paths are from the repo root
+(`/home/ddofer/ProtSent`); everything else is absolute. The **date** column is
+the artifact's file mtime, not the date the analysis was designed.
+
+Three reading rules that a future reader will otherwise get wrong:
+
+1. **The benchmark suite appends.** `protein_benchmark_suite.py` never
+   overwrites its results CSV, so one task can appear several times in one file.
+   The valid row is **the newest row for that task whose `Error` column is
+   empty**. Row count is not a completeness test — use
+   `python bench_arm_status.py <csv> 23`.
+2. **Two separate task-subsetting effects, often confused. They are not the
+   same three tasks.**
+
+   *Why the win/tie/loss counts are over 20 tasks, not 23.*
+   `antibiotic_resistance`, `remote_homology` and `temperature_stability` have
+   no delta in either probe: their main metric is multiclass AUC, and the test
+   split contains classes absent from train, so `roc_auc_score(multi_class="ovr")`
+   refuses. They are excluded from the counts in both tables. Note that this
+   drops **remote homology, the headline task**, out of the aggregate tally — its
+   accuracy is reported separately and is not part of the 20.
+   Verify with: `comparison.json` -> `tables.{knn,linear}` -> rows whose
+   `delta_v1_minus_esm2` is null.
+
+   *A different three tasks ignore `-p knn`.* `ec_classification`, `go_mf` and
+   `scope40_retrieval` use a built-in evaluator regardless of the requested probe
+   and record `Probe=linear` even inside a `*_knn/` directory, so their rows are
+   one measurement printed in both tables rather than two measurements. They ARE
+   included in the counts. Verify with the `probe_ignored` flag in
+   `comparison.json`.
+
+   The tie band in the win/tie/loss counts is **+/-0.005** (`tie_tol` in
+   `comparison.json`). It is not eyeballed, and with 7 ties out of 20 under the
+   linear probe it materially affects the record, so quote it whenever the counts
+   are quoted.
+3. **`BenchmarkSeed=42` in every row of every `v3/` CSV.** These are single-seed
+   numbers. Seed variability is the sweep in §0.5, which had not finished when
+   this index was written.
+
+### 0.1 Benchmark result CSVs — 4 model arms x 2 probes, 23 tasks, `--eval_split test`
+
+All eight produced by `run_benchmarks_v3.sh`, which for each arm runs:
+
+```bash
+uv run --no-sync python protein_benchmark_suite.py \
+  -m <MODEL> -t <the 23 tasks> -p {knn|linear} -e test \
+  --cache_embeddings -b 64 --device cuda -o results/benchmarks/v3/<tag>_<probe>
+```
+
+The 23 tasks are the ones with a paired MMseqs2 row: `aav_flip
+antibiotic_resistance beta_lactamase_peer binary_subcellular_localization
+cloning_clf ec_classification enzyme_catalytic_efficiency fluorescence go_mf
+material_production metal_ion_binding optimal_ph peptide_hla
+profet_np_sp_cleaved remote_homology scope40_retrieval signalp_binary
+solubility stability subcellular_loc temperature_stability thermostability
+variant_effect`. `scope40_retrieval` must be named explicitly or it silently
+does not run. `rhla_enzyme_mutations` is excluded (no MMseqs2 baseline exists
+for 6-residue mutation-site strings).
+
+| what it shows | artifact path | produced by | rows / n / seed | date | one-line conclusion |
+|---|---|---|---|---|---|
+| ProtSent-V2 (retrained, decontaminated), kNN | `results/benchmarks/v3/protsent_v3_knn/bench_models_protsent_esm2_35m_v3_final.csv` | `run_benchmarks_v3.sh`, `-m models/protsent_esm2_35m_v3/final -p knn -e test` | 23 rows, 23 tasks, 0 errors, seed 42 | 2026-07-29 09:59 | Best kNN arm; SCOPe-40 eligible R@10 0.9220, remote homology accuracy 0.66677 |
+| ProtSent-V2, linear probe | `results/benchmarks/v3/protsent_v3_linear/bench_models_protsent_esm2_35m_v3_final.csv` | same, `-p linear` | 23 rows, 23 tasks, 0 errors, seed 42 | 2026-07-29 11:06 | Loses to ESM-2 overall under a linear probe; remote homology accuracy 0.7016 (best) |
+| Near-trough checkpoint-4000, kNN | `results/benchmarks/v3/protsent_v3_ckpt4000_knn/bench_models_protsent_esm2_35m_v3_snapshots_checkpoint-4000.csv` | same, `-m models/protsent_esm2_35m_v3_snapshots/checkpoint-4000 -p knn` | 23 rows, 23 tasks, 0 errors, seed 42 | 2026-07-29 10:50 | Within 0.005-0.008 of the final checkpoint on every structural metric; RH accuracy 0.66554 |
+| checkpoint-4000, linear probe | `results/benchmarks/v3/protsent_v3_ckpt4000_linear/bench_models_protsent_esm2_35m_v3_snapshots_checkpoint-4000.csv` | same, `-p linear` | 23 rows, 23 tasks, 0 errors, seed 42 | 2026-07-29 11:23 | Same conclusion; RH accuracy 0.69883. The final model is not an artifact of where training stopped |
+| ProtSent-V1 (published `oriel9p/protsent-esm2-35M`), kNN | `results/benchmarks/v3/protsent_old_knn/bench_oriel9p_protsent-esm2-35M.csv` | same, `-m oriel9p/protsent-esm2-35M -p knn` | **46 rows**, 23 tasks x 2 runs (2026-07-28 and -29), 0 errors, seed 42 | 2026-07-29 12:01 | The 07-29 rerun reproduces the 07-28 numbers exactly; either copy is valid. RH accuracy 0.65875 |
+| ProtSent-V1, linear probe | `results/benchmarks/v3/protsent_old_linear/bench_oriel9p_protsent-esm2-35M.csv` | same, `-p linear` | 23 rows, 23 tasks, 0 errors, seed 42 | 2026-07-29 00:09 | RH accuracy 0.68989 |
+| ESM-2 35M baseline, kNN | `results/benchmarks/v3/esm2_35m_knn/bench__storage_models_ESM2-35M.csv` | same, `-m /storage/models/ESM2-35M -p knn` | **46 rows**: 23 from 2026-07-28 of which **2 are error rows**, 23 clean from 2026-07-29 | 2026-07-29 10:36 | Use the 07-29 rows only. RH accuracy 0.58354 |
+| ESM-2 35M baseline, linear probe | `results/benchmarks/v3/esm2_35m_linear/bench__storage_models_ESM2-35M.csv` | same, `-p linear` | 23 rows, 23 tasks, 0 errors, seed 42 | 2026-07-29 00:34 | RH accuracy 0.68681 |
+
+The two error rows in `esm2_35m_knn` are `Peptide-HLA Binding` (`Error = '|'`) and
+`Thermostability (FLIP)` (`Error = '#'`) dated 2026-07-28 — the FastPLM
+tokenizer `KeyError` fixed in commit `37ca0ea`. The 2026-07-29 rerun filled both
+in (`peptide_hla` AUC 0.74963, `thermostability` Spearman 0.44486) and **no
+other task's numbers changed between the two dates**, so only those two cells
+were ever affected. `python bench_arm_status.py <csv> 23` reports
+"23 task(s) with a clean result" for all eight arms as of 2026-07-29.
+
+### 0.2 Derived comparison tables and the alignment baseline
+
+| what it shows | artifact path | produced by | rows / n | date | one-line conclusion |
+|---|---|---|---|---|---|
+| Per-task kNN and linear tables, 4 arms side by side, with caveat sections | `results/benchmarks/COMPARISON.md` | `uv run --no-sync python build_comparison.py` | 23 tasks x 2 probes; win/tie/loss over 20 comparable tasks, tie band ±0.005 | 2026-07-29 12:01 | kNN: V1 11/3/6, V2 10/3/7 vs ESM-2. Linear: V1 4/4/12, V2 2/7/11. The probe decides the headline |
+| The same content as machine-readable JSON incl. `summary` and `source_notes` | `results/benchmarks/comparison.json` | same invocation | keys `naming, tie_tol, arms, tables{knn,linear}, summary, caveats` | 2026-07-29 12:01 | Median signed delta vs ESM-2: kNN V1 +0.00749, V2 +0.00410; linear V1 −0.01395, V2 −0.01071 |
+| MMseqs2-only baseline over the full benchmark | `results/benchmarks/mmseqs_baseline.json` | `uv run --no-sync python mmseqs_baseline.py --task <task_key>` once per task, appending; flags `-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3` | **24 entries**, 23 with a usable main metric (`rhla_enzyme_mutations` has `Spearman: null`, hit coverage 0.0) | 2026-07-28 21:51 | Alignment beats the best embedding model on 3 tasks under kNN and 6 under a linear probe; `solubility` AUC 0.4185 is below chance |
+| MMseqs2 scratch dirs incl. the raw hit tables | `/storage/users/ddofer/data/mmseqs_baseline/<task_key>/hits.tsv` | as above (`--work_dir` default) | 25 task dirs; `scope40_retrieval/hits.tsv` is 348 KB | 2026-07-28 | The hit table `bootstrap_ci.py` re-scores for the MMseqs2 arm |
+| SCOPe-40 head-to-head, 3 methods, all-query and eligible-query metrics | `results/benchmarks/scope40_table.json` | `protein_benchmark_suite.py` (embeddings) + `mmseqs_baseline.py` (alignment), assembled by hand | 3 entries; `n_queries` 2207, `n_eligible_queries` 1693 in every entry | 2026-07-28 21:59 | Contains ESM-2, ProtSent-V1 and MMseqs2 only — **ProtSent-V2 is not in this file**; V2's SCOPe row lives in the `v3/protsent_v3_*` CSVs |
+| Standalone SCOPe-only runs that fed `scope40_table.json` | `results/benchmarks/scope_map/bench__storage_models_ESM2-35M.csv`, `results/benchmarks/scope_map_protsent35m/bench_oriel9p_protsent-esm2-35M.csv` | `protein_benchmark_suite.py -t scope40_retrieval -e test` | 1 row each, seed 42, n_queries 2207 / n_eligible 1693 | 2026-07-28 21:56 / 21:58 | Superseded by the `v3/` arms but numerically identical; keep as the provenance of `scope40_table.json` |
+| `-s 5.7` MMseqs2 sensitivity variant (R@1 0.3847, R@10 0.4259; remote homology AUC 0.6262, hit cov 0.6233) | **MISSING** — no results file | `mmseqs_baseline.py` was re-run at reduced sensitivity but the output was not persisted; the numbers survive only in §3 of this document | n/a | 2026-07-28 | Re-derivable but not currently on disk. If it is ever quoted again, re-run and persist it |
+
+### 0.3 SCOPe leakage analyses
+
+| what it shows | artifact path | produced by | n / seeds | date | one-line conclusion |
+|---|---|---|---|---|---|
+| 95% bootstrap CIs, marginal and paired, on SCOPe-40 retrieval | `results/benchmarks/scope40_bootstrap_ci.json` | `uv run --no-sync python bootstrap_ci.py --models ESM-2=/storage/models/ESM2-35M ProtSent-V1=oriel9p/protsent-esm2-35M ProtSent-V2=models/protsent_esm2_35m_v3/final --mmseqs_hits /storage/users/ddofer/data/mmseqs_baseline/scope40_retrieval/hits.tsv` | `n_queries` 2207, `n_eligible` 1693, `n_boot` **10,000**, resample seed 0 | 2026-07-29 12:53 | Every paired interval for V2 excludes zero, including V2 − MMseqs2 at R@1 (+0.0289 [+0.0035, +0.0544]) |
+| Identity-vs-gain correlation, **ProtSent-V1** vs ESM-2 | `results/benchmarks/scope_identity_correlation_v1.json` | `uv run --no-sync python scope_identity_correlation.py --models /storage/models/ESM2-35M oriel9p/protsent-esm2-35M --out results/benchmarks/scope_identity_correlation_v1.json` | 2207 queries, 1693 eligible; `identity_median` 0.907725; bins 0/164/315/1214 | 2026-07-29 09:49 | AP Spearman −0.1136 (p=2.8e-06); gain does not grow with proximity to pretraining data |
+| Same, **ProtSent-V2** vs ESM-2 | `results/benchmarks/scope_identity_correlation_v2.json` | same script, `--models /storage/models/ESM2-35M models/protsent_esm2_35m_v3/final --out ..._v2.json` | same 2207 / 1693 / 0.907725 / 0/164/315/1214 | 2026-07-29 09:46 | AP Spearman −0.1162 (p=1.6e-06); identical sign and magnitude to V1 |
+| Headroom control on the V1 correlation | `results/benchmarks/scope_identity_partial_v1.json` | `uv run --no-sync python scope_identity_partial.py --models /storage/models/ESM2-35M oriel9p/protsent-esm2-35M --out results/benchmarks/scope_identity_partial_v1.json` | `n_eligible` 1693; AP quartile strata n = 423/423/423/424; hit@10 zero-baseline stratum n = 404 | 2026-07-29 12:57 | Partial Spearman −0.083 (p=6.8e-04); the null is not a headroom artifact |
+| Headroom control on the V2 correlation | `results/benchmarks/scope_identity_partial_v2.json` | same, `--models /storage/models/ESM2-35M models/protsent_esm2_35m_v3/final --out ..._v2.json` | same n; V2 AP quartile Spearmans +0.007 / −0.090 / −0.158 / −0.057 | 2026-07-29 12:56 | Partial Spearman −0.0806 (p=9.0e-04); among the 404 zero-baseline queries, identity does not predict gain (+0.038, p=0.45) |
+| Per-SCOPe-sequence max identity to the pretraining corpus, before and after dc40 | `/storage/users/ddofer/data/decontam_work/scope_strat/scope40_max_identity.parquet` | `scope_identity_strat.py`, consuming the streaming reductions from `decontam_work/scope_strat/reduce.sh` | **2,207 rows x 27 columns**; headline column `max_ident_overall` (= `fident × tcov`), dc column `max_ident_dc_overall` | 2026-07-28 23:40 | Median max identity 0.9077 unfiltered, 0.8950 after dc40; **the [0, 0.2) bin is empty**, so low-identity stratification is impossible on this benchmark |
+| Superseded first-pass correlation (see §0a "Superseded") | `results/benchmarks/scope_identity_correlation.json` | earlier run of the same script against the pre-regeneration identity table | 2207 / 1693; `identity_median` 0.893; bins 0/174/351/1168 | 2026-07-28 22:50 | **Do not cite.** Replaced by `_v1.json` |
+
+Note on `scope_identity_partial.py`: its module docstring shows a `--json`
+flag, but the actual CLI is `--models BASELINE PROTSENT --out PATH`. Use the
+CLI, not the docstring.
+
+### 0.4 Corpus verification
+
+| what it shows | artifact path | produced by | rows | date | one-line conclusion |
+|---|---|---|---|---|---|
+| Zero flagged sequences survived into the files training actually opened | `results/benchmarks/training_corpus_verification.json` | `uv run --no-sync python verify_training_corpus.py` (no arguments; paths are hardcoded to `/storage/users/ddofer/data/protsent-data-dc40`) | pfam 27,929,772 / afdb 126,301,607 / stringdb 15,000,000; `leaked_total` 0 for every file and column; `all_clean: true` | 2026-07-29 10:10 | The decontamination held all the way to the training loader, checked by semi-join and not taken from the filter's own report |
+| Console transcript of the same run | `logs/verify_corpus.log` | as above | 3 checks, all `CLEAN` | 2026-07-29 10:10 | Row arithmetic closes: 27,929,772 + 126,301,607 + 15,000,000 = 169,231,379 |
+| The filtering job's own record of intent | `/storage/users/ddofer/data/protsent-data-dc40/decontam_report.json` | `uv run --no-sync python decontaminate_pretrain.py --corpus all --gpu` (defaults `--min-seq-id 0.4 --cov 0.8 --cov-mode 1`) | per-corpus rows before/after/removed, prefilter, test set, shard count | 2026-07-28 19:41 | Records that only two test sets were ever filter targets: `biomap-research/fold_prediction[test]` (3,244) and `Synthyra/bernett_gold_ppi[test]` (3,022) |
+| Every hit with per-hit `fident`/`qcov`/`tcov`, plus the leaked-sequence lists | `/storage/users/ddofer/data/protsent-data-dc40/decontam/` | same | `afdb_leaked_sequences.parquet` 1.2 GB, `pfam_...` 47 MB, `stringdb_...` 64 MB, plus `*_hits.tsv.gz` and the two test FASTAs | 2026-07-26 | The audit trail `verify_training_corpus.py` joins against |
+
+### 0.5 In flight at the time of writing — multi-seed variability sweep
+
+**Status as of 2026-07-29 13:11: RUNNING, no output file yet.**
+
+| what it shows | artifact path | produced by | n / seeds | date | state |
+|---|---|---|---|---|---|
+| Probe-seed variability, 3 arms x 8 tasks x 5 seeds, kNN | `results/benchmarks/seeds/` — **directory exists but is EMPTY** | `tmux new-session -d -s seeds 'cd ~/ProtSent && CUDA_VISIBLE_DEVICES=1 bash run_seed_variability.sh 2>&1 \| tee logs/seeds/sweep.log'` | seeds `0,1,2,3,4`; tasks `remote_homology solubility stability thermostability fluorescence metal_ion_binding subcellular_loc variant_effect`; arms `esm2_35m`, `protsent_v1`, `protsent_v2` | started 2026-07-29 12:54 | Arm 1 of 3 (`esm2_35m`) only; at 13:11 it was on seed 5/5, task `subcellular_loc`. Arms 2 and 3 have not started. **No `.csv` has been written for any arm** — the suite writes at the end of a run |
+| Live log for arm 1 | `logs/seeds/esm2_35m.log` | as above | 370 lines at 13:11 | 2026-07-29 13:08 | Progressing normally, no tracebacks |
+| Sweep driver log | `logs/seeds/sweep.log` | as above | 1 line (`=== 12:54:00 esm2_35m ===`) | 2026-07-29 12:54 | No arm has reported `rc=` yet |
+
+`scope40_retrieval` is deliberately **not** in the seed sweep: retrieval has no
+probe randomness, so every seed returns an identical number. Its uncertainty is
+quantified by `bootstrap_ci.py` (§0.3) instead, which resamples queries.
+
+**Nothing in this document or in the rebuttal currently depends on the seed
+sweep.** If it is still unfinished when the response goes out, say so; do not
+quote a partial arm.
+
+### 0.6 Models
+
+| what it is | path | provenance | size / steps | date | note |
+|---|---|---|---|---|---|
+| **ProtSent-V2-35M** (paper name); on disk the RUN_NAME is `v3` | `models/protsent_esm2_35m_v3/final` | `train_esm2_35m.sh`, 7x NVIDIA B300, log `logs/esm2_v3/protsent_esm2_35m_v3.log` | 4,850 steps, 1 epoch over 169,231,379 rows, `train_runtime` 3.917e+04 s (10 h 53 m), 887.5 samples/s, `effective_batch=7168`, `world_size=7` | 2026-07-29 08:03 (weights); `config.json`/`tokenizer_config.json` rewritten 09:45 | The rewrite at 09:45 is `make_checkpoint_loadable.py`; originals kept as `*.fastplm`. Weights untouched |
+| Trainer checkpoints kept by `save_total_limit=2` | `models/protsent_esm2_35m_v3/checkpoint-4500`, `.../checkpoint-4850` | same run | — | 2026-07-29 07:16 / 08:03 | Not benchmarked; `final` is `checkpoint-4850` re-saved |
+| Near-trough LR snapshot, **benchmarked** | `models/protsent_esm2_35m_v3_snapshots/checkpoint-4000` | `snapshot_ckpt.sh`, then `make_checkpoint_loadable.py` | LR 5.5e-5; nearest saved checkpoint to the last cosine trough at step 4,208 | 2026-07-29 06:11 (weights), 09:45 (config rewrite) | The LR-schedule control arm in §0.1 |
+| Second near-trough snapshot, **never benchmarked** | `models/protsent_esm2_35m_v3_snapshots/checkpoint-3000` | `snapshot_ckpt.sh` | still in FastPLM form (no `config.json.fastplm`, so `make_checkpoint_loadable.py` has not been run on it) | 2026-07-29 03:57 | Exists on disk; **no results anywhere depend on it** |
+| ProtSent-V1 (submitted paper model) | `oriel9p/protsent-esm2-35M` (HF hub, not a local path) | published before the rebuttal period | — | — | Trained on the **unfiltered** corpus |
+| ESM-2 35M starting point | `/storage/models/ESM2-35M` | third-party | — | — | Untuned baseline arm |
+
+### 0.7 Data
+
+| what it is | path | produced by | size / rows | date | note |
+|---|---|---|---|---|---|
+| Decontaminated corpus, all three parquets | `/storage/users/ddofer/data/protsent-data-dc40/` | `decontaminate_pretrain.py --corpus all --gpu` | `pfam_sorted.parquet` 2.47 GB / 27,929,772 rows; `afdb_sorted.parquet` 12.2 GB / 126,301,607; `stringdb_train.parquet` 34.2 GB / 71,891,417 | 2026-07-26 | Also holds `README.md` (dataset card) and `decontam_report.json` |
+| The STRING file training actually used | `/storage/users/ddofer/data/protsent-data-dc40/stringdb_train_15M.parquet` | seeded (seed 42) 15M-pair subsample of `stringdb_train.parquet` | 7.14 GB, 15,000,000 rows | 2026-07-28 20:25 | A **compute-budget** decision, not a leakage control. Do not present it as one |
+| SCOPe identity table | `/storage/users/ddofer/data/decontam_work/scope_strat/scope40_max_identity.parquet` | `scope_identity_strat.py` | 2,207 rows x 27 cols | 2026-07-28 23:40 | Use `max_ident_overall` (`fident × tcov`), **never raw `fident`** |
+| SCOPe stratification working dir (reps FASTAs, leaked-ID lists, hit TSVs, driver scripts) | `/storage/users/ddofer/data/decontam_work/scope_strat/` | `reduce.sh`, `build_reps.py`, `search_reps.sh`, `search_stringdb*.sh` | ~16 TB of intermediates incl. `afdb_lowbin_hits.tsv` 8.8 GB | 2026-07-28 / -29 | Intermediates, not results; kept so the identity table can be rebuilt |
+
+### 0.8 Scripts — what each does and how to re-run it
+
+Every script below has a `--selfcheck` mode except `mmseqs_baseline.py`,
+`run_benchmarks_v3.sh`, `run_seed_variability.sh` and `bench_arm_status.py`.
+All Python is run through `uv run --no-sync python <script>`.
+
+| script | what it does | re-run |
+|---|---|---|
+| `decontaminate_pretrain.py` | Removes any pretraining sequence aligning to a benchmark test sequence at ≥40% identity / ≥80% coverage of the *test* sequence, via MMseqs2 `easy-search` with the corpus as query. | `python decontaminate_pretrain.py --corpus all --gpu` (defaults `--min-seq-id 0.4 --cov 0.8 --cov-mode 1 --shard-size 10000000`) |
+| `verify_training_corpus.py` | Re-reads the parquets the training log shows being opened and semi-joins them against the recorded removal lists — proves the filter's *result*, not its intent. | `python verify_training_corpus.py` (no args) |
+| `mmseqs_baseline.py` | Scores each benchmark task with alignment instead of embeddings, under the same metric definitions; no-hit queries count as failures. | `python mmseqs_baseline.py --task scope40_retrieval` (per task; `--output` defaults to `results/benchmarks/mmseqs_baseline.json`, `--threads 64`) |
+| `run_benchmarks_v3.sh` | Drives the 4-arm x 2-probe sweep on `--eval_split test`, caps BLAS threads, skips arms that are already complete, and checks the CSV rather than trusting the exit code. | `bash run_benchmarks_v3.sh` (`FORCE=1` to re-measure everything) |
+| `bench_arm_status.py` | Decides whether one arm succeeded: complete = every requested task has at least one error-free row *somewhere* in the appended CSV. | `python bench_arm_status.py <results.csv> 23` (exit 0 = complete) |
+| `make_checkpoint_loadable.py` | Rewrites a FastPLM-saved checkpoint's `config.json` / `tokenizer_config.json` into plain-ESM form so `SentenceTransformer(path)` can load it. Metadata only; weights untouched; idempotent; originals kept as `*.fastplm`. | `python make_checkpoint_loadable.py <checkpoint_dir> [...]` |
+| `build_comparison.py` | Merges the four arms per task per probe into `COMPARISON.md` + `comparison.json`, with the caveat sections. Idempotent; missing cells stay missing. | `python build_comparison.py` |
+| `bootstrap_ci.py` | Bootstraps the per-query SCOPe metrics: marginal CIs per method and **paired** CIs on per-query differences (the ones that settle anything). | `python bootstrap_ci.py --models ESM-2=... ProtSent-V1=... ProtSent-V2=... --mmseqs_hits <hits.tsv>` (`--n_boot` default 10000) |
+| `scope_identity_correlation.py` | Correlates each SCOPe query's max identity to the pretraining corpus against that query's retrieval gain over the baseline; reports Spearman/Pearson and per-bin means. | `python scope_identity_correlation.py --models <BASELINE> <PROTSENT> --out <path>` |
+| `scope_identity_partial.py` | The same correlation after controlling for baseline headroom: partial Spearman, within-quartile strata, and headroom-normalised gain. | `python scope_identity_partial.py --models <BASELINE> <PROTSENT> --out <path>` |
+| `scope_identity_strat.py` | Builds `scope40_max_identity.parquet` from the streaming reductions, carrying both `fident × tcov` and high-coverage raw `fident`, before and after dc40. | `python scope_identity_strat.py` (reads `/storage/users/ddofer/data/decontam_work/scope_strat/`) |
+| `run_seed_variability.sh` | Runs 8 tasks x 5 seeds x 3 arms under kNN in one process per arm, reusing the loaded model and the embedding cache. | `bash run_seed_variability.sh` (`SEEDS=`, `TASKS=` overridable) |
+
+### 0.9 Logs worth keeping
+
+| log | what it records | date |
+|---|---|---|
+| `logs/esm2_v3/protsent_esm2_35m_v3.log` | The full V2 training run: `total=169,231,379`, `effective_batch=7168`, `world_size=7`, `train_runtime` 3.917e+04, clean exit at 08:03 | 2026-07-29 08:03 |
+| `logs/bench_v3/{protsent_v3,protsent_old,esm2_35m,protsent_v3_ckpt4000}_{knn,linear}.log` | Per-arm benchmark stdout | 2026-07-29 |
+| `logs/bench_v3/sweep2.log` | The driver's own record of which arms ran and which were skipped | 2026-07-29 11:23 |
+| `logs/mmseqs_bl_scope.log`, `logs/mmseqs_bl_rh.log` | MMseqs2 baseline runs incl. the search parameters MMseqs2 echoes | 2026-07-28 19:54 / 19:55 |
+| `logs/scope_corr_v1.log`, `logs/scope_corr_v2.log` | The two identity-correlation runs; both print `2207 SCOPe sequences; identity median 0.908` | 2026-07-29 09:49 / 09:46 |
+| `logs/verify_corpus.log` | The corpus verification transcript | 2026-07-29 10:10 |
+| `logs/seeds/esm2_35m.log`, `logs/seeds/sweep.log` | The in-flight seed sweep (§0.5) | 2026-07-29, still being written |
+
+---
+
+## 0a. Conclusions and checks from the rebuttal sessions
+
+Durable findings, each with the path that establishes it. These are the
+statements that should survive into a revision; everything else in this document
+is working detail.
+
+### 0a.1 What the decontamination establishes
+
+1. **Decontamination at 40% identity / 80% coverage completed on all three
+   corpora.** Pfam 28,530,684 → 27,929,772 (−2.11%), AFDB 135,404,259 →
+   126,301,607 (−6.72%), STRING 76,070,154 → 71,891,417 (−5.49%).
+   → `/storage/users/ddofer/data/protsent-data-dc40/decontam_report.json`, §1.
+
+2. **Verified on the files training actually opened, not on the filter's own
+   report.** Semi-join against the recorded removal lists returns **0 surviving
+   flagged sequences** in all three files (STRING checked on both pair columns).
+   → `results/benchmarks/training_corpus_verification.json` (`all_clean: true`),
+   `verify_training_corpus.py`.
+
+3. **Row arithmetic closes independently.** 27,929,772 + 126,301,607 +
+   15,000,000 = **169,231,379**, exactly the `total=` in the training log.
+   → `logs/esm2_v3/protsent_esm2_35m_v3.log`.
+
+4. **Scope limit — state this prominently.** Only **`remote_homology`**
+   (`biomap-research/fold_prediction[test]`, 3,244 sequences) and
+   **`ppi_bernett`** (`Synthyra/bernett_gold_ppi[test]`, 3,022 sequences) were
+   ever used as decontamination targets. **The other 21 benchmark test sets were
+   not filtered.** The decontamination claim covers those two tasks and nothing
+   else. → `decontam_report.json`, which names one `test_set` per corpus and no
+   others.
+
+5. **SCOPe-40 was deliberately not a filter target.** `tattabio/scope40_test`
+   has no train/test split — the benchmark is leave-one-out self-retrieval over
+   the whole set — so filtering AFDB/Pfam against all of SCOPe at 40% identity
+   would remove essentially every structured domain from the corpus. This is the
+   ProtTucker posture (identity-based decontamination of the *supervised* split
+   plus low-identity stratification, no filtering of the pLM's pretraining
+   corpus). → §2, §2 "Precedent (verified)".
+
+### 0a.2 What the retrained model shows
+
+6. **The retrained model beats the submitted one and beats a tuned MMseqs2 at
+   every SCOPe cutoff, and every paired bootstrap CI excludes zero.** V2 − V1,
+   V2 − ESM-2 and V2 − MMseqs2 all exclude zero at R@1, R@10 and MAP; the
+   tightest is V2 − MMseqs2 at R@1, +0.0289 [+0.0035, +0.0544].
+   → `results/benchmarks/scope40_bootstrap_ci.json` (10,000 resamples, 1,693
+   eligible queries), §4a of `rebuttal/NEW_EVIDENCE.md`.
+
+7. **Remote homology — the task the corpus was actually filtered against —
+   improved.** kNN accuracy 0.58354 (ESM-2) → 0.65875 (V1) → **0.66677** (V2);
+   linear 0.68681 → 0.68989 → **0.70160**. Removing every pretraining sequence
+   within 40% identity / 80% coverage of that test set did not cost performance
+   on it. → the eight CSVs in §0.1, read as `Remote Homology (Fold)` /
+   `Accuracy`.
+
+8. **The near-trough checkpoint agrees with the final one.** The 3-cycle cosine
+   schedule ends at peak LR, so checkpoint-4000 (LR 5.5e-5) was benchmarked as a
+   control; it differs from the final checkpoint by 0.005-0.008 on every
+   structural metric. The final model is not an artifact of where training
+   stopped. → `results/benchmarks/v3/protsent_v3_ckpt4000_{knn,linear}/`.
+
+9. **There is no unfiltered-corpus retrain at the V2 configuration, and none is
+   planned.** V2 also changed the effective batch (7x1024 vs 1x1024), dropped
+   synthetic hard negatives, and uses proportional sampling over one epoch. The
+   V1-vs-V2 comparison is therefore **not a controlled decontamination
+   ablation**. The only supportable claim is the sufficient one: *decontaminating
+   the corpus did not cost performance.* → §5 "Caveat to state plainly", §2 of
+   `rebuttal/NEW_EVIDENCE.md`.
+
+### 0a.3 What the leakage analysis shows
+
+10. **The identity-vs-gain correlation is null to negative, for both models.**
+    Per-query Spearman between max identity to the pretraining corpus and gain
+    over ESM-2: R@10 −0.038 (V1) / −0.038 (V2); AP −0.1136 / −0.1162, both
+    p < 3e-6. Memorization predicts the opposite sign.
+    → `results/benchmarks/scope_identity_correlation_v{1,2}.json`.
+
+11. **It survives a baseline-headroom control.** A blind reader raised
+    regression to the mean — high-identity queries are already well solved, so
+    they have less room to improve, and gain is bounded above by (1 − baseline)
+    (`rebuttal/review_blind.md`, "#4's binning is confounded"). The control was
+    run *because* that objection was raised, and it did not change the
+    conclusion: partial Spearman controlling for baseline score is −0.083 (V1,
+    p=6.8e-04) / −0.081 (V2, p=9.0e-04); every within-quartile correlation for
+    V2 is null or negative (+0.007, −0.090, −0.158, −0.057); and among the 404
+    queries where the untuned backbone scores zero at R@10 — full headroom by
+    construction — identity does not predict the gain (V2 +0.038, p=0.45).
+    → `results/benchmarks/scope_identity_partial_v{1,2}.json`,
+    `scope_identity_partial.py`. **Record that the objection was raised and that
+    it survived** — a pre-empted objection that survived its own control is
+    worth more than the raw correlation.
+
+12. **Recall@K on SCOPe-40 is upper-bounded at 0.7671.** Only 1,693 of 2,207
+    queries have any non-self same-family protein in the gallery; the other 514
+    are singleton families and are unachievable for any method. Every SCOPe
+    recall number needs this in its caption.
+    → `n_queries` / `n_eligible_queries` columns in every SCOPe CSV row, and
+    `results/benchmarks/scope40_table.json`.
+
+13. **Low-identity stratification is impossible on this benchmark, and the
+    reason is a property of the sequence universe.** The [0, 0.2) bin is empty
+    and the median max identity is 0.908, because AFDB covers essentially all of
+    UniProt and SCOPe domains come from PDB entries whose parent sequences are
+    in UniProt. ESM-2's UniRef50 carries the identical exposure, so the
+    model-vs-model delta is the valid measurement.
+    → `scope40_max_identity.parquet`, §2(a).
+
+### 0a.4 The honesty constraints
+
+14. **The probe decides the headline. This is the main constraint on any
+    claim.** Over the 20 tasks comparable in both arms, both ProtSent models
+    beat ESM-2 under kNN (V1 11/3/6, V2 10/3/7; median delta +0.0075 / +0.0041)
+    and lose under a linear probe (V1 4/4/12, V2 2/7/11; median −0.0139 /
+    −0.0107). The structural-retrieval advantage survives both; a
+    general-purpose superiority claim does not. **Any "ProtSent > ESM-2"
+    sentence must name the probe.** → `results/benchmarks/COMPARISON.md`,
+    `comparison.json` → `summary`.
+
+15. **MMseqs2 wins outright on several tasks — the measured
+    generality-accuracy trade-off.** 3 tasks under kNN (`ec_classification`,
+    `go_mf`, `beta_lactamase_peer`) and 6 under a linear probe (those plus
+    `enzyme_catalytic_efficiency`, `optimal_ph`, `stability`).
+    → `comparison.json` → `summary.{knn,linear}.mmseqs_beats_best_embedding`.
+
+16. **MMseqs2 also beats the submitted model at top-1 on SCOPe** (+0.0697
+    [+0.0413, +0.0975], significant) and beats ESM-2 at top-1 by +0.1565. It
+    does **not** beat V2. State the V1 weakness first; that is what makes the V2
+    result credible. Never retro-claim the top-1 win for the submitted paper.
+    → `scope40_bootstrap_ci.json` → `paired`.
+
+17. **MMseqs2 vs ESM-2 at depth is unresolved**, not a win for the pLM: R@10
+    −0.0213 [−0.0484, +0.0047], MAP −0.0125 [−0.0351, +0.0102]. Do not claim
+    ESM-2 beats alignment at depth. → same file.
+
+18. **Every result in `v3/` is single-seed (`BenchmarkSeed=42`).** The
+    multi-seed sweep that would quantify probe-seed variance had not finished
+    when this index was written (§0.5). The bootstrap CIs quantify *which
+    proteins are in the benchmark*, not training-seed or probe-seed variance.
+
+### 0a.5 Paper description errors found by audit — disclose proactively
+
+19. **"100,000 sequences at the superfamily level" is wrong on both counts.**
+    The code evaluates the SCOPe **family** field on **2,207** sequences. The
+    100,000 is the evaluator's `max_samples` cap echoed into the results table —
+    visible as `Samples,100000` in the header row of every benchmark CSV
+    alongside `n_queries,2207`. An apparent 45x error in reported N is a logging
+    artifact. → any CSV in `results/benchmarks/v3/`.
+
+20. **The remote-homology test split is not hierarchy-disjoint.** It is TAPE
+    remote homology repackaged: the pooled concatenation of TAPE's three
+    holdouts (718 fold + 1,254 superfamily + 1,272 family = 3,244) with no
+    column marking which. Two thirds is not fold-disjoint. The pooled 457-class
+    macro AUC is also not comparable to published per-holdout top-1 accuracies.
+    Corpus-level decontamination is the real control. → §3 "Split protocol",
+    `results/benchmarks/COMPARISON.md` → "Metrics that are not comparable to
+    published literature".
+
+21. **The PPI decontamination text does not match `data_prep.py`.** The code
+    uses `easy-search` (STRING as query, Bernett test as target) at 40%
+    identity, `--cov-mode 1 -c 0.8`, removing hit query IDs — not `easy-linclust`
+    at 50% with cluster-level removal. Its own docstring says `easy-search` was
+    chosen deliberately because linclust loses sensitivity below ~50% identity.
+    Describe what the code does. → `data_prep.py`, §6 item 4.
+
+22. **Eq. 1 is malformed**, as the reviewer noted. → §7 of
+    `rebuttal/NEW_EVIDENCE.md`.
+
+### 0a.6 Engineering fixes that affect result validity
+
+These matter because results produced **before** each fix are not trustworthy.
+Where a stale result still exists on disk it is named.
+
+| fix | commit | what was wrong | which results are affected |
+|---|---|---|---|
+| FastPLM tokenizer raised `KeyError` on `\|`, `#`, `J` and any other non-A-Z character; the suite caught the exception into an `Error` column and **still exited 0**, so a whole task could silently fail while the sweep reported success | `0e74e9b` (2026-07-28, OOV residue crash + silent benchmark failure), `37ca0ea` (2026-07-29, map *any* unknown token to `X`, not just A-Z) | affected `peptide_hla` (pipe-joined `HLA\|peptide` inputs) and `thermostability` (`#` in sequences) | The 2026-07-28 rows in `results/benchmarks/v3/esm2_35m_knn/bench__storage_models_ESM2-35M.csv` are error rows and must not be read. The 2026-07-29 rerun of that arm is clean. No other arm has error rows. **Any benchmark number dated before 2026-07-29 for `peptide_hla` or `thermostability` is invalid.** |
+| `--cache_embeddings` is `store_true` and OFF by default, and the sweep never passed it — every arm recomputed embeddings from scratch (~15 min each) instead of the linear pass being a cheap classifier refit | `b93f2af` (2026-07-29) | a cost bug, not a correctness bug: the numbers were right, the sweep was ~4x slower than it should have been, which is why early arms were run piecemeal and appended | No result is invalidated. It explains why `protsent_old_linear` and `esm2_35m_linear` are dated 2026-07-29 00:09/00:34 while their kNN counterparts were re-run later |
+| OpenBLAS thread oversubscription: on this 256-core box, uncapped probe fits abort with `corrupted size vs. prev_size` (SIGABRT, rc=134). `aav_flip` (50,430 x 22,186) reproduced it every time | `d05d96c` (2026-07-28) — `OPENBLAS/OMP/MKL/NUMEXPR_NUM_THREADS=32` exported in `run_benchmarks_v3.sh` (and set before the numpy import in `build_comparison.py`) | whole arms died mid-sweep rather than producing wrong numbers | Nothing on disk is wrong because of it; arms that hit it produced no rows. Any future re-run must keep the caps |
+| `bench_arm_status.py` originally counted error rows over the whole appended file, so an arm that had just succeeded on all 23 tasks was reported `FAILED` because the pre-fix error rows were still in the file | `46c2200` (2026-07-29) | reporting only | `logs/bench_v3/sweep2.log` still contains the false `FAILED: 2 task(s) errored despite rc=0` for `esm2_35m / knn` at 10:36. That arm is complete and clean; the current `bench_arm_status.py` confirms 23/23 |
+
+### 0a.7 Superseded / do not cite
+
+Numbers that appear in older drafts and must not be reused.
+
+| do not cite | where it came from | what replaces it | why |
+|---|---|---|---|
+| MMseqs2 SCOPe-40 **R@1 0.3539 / MAP 0.1795** | `rebuttal/DRAFT_rebuttal.md` | **R@1 0.5029 / MAP 0.3100** at `-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3`, `results/benchmarks/mmseqs_baseline.json` | A default-sensitivity run. Publishing the weaker baseline while a stronger one is reproducible from the released repo is a self-inflicted integrity problem. Any MMseqs2 number must state its sensitivity setting |
+| MMseqs2 **R@10 = R@30 = 0.3856** (exact equality) | `rebuttal/DRAFT_rebuttal.md` | **R@10 0.5637, R@30 0.5641** | Exact equality to four decimals indicates a truncated hit list, not a plateau |
+| SCOPe AP correlation **Spearman −0.105 (p=1.6e-05)**, bin gains **+0.103 / +0.090**, bin counts **174 / 351 / 1,168**, identity median **0.893** | `results/benchmarks/scope_identity_correlation.json` (2026-07-28), and the Summary of this document before 2026-07-29 | **−0.1136 (p=2.8e-06)**, bin gains **+0.0915 / +0.0865**, counts **164 / 315 / 1,214**, median **0.9077** — `results/benchmarks/scope_identity_correlation_v1.json` | Computed against a superseded identity table. The unsuffixed `scope_identity_correlation.json` is kept only as provenance |
+| SCOPe identity distribution **247 / 459 / 1,501** (unfiltered) and **281 / 475 / 1,451** (dc40), and "STRING supplies **1,399** of 2,207 above 0.7" | §2(a) of this document before 2026-07-29 | **237 / 416 / 1,554** and **270 / 430 / 1,507**; STRING **1,457** above 0.7 (AFDB 733 is unchanged) | Same superseded identity table. Recomputed on 2026-07-29 from `scope40_max_identity.parquet` columns `max_ident_overall` / `max_ident_dc_overall` |
+| SCOPe eligible-query totals **AP 0.4216 → 0.5505 → 0.6448** used interchangeably with **0.4210 → 0.5509 → 0.6459** | §2(a) vs §3/§5 of this document | Both are correct *for their own code path*; do not mix them in one table | `scope_identity_correlation.py` and `protein_benchmark_suite.evaluate_retrieval` agree to four decimals on Recall@10 (0.92203 vs 0.9220) but differ in the third decimal on AP/MAP. The cross-validation claim in §5 is about **Recall@10 only** |
+| Task count **24** for the model arms | early notes | **23** model-arm tasks; `mmseqs_baseline.json` has **24 entries**, of which 23 have a usable main metric | `rhla_enzyme_mutations` has an MMseqs2 row with `Spearman: null` and hit coverage 0.0, and is excluded from every model arm. Quote "23 tasks" for the sweep and "24 rows, 23 scorable" for the baseline JSON |
+| "the n=92 strict-subset analysis" | `rebuttal/DRAFT_rebuttal.md` | the identity-stratified analysis over all 2,207 queries (§2a) | The 92-query subset has a ceiling of 57/92 = 0.620 that the draft does not state, so its R@30 of 0.500 reads against an implied 1.0 |
 
 ---
 
@@ -113,7 +505,7 @@ The protocol used instead has three parts:
 We computed, for every SCOPe-40 sequence, its maximum sequence identity to the
 pretraining corpus. The result establishes the key point directly: **SCOPe-40 is
 not separable from any comprehensive protein corpus.** Median max-identity is
-**0.89**, and **no** SCOPe sequence falls below 20% identity. AFDB is predicted
+**0.908**, and **no** SCOPe sequence falls below 20% identity. AFDB is predicted
 structure over essentially all of UniProt, and SCOPe domains come from PDB
 entries whose parent sequences are in UniProt — so every SCOPe domain has a close
 neighbour by construction.
@@ -127,12 +519,19 @@ matching essentially every query.
 | max identity to pretraining | unfiltered | after dc40 |
 |---|---:|---:|
 | [0, 0.2) | **0 (0.00%)** | **0 (0.00%)** |
-| [0.2, 0.4) | 247 (11.19%) | 281 (12.73%) |
-| [0.4, 0.7) | 459 (20.80%) | 475 (21.52%) |
-| [0.7, 1.0] | 1,501 (68.01%) | 1,451 (65.75%) |
+| [0.2, 0.4) | 237 (10.74%) | 270 (12.23%) |
+| [0.4, 0.7) | 416 (18.85%) | 430 (19.48%) |
+| [0.7, 1.0] | 1,554 (70.41%) | 1,507 (68.28%) |
 
 Per corpus, STRING — not AFDB — supplies most of the near-identical matches
-(1,399 of 2,207 above 0.7, vs AFDB's 733).
+(1,457 of 2,207 above 0.7, vs AFDB's 733).
+
+*Corrected 2026-07-29.* This table previously read 247/459/1,501 and
+281/475/1,451, with STRING at 1,399 — those came from the superseded identity
+table, the same one that produced the superseded bin counts noted at the end of
+this subsection. The values above were recomputed from the current
+`scope40_max_identity.parquet` (columns `max_ident_overall` and
+`max_ident_dc_overall`, same bin edges, n = 2,207). See §0a.7.
 
 The question the binning was meant to answer is answered directly instead. If the
 advantage came from memorising pretraining neighbours, queries with a *closer*
@@ -195,11 +594,11 @@ unique sequences and carries no such caveat.
 **(b) Both corpora reported.** SCOPe-40 is evaluated with the model trained on
 the fold_prediction-filtered corpus **and** on the published model trained on the
 unfiltered one, so the effect of decontamination on this task is directly
-visible rather than asserted. The unfiltered-model numbers are already in
-§2(a); the filtered-model numbers land when the retraining in §4 finishes.
+visible rather than asserted. The unfiltered-model numbers are in §2(a); the
+filtered-model numbers landed 2026-07-29 and are in §5.
 
 For calibration of how much this can move: decontamination shifts SCOPe-40's own
-identity profile only slightly (median 0.893 → 0.870; the >70% bin 1,501 → 1,451
+identity profile only slightly (median 0.908 → 0.895; the >70% bin 1,554 → 1,507
 of 2,207), because the filter targeted `fold_prediction`, not SCOPe. A large
 swing in SCOPe scores between the two models would therefore be surprising, and
 that stability is itself the point: the benchmark is measuring representation
@@ -612,6 +1011,9 @@ the probe.
 
 - [ ] MMseqs2 + MAP on the remaining benchmarks compared against published
       literature values (needs the target papers named)
+- [ ] Multi-seed variability sweep (5 seeds x 8 tasks x 3 arms, kNN). Started
+      2026-07-29 12:54, still on arm 1 of 3 at 13:11, **no output file yet**.
+      See §0.5 for its exact state and `run_seed_variability.sh` to resume it.
 
 ---
 
@@ -678,8 +1080,8 @@ with the source that settles it. These are not stylistic preferences.
    The identity-stratified analysis (§2a) retains all 2,207 queries and has the
    statistical power the 92-query subset lacks.
 - [x] MMseqs2 baseline across all 24 evaluable benchmarks + sensitivity variant (§3)
-- [ ] ProtSent-v2-35M benchmark results: kNN probe and linear probe, vs ESM2-35M,
-      both with `-e test`
+- [x] ProtSent-v2-35M benchmark results: kNN probe and linear probe, vs ESM2-35M,
+      both with `-e test` — done 2026-07-29, four arms x two probes, indexed in §0.1
 - [ ] **Additional metrics to match the comparison papers.** The table in §3
       reports each task's declared `main_metric` plus whatever the evaluator
       emits. Papers we are compared against may report different quantities
