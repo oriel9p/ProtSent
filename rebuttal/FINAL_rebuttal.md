@@ -1,14 +1,13 @@
 # ProtSent — NeurIPS 2026 rebuttal (submission 28056) — postable
 
-Paste unit = everything strictly between `<!-- BEGIN X -->` and `<!-- END X -->`.
 
 ---
 
 ## Response to Reviewer HNXd
 
-<!-- character count of the pasted body below: 9363 (limit 10,000) -->
+<!-- character count of the pasted body below: 9355 (limit 10,000) -->
 <!-- BEGIN HNXd -->
-We thank the reviewer for naming exactly which analyses would change the assessment. All five are run.
+We thank the reviewer for naming which analyses would change the assessment. All five are run.
 
 Under a trained linear probe, ProtSent loses to stock ESM-2 35M, on 11 of 20 comparable tasks (test split, single seed, tie band 0.005 absolute), so we withdraw the general-purpose embedding claim. What survives is a retrieval and clustering result, now measured as asked.
 
@@ -97,7 +96,7 @@ That is a narrower paper than the one we submitted, and a better-supported one. 
 
 ## Response to Reviewer jVGf
 
-<!-- character count of the pasted body below: 9786 (limit 10,000) -->
+<!-- character count of the pasted body below: 9811 (limit 10,000) -->
 <!-- BEGIN jVGf -->
 We thank the reviewer for identifying the two axes that would change the assessment. We address both, and we begin with a correction that goes against us.
 
@@ -111,7 +110,7 @@ On naming: **V1** is the submitted 35M model, and **V2** a 35M model retrained d
 
 We agree that this is the important missing piece, and we have now measured it rather than asserted it. Both alignment pipelines were run over the whole benchmark under identical metric definitions, with no-hit queries scored as failures: MMseqs2 at high sensitivity (`-s 7.5 -e 10 --max-seqs 300`, since the default `-s 5.7` gives a much weaker baseline of SCOPe-40 R@1 0.385, so any MMseqs2 number needs its sensitivity stated) and HMMER phmmer at `-E 10` through the same scoring code. HMMER wins on 12 of the 22 tasks both completed, so neither is the weaker opponent, and we quote whichever tool is better for each task.
 
-Alignment beats the best embedding model outright on 3 of 23 tasks under a 3-NN probe and 6 under a linear probe, by wide margins. On enzyme-class prediction, F1-macro is 0.723 for HMMER against 0.598 for ESM-2 35M, 0.562 for V1 and 0.592 for V2. On GO molecular function it is 0.605 against 0.459, 0.443 and 0.455. On beta-lactamase fitness, Spearman is 0.803 for MMseqs2 against 0.727, 0.768 and 0.715. Where annotation transfers by homology, alignment is better, and the gap is not small.
+Alignment beats every 35M arm we scored on 3 of the 20 comparable tasks under a 3-NN probe and 6 under a linear probe. On enzyme-class prediction, F1-macro is 0.723 for HMMER against 0.598 for ESM-2 35M, 0.562 for V1 and 0.592 for V2. On GO molecular function it is 0.605 against 0.459, 0.443 and 0.455. On beta-lactamase fitness, Spearman is 0.803 for MMseqs2 against 0.727, 0.768 and 0.715. Where annotation transfers by homology, alignment is better, and on the two annotation-transfer tasks the gap exceeds 0.12.
 
 The other end of the trade-off is coverage, and we consider it the sharper half of the answer. Alignment returns nothing at all for a substantial share of queries, and that share grows precisely where the task is hard. HMMER returns no hit for 47.6% of the remote-homology test set and 31.3% of the SCOPe-40 gallery. On the RhlA enzyme-mutation task, whose sequences are 6-residue mutation-site strings, hit coverage is 0.004 for HMMER and 0.000 for MMseqs2, so both tools fail completely. On DeepSol solubility, MMseqs2 scores an AUC of 0.418, below chance. An embedding always returns a ranked list, so its metric is never a property of a fallback. We should add, however, that the three alignment wins above occur at coverage 0.945, 0.901 and 1.000, so they are genuine wins and not coverage artefacts.
 
@@ -212,7 +211,7 @@ The cost of the shared space is measurable, and it is the linear-probe record in
 
 HMMER (phmmer at `-E 10`, no-hit scored as failure) was run on the same gallery through the same scoring code as MMseqs2. Both take sequence input only, as we do, so together they bound what a sequence-only encoder must beat. On SCOPe-40 at family level over 1,693 eligible queries, R@1 / R@10 / MAP are 0.697 / 0.781 / 0.475 for phmmer, 0.656 / 0.740 / 0.410 for MMseqs2, 0.499 / 0.761 / 0.421 for ESM-2 35M, 0.585 / 0.851 / 0.551 for V1 and 0.685 / 0.922 / 0.646 for V2.
 
-By paired bootstrap over 10,000 resamples, V1 minus HMMER at Recall@1 is -0.111 [-0.139, -0.083], an outright loss, while V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP. Alignment remains better at top-1, and 691 queries return no phmmer hit at all, so part of our depth margin reflects coverage rather than ranking. Across the benchmark alignment beats the best embedding model on 3 of 23 tasks under a 3-NN probe and 6 under a linear probe; details in our reply to jVGf.
+By paired bootstrap over 10,000 resamples, V1 minus HMMER at Recall@1 is -0.111 [-0.139, -0.083], an outright loss, while V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP. Alignment remains better at top-1, and 691 queries return no phmmer hit at all, so part of our depth margin reflects coverage rather than ranking. Across the benchmark alignment beats every 35M arm on 3 of 20 comparable tasks under a 3-NN probe and 6 under a linear probe; details in our reply to jVGf.
 
 We did not run ProtTucker, Foldseek, PLMSearch, DHR, ProTrek or Redl et al. 2023; Foldseek and ProTrek consume structure at query time. ProtTucker is the real gap, its protocol being ours.
 
