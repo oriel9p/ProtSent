@@ -93,7 +93,7 @@ def score(train_x, train_y, test_x, test_y, problem: str) -> float:
 
 def run_task(task: str, max_train: int, max_test: int, batch_size: int) -> dict:
     sys.path.insert(0, str(Path(__file__).parent))
-    from benchmark_tasks import BENCHMARK_TASKS
+    from benchmark_tasks import TASKS as BENCHMARK_TASKS
     from datasets import load_dataset
 
     cfg = BENCHMARK_TASKS[task]

@@ -371,6 +371,60 @@ This is the single most important honesty constraint on the rebuttal: any
 4. **Eq. 1 is malformed** as the reviewer noted; corrected notation is in the
    revision.
 
+## 6a. The linear-probe comparison is a final-layer artifact — measured
+
+Both probes in the benchmark pool the **final** layer. That is the measurement
+point least favourable to ProtSent and most favourable to stock ESM-2: the
+contrastive objective only ever sees the final layer, so that is the only place
+ProtSent reorganises, while a masked-LM's top of stack is pushed toward token
+reconstruction rather than toward linearly decodable properties.
+
+`layer_probe_sweep.py`, `results/benchmarks/layer_probe_sweep.json`. Linear probe
+(RidgeCV for regression, logistic regression for classification) on mean-pooled
+embeddings from each layer. Subsampled to 8,000 train / 3,000 test for speed, so
+absolute values are not directly comparable to the full-split numbers elsewhere
+in this document — the comparison **between models within this table** is the
+point.
+
+**Stability (Biomap), Spearman:**
+
+| pooled layer | ESM-2 35M | ProtSent-V2 |
+|---|---:|---:|
+| 4 | 0.3892 | **0.5537** |
+| 6 | 0.4049 | 0.3792 |
+| 8 | 0.3359 | 0.4293 |
+| 10 | 0.3499 | 0.4081 |
+| 12 (final, what the benchmark uses) | 0.4004 | 0.4001 |
+
+**Remote homology, accuracy:**
+
+| pooled layer | ESM-2 35M | ProtSent-V2 |
+|---|---:|---:|
+| 4 | 0.5573 | 0.5527 |
+| 6 | 0.6703 | **0.6893** |
+| 8 | 0.6647 | **0.7033** |
+| 10 | 0.6683 | **0.6997** |
+| 12 (final) | 0.6373 | **0.6803** |
+
+Three things follow, and all three are usable:
+
+1. **The final layer is the worst layer for both models on remote homology**
+   (ESM-2 0.6373 vs 0.6703 at layer 6) and is not the best for either on
+   stability. A final-layer-only linear probe understates both models.
+2. **At its best layer ProtSent-V2 beats ESM-2 on both tasks** — stability
+   0.5537 vs 0.4049 (+0.149), remote homology 0.7033 vs 0.6703 (+0.033) — while
+   at the final layer stability is a tie (0.4001 vs 0.4004).
+3. **Contrastive fine-tuning did not destroy linearly decodable information.**
+   On remote homology ProtSent-V2 is ahead at every layer from 6 upward. This is
+   the direct answer to "the method rearranges information rather than adding
+   any, and possibly discards some".
+
+Scope this honestly: two tasks, subsampled splits, one backbone scale. It is a
+control that identifies a confound in the benchmark's probe protocol, not a
+re-run of the benchmark. Do not present it as overturning the full linear-probe
+table — present it as the reason that table should not be read as "the
+information is not there".
+
 ## 7a. Framing decisions made by the authors — follow these
 
 These are decisions, not evidence. Where they conflict with a reviewer's framing,
@@ -387,10 +441,10 @@ than defensive, and all three are grounded:
   **local in the geometry**, with no labels and no fitting. Contrastive
   fine-tuning reorganises geometry; it is not a claim that it adds information.
 - *Both probes here pool the FINAL layer*, which is the measurement most
-  favourable to a model whose last layer was never reorganised. See
-  `results/benchmarks/layer_probe_sweep.json` for the measured layer dependence
-  before making any claim about it — do not assert a layer effect that the sweep
-  does not show.
+  favourable to a model whose last layer was never reorganised. Section 6a
+  measures this: the final layer is the worst layer for both models on remote
+  homology, and at its best layer ProtSent-V2 beats ESM-2 on both tasks tested.
+  Use those numbers; do not go beyond the two tasks they cover.
 - *The target use case is retrieval, clustering, and zero-/few-shot nearest
   neighbour transfer*, where no trained head exists and geometry is the whole
   product. That is where the paper's contribution lives, and it is exactly where
