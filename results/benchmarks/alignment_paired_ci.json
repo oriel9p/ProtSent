@@ -1,0 +1,74 @@
+{
+  "ProtSent-V1 - HMMER / hit1": {
+    "delta": -0.11104548139397519,
+    "lo": -0.13880685174246898,
+    "hi": -0.08269344359125812,
+    "excludes_zero": true
+  },
+  "ProtSent-V1 - HMMER / hit10": {
+    "delta": 0.07028942705256941,
+    "lo": 0.04843473124630833,
+    "hi": 0.09273479031305375,
+    "excludes_zero": true
+  },
+  "ProtSent-V1 - HMMER / ap": {
+    "delta": 0.07643057767773229,
+    "lo": 0.055115514887106205,
+    "hi": 0.09819349510190696,
+    "excludes_zero": true
+  },
+  "ProtSent-V2 - HMMER / hit1": {
+    "delta": -0.012404016538688719,
+    "lo": -0.03721204961606615,
+    "hi": 0.012404016538688719,
+    "excludes_zero": false
+  },
+  "ProtSent-V2 - HMMER / hit10": {
+    "delta": 0.14116952155936208,
+    "lo": 0.12049616066154754,
+    "hi": 0.16184288245717662,
+    "excludes_zero": true
+  },
+  "ProtSent-V2 - HMMER / ap": {
+    "delta": 0.1707723958797932,
+    "lo": 0.1511480264291171,
+    "hi": 0.19054995947988415,
+    "excludes_zero": true
+  },
+  "ProtSent-V1 - MMseqs2 / hit1": {
+    "delta": -0.06969875959834614,
+    "lo": -0.09746012994683993,
+    "hi": -0.04134672179562906,
+    "excludes_zero": true
+  },
+  "ProtSent-V1 - MMseqs2 / hit10": {
+    "delta": 0.11104548139397519,
+    "lo": 0.0874187832250443,
+    "hi": 0.1340815121086828,
+    "excludes_zero": true
+  },
+  "ProtSent-V1 - MMseqs2 / ap": {
+    "delta": 0.14130786620086908,
+    "lo": 0.11971775706802744,
+    "hi": 0.16252492290049406,
+    "excludes_zero": true
+  },
+  "ProtSent-V2 - MMseqs2 / hit1": {
+    "delta": 0.028942705256940343,
+    "lo": 0.0035440047253396337,
+    "hi": 0.05435617247489642,
+    "excludes_zero": true
+  },
+  "ProtSent-V2 - MMseqs2 / hit10": {
+    "delta": 0.18192557590076786,
+    "lo": 0.16066154754873008,
+    "hi": 0.20261370348493776,
+    "excludes_zero": true
+  },
+  "ProtSent-V2 - MMseqs2 / ap": {
+    "delta": 0.23564968440293,
+    "lo": 0.2158578575081899,
+    "hi": 0.25510604863030734,
+    "excludes_zero": true
+  }
+}

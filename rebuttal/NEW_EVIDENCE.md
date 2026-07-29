@@ -97,18 +97,64 @@ any non-self same-family protein in the gallery. Restricted to those:
 | ProtSent-V1 35M | 0.5854 | 0.8512 | 0.9256 | 0.5509 |
 | **ProtSent-V2 35M** | **0.6852** | **0.9220** | **0.9634** | **0.6459** |
 
-**The top-1 story changed.** A tuned MMseqs2 beats the *submitted* model at R@1
-(0.5029 vs 0.4490). It does not beat the retrained model (0.5029 vs 0.5256), and
-that lead is statistically resolved (see 4a). Be precise about which model each
-claim refers to; do not retro-claim a top-1 win for the submitted paper.
+### The top-1 claim, stated correctly — read this before writing anything about R@1
 
-Remote homology — **the task the corpus was actually filtered against**:
+Yi1G named "HMMER/MMseqs2" as missing baselines. **Both were run.** HMMER
+(phmmer, `hmmer_baseline.py`) is the stronger alignment baseline and the harder
+one to beat, because a per-query implicit profile detects remote homology better
+than MMseqs2's k-mer prefilter. Eligible-query results, same gallery, same
+scoring, no-hit queries counted as failures (691 of 2,207 queries return no
+phmmer hit at all):
 
-| model | kNN accuracy | linear-probe accuracy |
-|---|---:|---:|
-| ESM-2 35M | 0.5835 | 0.6868 |
-| ProtSent-V1 | 0.6587 | 0.6899 |
-| **ProtSent-V2** | **0.6668** | **0.7016** |
+| method | R@1 | R@10 | R@30 | MAP |
+|---|---:|---:|---:|---:|
+| MMseqs2 (`-s 7.5`) | 0.6556 | 0.7401 | 0.7566 | 0.4098 |
+| **HMMER (phmmer)** | **0.6970** | 0.7809 | 0.7980 | 0.4747 |
+| ESM-2 35M | 0.4991 | 0.7614 | 0.8340 | 0.4210 |
+| ProtSent-V1 | 0.5854 | 0.8512 | 0.9256 | 0.5509 |
+| ProtSent-V2 | 0.6852 | **0.9220** | **0.9634** | **0.6459** |
+
+Paired bootstrap, 10,000 resamples (`results/benchmarks/alignment_paired_ci.json`):
+
+| comparison | R@1 | R@10 | MAP |
+|---|---|---|---|
+| V2 - HMMER | **-0.0124 [-0.0372, +0.0124] UNRESOLVED** | +0.1412 [+0.1205, +0.1618] | +0.1708 [+0.1511, +0.1905] |
+| V2 - MMseqs2 | +0.0289 [+0.0035, +0.0544] | +0.1819 [+0.1607, +0.2026] | +0.2356 [+0.2159, +0.2551] |
+| V1 - HMMER | -0.1110 [-0.1388, -0.0827] | +0.0703 [+0.0484, +0.0927] | +0.0764 [+0.0551, +0.0982] |
+| V1 - MMseqs2 | -0.0697 [-0.0975, -0.0413] | +0.1110 [+0.0874, +0.1341] | +0.1413 [+0.1197, +0.1625] |
+
+**The supportable claim, and the only one to make:** ProtSent-V2 is
+*statistically tied* with the best alignment baseline at top-1 and beats both
+alignment baselines decisively at ranking depth and MAP. The submitted model V1
+*loses* top-1 to both, significantly.
+
+Do NOT write that ProtSent beats alignment at top-1. It beats MMseqs2 there and
+ties HMMER, and a reviewer who runs the stronger baseline will find the tie. Say
+it first: alignment remains the better top-1 method, and the embedding advantage
+is in ranking depth — which is the property that matters for retrieval,
+clustering, and k-NN transfer, and it is consistent across both tools.
+
+Remote homology — **the task the corpus was actually filtered against**. Report
+accuracy and macro-F1 together, and **never compare either against MMseqs2's
+AUC**: the alignment baseline's headline metric for this task is multiclass AUC
+(0.6523), which is not commensurate with an accuracy. The commensurate numbers,
+test split, all arms:
+
+| method | kNN accuracy | kNN macro-F1 | linear accuracy | linear macro-F1 |
+|---|---:|---:|---:|---:|
+| MMseqs2 | 0.4365 | 0.2064 | — | — |
+| ESM-2 35M | 0.5835 | 0.3173 | 0.6868 | 0.4414 |
+| ProtSent-V1 | 0.6587 | 0.3687 | 0.6899 | 0.4281 |
+| **ProtSent-V2** | **0.6668** | **0.4108** | **0.7016** | **0.4527** |
+
+MMseqs2 hit coverage here is 0.889; the remaining 11% are scored against an
+uninformative fallback. Note that under the linear probe V1's macro-F1 (0.4281)
+is *below* ESM-2 (0.4414) — only V2 improves on both metrics under both probes.
+
+**The paper's Table 2 reports macro-F1 .223 -> .313 for this task, which does not
+match the .3173 -> .3687 measured here.** The submitted table was not computed on
+the test split. Do not present the paper's number and this one as the same
+measurement; quote the test-split numbers above and say they are test-split.
 
 Removing every pretraining sequence within 40% identity / 80% coverage of the
 remote-homology test set **improved** remote-homology performance.
