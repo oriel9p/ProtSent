@@ -1833,8 +1833,11 @@ def _build_pair_dataset(
         has_neg,
     )
 
+    skipped_null_neg = 0
+
     def _pair_gen():
         """Yield pairs from consecutive same-group rows."""
+        nonlocal skipped_null_neg
         _comb = combinations
         total_pairs = 0
         buf_seqs: List[str] = []
@@ -1846,19 +1849,26 @@ def _build_pair_dataset(
             columns.append("hard_negative")
 
         def _flush_group():
-            nonlocal total_pairs
+            nonlocal total_pairs, skipped_null_neg
             if len(buf_seqs) < 2:
                 return
             sample_idx = list(range(len(buf_seqs)))
             if len(sample_idx) > max_pairs_per_cluster:
                 sample_idx = random.sample(sample_idx, max_pairs_per_cluster)
             for a_i, b_i in _comb(sample_idx, 2):
+                # A null hard negative must not become an empty sentence_2:
+                # MNRL pools every sentence_2 in the batch into the candidate
+                # set, so a "" would be a degenerate zero-residue negative that
+                # the loss pushes all proteins away from. Skip the pair instead.
+                if has_neg and not buf_hard_neg[a_i]:
+                    skipped_null_neg += 1
+                    continue
                 row: dict[str, str] = {
                     "sentence_0": buf_seqs[a_i],
                     "sentence_1": buf_seqs[b_i],
                 }
                 if has_neg:
-                    row["sentence_2"] = buf_hard_neg[a_i] or ""
+                    row["sentence_2"] = buf_hard_neg[a_i]
                 if length_labels:
                     row["label"] = _pair_length(
                         max_seq_length,
@@ -1915,6 +1925,12 @@ def _build_pair_dataset(
         [os.path.basename(f) for f in file_paths],
         has_neg,
     )
+    if skipped_null_neg:
+        logger.info(
+            "Skipped %d pairs whose anchor had no hard negative "
+            "(would previously have trained on an empty-string negative)",
+            skipped_null_neg,
+        )
     return pair_ds
 
 
@@ -3169,20 +3185,37 @@ if __name__ == "__main__":
     )
     # ── pfam_hard_negatives args ─────────────────────────────────────────
     prep.add_argument(
-        "--hard_negative_threshold",
+        "--hard_negative_max_evalue",
         type=float,
-        default=-16.0,
-        help="pfam_hard_negatives: max total Delta-S for the explicit negative (default -16.0)",
+        default=1.0,
+        help="pfam_hard_negatives: accept a mutant as a negative once its E-value "
+        "against its own family exceeds this (default 1.0)",
+    )
+    prep.add_argument(
+        "--hard_negative_evalue_z",
+        type=float,
+        default=1e6,
+        help="pfam_hard_negatives: effective database size for E-value calculation, "
+        "pinned so acceptance is batch-independent (default 1e6)",
+    )
+    prep.add_argument(
+        "--hard_negative_max_mut_frac",
+        type=float,
+        default=0.5,
+        help="pfam_hard_negatives: cap on the fraction of aligned positions that may "
+        "be mutated (default 0.5)",
+    )
+    prep.add_argument(
+        "--min_aligned_positions",
+        type=int,
+        default=20,
+        help="pfam_hard_negatives: skip anchors aligning to fewer match states "
+        "(default 20)",
     )
     prep.add_argument(
         "--force",
         action="store_true",
         help="pfam_hard_negatives / dms: overwrite existing output if present",
-    )
-    prep.add_argument(
-        "--patch_missing_only",
-        action="store_true",
-        help="pfam_hard_negatives: only generate negatives for rows where hard_negative is null",
     )
     prep.add_argument(
         "--max_total_rows",
@@ -3630,9 +3663,11 @@ if __name__ == "__main__":
             )
         elif args.dataset == "pfam_hard_negatives":
             dp.prep_pfam_hard_negatives(
-                hard_negative_threshold=args.hard_negative_threshold,
+                max_evalue=args.hard_negative_max_evalue,
+                evalue_z=args.hard_negative_evalue_z,
+                max_mutation_fraction=args.hard_negative_max_mut_frac,
+                min_aligned_positions=args.min_aligned_positions,
                 force=args.force,
-                patch_missing_only=args.patch_missing_only,
                 max_total_rows=args.max_total_rows,
                 max_seqs_per_family=args.max_seqs_per_family,
                 workers=args.workers,

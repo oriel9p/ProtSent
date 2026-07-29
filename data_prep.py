@@ -38,24 +38,273 @@ _TEST_SPLIT_VALUES = {"test", "testing"}
 _AFDB_ALLOWED_CLU_FLAGS = (1, 2)
 
 
-def _resolve_pfam_hard_negative_spec(
-    hard_negative_threshold: float,
-) -> tuple[str, float, int, int, int]:
-    """Return the PFAM hard-negative generation regime.
+PFAM_HN_AA = "ACDEFGHIKLMNPQRSTVWY"
+PFAM_HN_AA_INDEX = {aa: i for i, aa in enumerate(PFAM_HN_AA)}
+# Substitutions are drawn only from residues this common in the background
+# proteome, so a negative keeps a natural amino-acid composition instead of
+# filling up with the rarest residues the profile happens to disfavour.
+PFAM_HN_MIN_BACKGROUND_FREQ = 0.04
 
-    The output schema uses a single explicit negative column,
-    ``hard_negative``. Generation starts at 6 mutations and can expand
-    beyond the initial target range when additional mutations are needed
-    to satisfy the Delta-S threshold.
+
+def _hmm_match_log_odds(hmm, log_background: np.ndarray) -> np.ndarray:
+    """Per-match-state log-odds matrix for one profile HMM.
 
     Args:
-        hard_negative_threshold: Delta-S threshold for the explicit negative.
+        hmm: A ``pyhmmer.plan7.HMM``.
+        log_background: log2 background frequencies, shape (20,).
 
     Returns:
-        Tuple of
-        ``(column_name, threshold, min_mutations, initial_max_mutations, spacing_divisor)``.
+        Array of shape (model_len, 20) holding log2(emission) - log2(background).
     """
-    return ("hard_negative", float(hard_negative_threshold), 6, 50, 8)
+    emissions = np.asarray(hmm.match_emissions, dtype=np.float32)
+    # Row 0 is the BEGIN state, which emits nothing.
+    emissions = np.maximum(emissions[1:, : len(PFAM_HN_AA)], 1e-9)
+    return np.log2(emissions) - log_background[np.newaxis, :]
+
+
+def _alignment_position_map(domain) -> dict[int, int]:
+    """Map sequence offsets to HMM match states using the real alignment.
+
+    A Pfam domain is not gaplessly aligned to its model: one insert or delete
+    shifts every downstream residue, so ``i -> i`` is wrong for most sequences.
+    Walk the alignment HMMER produced instead.
+
+    Args:
+        domain: A ``pyhmmer.plan7.Domain`` from a search hit.
+
+    Returns:
+        Mapping of 0-based sequence offset to 0-based match-state index,
+        containing only positions aligned to a match state.
+    """
+    alignment = domain.alignment
+    position_map: dict[int, int] = {}
+    seq_idx = alignment.target_from - 1
+    hmm_idx = alignment.hmm_from - 1
+    for hmm_char, target_char in zip(
+        alignment.hmm_sequence, alignment.target_sequence
+    ):
+        if hmm_char == "." and target_char != "-":
+            seq_idx += 1  # insertion relative to the model
+        elif hmm_char != "." and target_char == "-":
+            hmm_idx += 1  # deletion relative to the model
+        else:
+            position_map[seq_idx] = hmm_idx
+            seq_idx += 1
+            hmm_idx += 1
+    return position_map
+
+
+def _rank_substitutions(
+    sequence: str,
+    position_map: dict[int, int],
+    log_odds: np.ndarray,
+    allowed_aa: np.ndarray,
+) -> list[tuple[float, int, str]]:
+    """Rank aligned positions by how much the profile score they can destroy.
+
+    Args:
+        sequence: The wild-type sequence.
+        position_map: Sequence offset -> match state, from the alignment.
+        log_odds: Match-state log-odds, shape (model_len, 20).
+        allowed_aa: Indices of substitutions permitted at any position.
+
+    Returns:
+        ``(delta, offset, replacement)`` tuples sorted most-damaging first.
+        The sort is total, so the ranking is reproducible without a seed.
+    """
+    ranked: list[tuple[float, int, str]] = []
+    model_len = log_odds.shape[0]
+    for offset, state in position_map.items():
+        if state >= model_len or offset >= len(sequence):
+            continue
+        wild_type = sequence[offset]
+        wt_index = PFAM_HN_AA_INDEX.get(wild_type)
+        if wt_index is None:
+            continue
+        delta = log_odds[state] - log_odds[state, wt_index]
+        best = allowed_aa[int(np.argmin(delta[allowed_aa]))]
+        if best == wt_index:
+            continue
+        ranked.append((float(delta[best]), offset, PFAM_HN_AA[best]))
+    # Ties break on offset then residue, never on dict or thread ordering.
+    ranked.sort()
+    return ranked
+
+
+def _apply_substitutions(
+    sequence: str, ranked: list[tuple[float, int, str]], count: int
+) -> str:
+    """Apply the ``count`` most damaging ranked substitutions to a sequence."""
+    residues = list(sequence)
+    for _, offset, replacement in ranked[:count]:
+        residues[offset] = replacement
+    return "".join(residues)
+
+
+def _hmm_search_named(hmm, named_sequences, evalue_z: float):
+    """Search one HMM against named sequences with a pinned E-value database size.
+
+    ``Z`` is pinned so a reported E-value depends only on the sequence and the
+    model, not on how many candidates happen to share the batch.
+
+    Args:
+        hmm: A ``pyhmmer.plan7.HMM``.
+        named_sequences: ``(name, sequence)`` pairs.
+        evalue_z: Effective database size used for E-value calculation.
+
+    Returns:
+        Mapping of name to ``(bit_score, evalue, top_domain)``. Names that did
+        not produce a hit are absent.
+    """
+    from pyhmmer.easel import Alphabet, DigitalSequenceBlock, TextSequence
+    from pyhmmer.plan7 import Pipeline
+
+    alphabet = Alphabet.amino()
+    block = DigitalSequenceBlock(
+        alphabet,
+        [
+            TextSequence(name=name.encode(), sequence=sequence).digitize(alphabet)
+            for name, sequence in named_sequences
+        ],
+    )
+    # Report everything: the caller decides what counts as a miss, and a
+    # filtered-out hit would look like a negative when it is not.
+    pipeline = Pipeline(
+        alphabet,
+        E=1e9,
+        incE=1e9,
+        Z=evalue_z,
+        domZ=evalue_z,
+        bias_filter=False,
+        F1=1.0,
+        F2=1.0,
+        F3=1.0,
+    )
+    results = {}
+    for hit in pipeline.search_hmm(hmm, block):
+        name = hit.name.decode() if isinstance(hit.name, bytes) else hit.name
+        results[name] = (
+            hit.score,
+            hit.evalue,
+            hit.domains[0] if hit.domains else None,
+        )
+    return results
+
+
+def _generate_family_negatives(
+    hmm,
+    sequences: list[str],
+    log_background: np.ndarray,
+    max_evalue: float = 1.0,
+    evalue_z: float = 1e6,
+    max_mutation_fraction: float = 0.5,
+    min_aligned_positions: int = 20,
+) -> list[str | None]:
+    """Generate one verified hard negative per sequence for a single family.
+
+    A negative is accepted only when HMMER, re-run on the mutant, no longer
+    reports it as a hit for this family above ``max_evalue``. The smallest
+    mutation count that clears the bar is chosen, so the negative stays as
+    close to the wild type as the criterion allows.
+
+    Args:
+        hmm: The family's profile HMM.
+        sequences: Wild-type sequences belonging to the family.
+        log_background: log2 background residue frequencies, shape (20,).
+        max_evalue: A mutant is a negative once its E-value exceeds this.
+        evalue_z: Effective database size for E-value calculation.
+        max_mutation_fraction: Never mutate more than this fraction of the
+            aligned positions; sequences that cannot clear the bar within the
+            budget get ``None``.
+        min_aligned_positions: Skip sequences aligning to fewer match states.
+
+    Returns:
+        One negative (or ``None``) per input sequence, in input order.
+    """
+    from pyhmmer.plan7 import Background
+
+    negatives: list[str | None] = [None] * len(sequences)
+    if not sequences:
+        return negatives
+
+    background_freq = np.maximum(
+        np.array(
+            [Background(_amino_alphabet()).residue_frequencies[i]
+             for i in range(len(PFAM_HN_AA))],
+            dtype=np.float32,
+        ),
+        1e-9,
+    )
+    allowed_aa = np.flatnonzero(background_freq >= PFAM_HN_MIN_BACKGROUND_FREQ)
+    log_odds = _hmm_match_log_odds(hmm, log_background)
+
+    wild_type_hits = _hmm_search_named(
+        hmm, [(str(i), s) for i, s in enumerate(sequences)], evalue_z
+    )
+
+    ranked_by_index: dict[int, list[tuple[float, int, str]]] = {}
+    budget: dict[int, int] = {}
+    for index, sequence in enumerate(sequences):
+        hit = wild_type_hits.get(str(index))
+        if hit is None or hit[2] is None:
+            continue  # not recognised as a member; nothing to break
+        position_map = _alignment_position_map(hit[2])
+        if len(position_map) < min_aligned_positions:
+            continue
+        ranked = _rank_substitutions(sequence, position_map, log_odds, allowed_aa)
+        cap = int(len(ranked) * max_mutation_fraction)
+        if cap < 1:
+            continue
+        ranked_by_index[index] = ranked
+        budget[index] = cap
+
+    def probe(counts: dict[int, int]) -> dict[int, bool]:
+        """Mutate at the given counts and report which cleared max_evalue."""
+        named = [
+            (f"{index}|{count}", _apply_substitutions(
+                sequences[index], ranked_by_index[index], count))
+            for index, count in counts.items()
+        ]
+        hits = _hmm_search_named(hmm, named, evalue_z)
+        cleared = {}
+        for index, count in counts.items():
+            hit = hits.get(f"{index}|{count}")
+            # No hit at all is the strongest possible pass.
+            cleared[index] = hit is None or hit[1] > max_evalue
+        return cleared
+
+    # Only sequences that clear the bar at full budget can clear it at all.
+    feasible = probe(budget)
+    low = {i: 1 for i, ok in feasible.items() if ok}
+    high = {i: budget[i] for i in low}
+    best = dict(high)
+
+    while True:
+        counts = {
+            i: (low[i] + high[i]) // 2 for i in low if low[i] < high[i]
+        }
+        if not counts:
+            break
+        cleared = probe(counts)
+        for index, count in counts.items():
+            if cleared[index]:
+                high[index] = count
+                best[index] = count
+            else:
+                low[index] = count + 1
+
+    for index, count in best.items():
+        negatives[index] = _apply_substitutions(
+            sequences[index], ranked_by_index[index], count
+        )
+    return negatives
+
+
+def _amino_alphabet():
+    """Return the pyhmmer amino-acid alphabet."""
+    from pyhmmer.easel import Alphabet
+
+    return Alphabet.amino()
 
 
 def _download_file(url: str, dest_path: Path, attempts: int = 3) -> None:
@@ -2343,51 +2592,56 @@ class DataPrep:
 
     def prep_pfam_hard_negatives(
         self,
-        hard_negative_threshold: float = -16.0,
+        max_evalue: float = 1.0,
+        evalue_z: float = 1e6,
+        max_mutation_fraction: float = 0.5,
+        min_aligned_positions: int = 20,
         force: bool = False,
-        patch_missing_only: bool = False,
         max_total_rows: int = 0,
         max_seqs_per_family: int = 100,
-        length_tolerance: float = 0.10,
-        proposals_per_k: int = 2048,
         workers: int = 0,
     ) -> None:
-        """Generate HMM-profile-guided hard negatives for Pfam domains.
+        """Generate HMM-verified hard negatives for Pfam domains.
 
-        High-performance mode:
-        1) Builds per-family PSSM/log-odds from Pfam HMM match emissions.
-        2) Uses direct position mapping (i -> i) for family members.
-        3) Caps rows per family and global rows to bound runtime/memory.
-        4) Parallelizes generation across families.
+        For each anchor the profile is used to rank aligned positions by how
+        much score a substitution there destroys, the most damaging ones are
+        applied, and HMMER is re-run on the mutant. A mutant is only kept once
+        the family no longer recognises it above ``max_evalue``, and the
+        smallest mutation count that clears the bar is chosen, so the negative
+        stays as similar to the anchor as the criterion permits.
 
-        Output contains a single explicit negative column:
+        This replaces an earlier scheme that applied six substitutions chosen
+        for a fixed total log-odds drop. That produced sequences which HMMER
+        still matched to the source family with E-values around 1e-8, i.e.
+        false negatives, and it mapped sequence offsets onto match states
+        directly, which is only correct for a gaplessly aligned domain.
 
-        - hard_negative: 6+ mutations, Delta-S <= hard_negative_threshold
+        Positions are ranked by a total order and no sampling is involved, so
+        repeated runs over the same input produce byte-identical output.
 
-        Output is pfam_hard_negatives.parquet containing core columns plus
-        hard_negative.
+        Output is pfam_hard_negatives.parquet containing the core columns plus
+        ``hard_negative``. Anchors with no verified negative are dropped, so
+        the column is never null.
 
         Args:
-            hard_negative_threshold: Max total Delta-S for the explicit
-                negative (default -16).
+            max_evalue: A mutant counts as a negative once its E-value against
+                its own family exceeds this (default 1.0 = no meaningful hit).
+            evalue_z: Effective database size for E-value calculation. Pinned
+                so acceptance does not depend on batch size.
+            max_mutation_fraction: Cap on the fraction of aligned positions
+                that may be mutated (default 0.5, bounding identity loss).
+            min_aligned_positions: Skip anchors aligning to fewer match states.
             force: Overwrite existing output if it exists.
-            patch_missing_only: If True and output exists, generate negatives
-                only for rows where ``hard_negative`` is null and merge the
-                patched rows back into the existing parquet.
-            max_total_rows: Global cap on selected rows before generation
-                (0 = uncapped).
-            max_seqs_per_family: Cap per-family rows before generation.
-            length_tolerance: Allowed median length mismatch fraction between
-                family sequences and HMM model length.
-            proposals_per_k: Rejection sampling proposals per mutation count.
+            max_total_rows: Global cap on selected rows (0 = uncapped).
+            max_seqs_per_family: Cap per-family rows (0 = uncapped).
             workers: Thread workers (0 = auto).
 
         Raises:
-            FileNotFoundError: If pfam_sorted.parquet or Pfam-A.hmm.gz
-                are not found.
+            FileNotFoundError: If pfam_sorted.parquet is not found.
         """
-        import pyhmmer
         from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        import pyhmmer
         from pyhmmer.easel import Alphabet
         from pyhmmer.plan7 import HMMFile
 
@@ -2396,7 +2650,7 @@ class DataPrep:
         hmm_gz_path = data_path / "Pfam-A.hmm.gz"
         output_path = data_path / "pfam_hard_negatives.parquet"
 
-        if output_path.exists() and not force and not patch_missing_only:
+        if output_path.exists() and not force:
             logger.info(
                 "Output already exists: %s (use --force to overwrite)",
                 output_path,
@@ -2409,213 +2663,10 @@ class DataPrep:
                 "Run `python data_prep.py --dataset pfam` first."
             )
 
-        # Download HMM profiles if needed
         hmm_url = (
             "https://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.hmm.gz"
         )
         _download_file(hmm_url, hmm_gz_path)
-
-        # Parse HMMs into per-family log-odds matrices keyed by accession (PFxxxxx)
-        logger.info("Loading Pfam HMM profiles and precomputing PSSMs...")
-        alphabet = Alphabet.amino()
-        pssm_dict: dict[str, np.ndarray] = {}
-        model_len_dict: dict[str, int] = {}
-
-        AA_BYTES = b"ACDEFGHIKLMNPQRSTVWY"
-        AA_LIST = list(AA_BYTES)
-        AA_IDX = {aa: i for i, aa in enumerate(AA_LIST)}
-        NUM_AA = len(AA_LIST)
-
-        aa_lut = np.full(256, -1, dtype=np.int16)
-        for aa, idx in AA_IDX.items():
-            aa_lut[aa] = idx
-
-        # pyhmmer amino alphabet: columns 0-19 = ACDEFGHIKLMNPQRSTVWY
-        bg = pyhmmer.plan7.Background(alphabet)
-        bg_freqs = np.array(
-            [bg.residue_frequencies[i] for i in range(NUM_AA)],
-            dtype=np.float32,
-        )
-        bg_freqs = np.maximum(bg_freqs, 1e-9)
-        log_bg = np.log2(bg_freqs)
-
-        with HMMFile(hmm_gz_path) as hmm_file:
-            for hmm in hmm_file:
-                raw_acc = hmm.accession
-                if raw_acc is None:
-                    continue
-                acc = raw_acc.decode() if isinstance(raw_acc, bytes) else raw_acc
-                fam_id = acc.split(".")[0]
-                hmm_me = np.array(
-                    hmm.match_emissions,  # type: ignore[attr-defined]
-                    dtype=np.float32,
-                )
-                if hmm_me.shape[0] <= 1:
-                    continue
-                emissions = np.maximum(hmm_me[1:, :NUM_AA], 1e-9)
-                pssm_dict[fam_id] = np.log2(emissions) - log_bg[np.newaxis, :]
-                model_len_dict[fam_id] = emissions.shape[0]
-        logger.info("Loaded %d family PSSMs", len(pssm_dict))
-
-        if not pssm_dict:
-            logger.error("No HMM profiles loaded; aborting.")
-            return
-
-        negative_spec = _resolve_pfam_hard_negative_spec(hard_negative_threshold)
-        effective_proposals_per_k = proposals_per_k
-        if patch_missing_only:
-            # Patch mode prioritizes throughput over maximal recovery.
-            effective_proposals_per_k = min(proposals_per_k, 512)
-        logger.info(
-            "Using PFAM hard-negative spec: %s",
-            {
-                "column": negative_spec[0],
-                "threshold": negative_spec[1],
-                "min_mutations": negative_spec[2],
-                "initial_max_mutations": negative_spec[3],
-            },
-        )
-        if effective_proposals_per_k != proposals_per_k:
-            logger.info(
-                "Patch mode: capping proposals_per_k from %d to %d for speed",
-                proposals_per_k,
-                effective_proposals_per_k,
-            )
-
-        def _sample_negative(
-            seq_arr: np.ndarray,
-            matched_positions: np.ndarray,
-            pool_match_idx: np.ndarray,
-            pool_aa_idx: np.ndarray,
-            pool_scores: np.ndarray,
-            target_drop: float,
-            min_mutations: int,
-            initial_max_mutations: int,
-            min_spacing: int,
-            rng: np.random.Generator,
-        ) -> str | None:
-            """Rejection sample one hard negative from a precomputed candidate pool."""
-            pool_size = len(pool_match_idx)
-            if pool_size == 0:
-                return None
-
-            total_proposals = max(1, effective_proposals_per_k)
-            proposal_chunk = min(256, total_proposals)
-
-            max_spaced_mutations = max(
-                1,
-                1 + ((len(matched_positions) - 1) // max(1, min_spacing)),
-            )
-            max_mutations = min(
-                pool_size,
-                len(matched_positions),
-                max(max_spaced_mutations, initial_max_mutations),
-            )
-
-            # Skip impossible low-k regimes by using the best single-position drop.
-            best_single_drop = float(pool_scores.min())
-            if best_single_drop >= 0.0:
-                return None
-            min_required_mutations = int(np.ceil(target_drop / best_single_drop))
-            start_k = max(min_mutations, min_required_mutations)
-
-            for k in range(start_k, max_mutations + 1):
-                if pool_size < k:
-                    continue
-
-                attempted = 0
-                while attempted < total_proposals:
-                    draw_count = min(proposal_chunk, total_proposals - attempted)
-                    idx = rng.integers(0, pool_size, size=(draw_count, k))
-                    attempted += draw_count
-
-                    prop_match = pool_match_idx[idx]
-                    prop_aa = pool_aa_idx[idx]
-                    prop_scores = pool_scores[idx]
-
-                    valid = prop_scores.sum(axis=1) <= target_drop
-                    if k > 1:
-                        prop_seq_pos = matched_positions[prop_match]
-                        sorted_pos = np.sort(prop_seq_pos, axis=1)
-                        diffs = np.diff(sorted_pos, axis=1)
-                        valid &= diffs.min(axis=1) >= min_spacing
-                        # Uniqueness: strictly increasing sorted positions
-                        valid &= (diffs > 0).all(axis=1)
-
-                    valid_idx = np.flatnonzero(valid)
-                    if len(valid_idx) == 0:
-                        continue
-
-                    chosen = valid_idx[0]
-                    mut_arr = seq_arr.copy()
-                    for m in range(k):
-                        mi = prop_match[chosen, m]
-                        ai = prop_aa[chosen, m]
-                        mut_arr[matched_positions[mi]] = AA_LIST[ai]
-                    return mut_arr.tobytes().decode("ascii")
-
-            return None
-
-        def _process_family(
-            fam_id: str,
-            row_indices: list[int],
-            seqs: list[str],
-            seed: int,
-        ) -> list[tuple[int, str | None]]:
-            """Generate hard negatives for one family using direct PSSM mapping."""
-            log_odds = pssm_dict[fam_id]
-            model_len = model_len_dict[fam_id]
-            rng = np.random.default_rng(seed)
-
-            out: list[tuple[int, str | None]] = []
-            for row_idx, seq in zip(row_indices, seqs):
-                seq_bytes = seq.encode("ascii", errors="ignore")
-                seq_len = len(seq_bytes)
-                n_matched = min(seq_len, model_len)
-                if n_matched < 5:
-                    out.append((row_idx, None))
-                    continue
-
-                wt_bytes = np.frombuffer(seq_bytes[:n_matched], dtype=np.uint8)
-                wt_idx = aa_lut[wt_bytes].astype(np.int32)
-                valid_mask = wt_idx >= 0
-                safe_idx = np.where(valid_mask, wt_idx, 0)
-
-                lo = log_odds[:n_matched]
-                wt_lo = lo[np.arange(n_matched), safe_idx]
-                delta_s = lo - wt_lo[:, np.newaxis]
-
-                # Zero out self-substitutions and non-standard residues
-                delta_s[np.arange(n_matched), safe_idx] = 0.0
-                if not valid_mask.all():
-                    delta_s[~valid_mask, :] = 0.0
-
-                matched_positions = np.arange(n_matched, dtype=np.int64)
-
-                candidate_mask = delta_s < -1.0
-                pool_match_idx, pool_aa_idx = np.nonzero(candidate_mask)
-                pool_scores = delta_s[candidate_mask]
-
-                seq_arr = np.frombuffer(seq_bytes, dtype=np.uint8).copy()
-                _, threshold, min_mutations, max_mutations, spacing_divisor = (
-                    negative_spec
-                )
-                generated_negative = _sample_negative(
-                    seq_arr,
-                    matched_positions,
-                    pool_match_idx,
-                    pool_aa_idx,
-                    pool_scores,
-                    threshold,
-                    min_mutations,
-                    max_mutations,
-                    max(min_mutations, seq_len // spacing_divisor),
-                    rng,
-                )
-
-                out.append((row_idx, generated_negative))
-
-            return out
 
         source_schema = pl.read_parquet_schema(source_parquet)
         keep_cols = [
@@ -2626,126 +2677,93 @@ class DataPrep:
         if "sequence" not in keep_cols or "family_id" not in keep_cols:
             raise ValueError("pfam_sorted.parquet must contain sequence and family_id")
 
-        existing_df: pl.DataFrame | None = None
-        if patch_missing_only and output_path.exists():
-            logger.info(
-                "Patch mode enabled: selecting only rows missing hard negatives"
-            )
-            output_schema = pl.read_parquet_schema(output_path)
-            missing_cols = [
-                c for c in [*keep_cols, "hard_negative"] if c not in output_schema
-            ]
-            if missing_cols:
-                raise ValueError(
-                    "Existing pfam_hard_negatives.parquet missing required columns: "
-                    + ", ".join(missing_cols)
-                )
-
-            existing_df = pl.read_parquet(output_path).select(
-                [*keep_cols, "hard_negative"]
-            )
-            existing_df = existing_df.with_row_index("__orig_idx")
-            selected_df = existing_df.filter(pl.col("hard_negative").is_null()).drop(
-                "hard_negative"
-            )
-            if max_seqs_per_family > 0:
-                selected_df = selected_df.group_by("family_id").head(
-                    max_seqs_per_family
-                )
-            if max_total_rows > 0 and selected_df.height > max_total_rows:
-                selected_df = selected_df.sample(
-                    n=max_total_rows, seed=42, shuffle=True
-                )
-            logger.info(
-                "Rows missing hard_negative: %d / %d",
-                selected_df.height,
-                existing_df.height,
-            )
-            if selected_df.height == 0:
-                logger.info("Nothing to patch; all rows already have hard_negative")
-                return
-        else:
-            if patch_missing_only:
-                logger.warning(
-                    "Patch mode requested but output parquet is missing; falling back to full generation"
-                )
-
-            # Family statistics for eligibility filtering
-            logger.info("Computing family length statistics...")
-            fam_stats = cast(
-                pl.DataFrame,
-                (
-                    pl.scan_parquet(source_parquet)
-                    .select(
-                        pl.col("family_id"),
-                        pl.col("sequence").str.len_bytes().alias("seq_len"),
-                    )
-                    .group_by("family_id")
-                    .agg(
-                        pl.col("seq_len").median().alias("median_len"),
-                        pl.len().alias("n_rows"),
-                    )
-                    .collect()
-                ),
+        logger.info("Selecting source rows (5 < len < 1024, capped) ...")
+        selected_lf = (
+            pl.scan_parquet(source_parquet)
+            .select([pl.col(c) for c in keep_cols])
+            .filter(pl.col("sequence").str.len_bytes() > 5)
+            .filter(pl.col("sequence").str.len_bytes() < 1024)
+        )
+        if max_seqs_per_family > 0:
+            # maintain_order keeps selection reproducible across runs.
+            selected_lf = selected_lf.group_by("family_id", maintain_order=True).head(
+                max_seqs_per_family
             )
 
-            model_len_df = pl.DataFrame(
-                {
-                    "family_id": list(model_len_dict.keys()),
-                    "model_len": list(model_len_dict.values()),
-                }
+        selected_df = cast(pl.DataFrame, selected_lf.collect())
+        if max_total_rows > 0 and selected_df.height > max_total_rows:
+            selected_df = selected_df.sample(n=max_total_rows, seed=42, shuffle=True)
+        if "group_id" not in selected_df.columns:
+            selected_df = selected_df.with_columns(
+                pl.col("family_id").alias("group_id")
             )
-            fam_stats = fam_stats.join(model_len_df, on="family_id", how="inner")
-            fam_stats = fam_stats.with_columns(
-                (
-                    (pl.col("median_len") - pl.col("model_len")).abs()
-                    / pl.col("model_len").clip(lower_bound=1)
-                ).alias("rel_len_delta")
-            )
-            eligible = fam_stats.filter(pl.col("rel_len_delta") <= length_tolerance)
-            eligible_fams = eligible["family_id"].to_list()
-            logger.info(
-                "Eligible families: %d / %d (length tolerance %.0f%%)",
-                len(eligible_fams),
-                fam_stats.height,
-                length_tolerance * 100,
-            )
-
-            if not eligible_fams:
-                logger.error("No eligible families after filtering; aborting.")
-                return
-
-            logger.info("Selecting source rows (len>5, len<1024, capped) ...")
-            selected_lf = (
-                pl.scan_parquet(source_parquet)
-                .select([pl.col(c) for c in keep_cols])
-                .filter(pl.col("family_id").is_in(eligible_fams))
-                .filter(pl.col("sequence").str.len_bytes() > 5)
-                .filter(pl.col("sequence").str.len_bytes() < 1024)
-            )
-            if max_seqs_per_family > 0:
-                selected_lf = selected_lf.group_by("family_id").head(
-                    max_seqs_per_family
-                )
-
-            selected_df = cast(pl.DataFrame, selected_lf.collect())
-
-            if max_total_rows > 0 and selected_df.height > max_total_rows:
-                selected_df = selected_df.sample(
-                    n=max_total_rows, seed=42, shuffle=True
-                )
-
-            if "group_id" not in selected_df.columns:
-                selected_df = selected_df.with_columns(
-                    pl.col("family_id").alias("group_id")
-                )
-
+        selected_df = selected_df.sort("family_id", maintain_order=True)
         selected_df = selected_df.with_row_index("__row_idx")
         total_selected = selected_df.height
-        logger.info("Selected %d rows for hard-negative generation", total_selected)
+        wanted_families = set(selected_df["family_id"].unique().to_list())
+        logger.info(
+            "Selected %d rows across %d families",
+            total_selected,
+            len(wanted_families),
+        )
 
-        fam_batches = (
-            selected_df.group_by("family_id")
+        logger.info("Loading Pfam HMM profiles...")
+        alphabet = Alphabet.amino()
+        background = pyhmmer.plan7.Background(alphabet)
+        log_background = np.log2(
+            np.maximum(
+                np.array(
+                    [
+                        background.residue_frequencies[i]
+                        for i in range(len(PFAM_HN_AA))
+                    ],
+                    dtype=np.float32,
+                ),
+                1e-9,
+            )
+        )
+
+        hmm_dict = {}
+        with HMMFile(hmm_gz_path) as hmm_file:
+            for hmm in hmm_file:
+                raw_acc = hmm.accession
+                if raw_acc is None:
+                    continue
+                acc = raw_acc.decode() if isinstance(raw_acc, bytes) else raw_acc
+                family_id = acc.split(".")[0]
+                if family_id in wanted_families:
+                    hmm_dict[family_id] = hmm
+        logger.info(
+            "Loaded %d family profiles covering %d of %d selected families",
+            len(hmm_dict),
+            len(hmm_dict),
+            len(wanted_families),
+        )
+        if not hmm_dict:
+            logger.error("No HMM profiles matched the selected families; aborting.")
+            return
+
+        def _process_family(
+            family_id: str, row_indices: list[int], sequences: list[str]
+        ) -> list[tuple[int, str | None]]:
+            """Generate verified negatives for one family."""
+            negatives = _generate_family_negatives(
+                hmm_dict[family_id],
+                sequences,
+                log_background,
+                max_evalue=max_evalue,
+                evalue_z=evalue_z,
+                max_mutation_fraction=max_mutation_fraction,
+                min_aligned_positions=min_aligned_positions,
+            )
+            return list(zip(row_indices, negatives))
+
+        if workers <= 0:
+            workers = min(os.cpu_count() or 1, 32)
+
+        hard_negative_col = cast(list[str | None], [None] * total_selected)
+        family_batches = (
+            selected_df.group_by("family_id", maintain_order=True)
             .agg(
                 pl.col("__row_idx").alias("row_indices"),
                 pl.col("sequence").alias("sequences"),
@@ -2753,70 +2771,69 @@ class DataPrep:
             .iter_rows(named=True)
         )
 
-        if workers <= 0:
-            workers = min(os.cpu_count() or 1, 32)
-
-        hard_negative_col = cast(list[str | None], [None] * total_selected)
-
         logger.info(
-            "Generating negatives in parallel (workers=%d, proposals_per_k=%d)...",
+            "Generating negatives (workers=%d, max_evalue=%s, max_mut_frac=%.2f)...",
             workers,
-            effective_proposals_per_k,
+            max_evalue,
+            max_mutation_fraction,
         )
-
         futures = []
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            for i, row in enumerate(fam_batches):
-                fam_id = row["family_id"]
-                row_indices = row["row_indices"]
-                seqs = row["sequences"]
-                if fam_id not in pssm_dict:
+            for row in family_batches:
+                family_id = row["family_id"]
+                if family_id not in hmm_dict:
                     continue
                 futures.append(
-                    executor.submit(_process_family, fam_id, row_indices, seqs, 42 + i)
+                    executor.submit(
+                        _process_family,
+                        family_id,
+                        row["row_indices"],
+                        row["sequences"],
+                    )
                 )
+            for done, future in enumerate(as_completed(futures), start=1):
+                for row_idx, negative in future.result():
+                    hard_negative_col[row_idx] = negative
+                if done % 250 == 0:
+                    logger.info("Processed %d/%d families", done, len(futures))
 
-            for i, fut in enumerate(as_completed(futures), start=1):
-                for row_idx, hard_negative in fut.result():
-                    hard_negative_col[row_idx] = hard_negative
-                if i % 250 == 0:
-                    logger.info("Processed %d/%d families", i, len(futures))
-
-        result_df = selected_df.with_columns(
-            pl.Series("hard_negative", hard_negative_col, dtype=pl.Utf8),
-        ).drop("__row_idx")
-
-        if patch_missing_only and existing_df is not None:
-            patched_indices = result_df.select("__orig_idx")
-            untouched_df = existing_df.join(
-                patched_indices,
-                on="__orig_idx",
-                how="anti",
+        result_df = (
+            selected_df.with_columns(
+                pl.Series("hard_negative", hard_negative_col, dtype=pl.Utf8),
             )
-            result_df = (
-                pl.concat([untouched_df, result_df], how="diagonal_relaxed")
-                .sort("__orig_idx")
-                .drop("__orig_idx")
-            )
-
-        has_neg = result_df.filter(pl.col("hard_negative").is_not_null())
-        logger.info(
-            "Rows with a hard negative: %d / %d (%.1f%%)",
-            len(has_neg),
-            len(result_df),
-            100 * len(has_neg) / max(1, len(result_df)),
+            .drop("__row_idx")
+            .filter(pl.col("hard_negative").is_not_null())
         )
-
-        if len(has_neg) < 5_000_000:
-            logger.warning(
-                "Generated %d rows with at least one negative (< 5M target). "
-                "Increase --max_total_rows or --max_seqs_per_family.",
-                len(has_neg),
+        logger.info(
+            "Anchors with a verified hard negative: %d / %d (%.1f%%)",
+            result_df.height,
+            total_selected,
+            100 * result_df.height / max(1, total_selected),
+        )
+        if result_df.height:
+            stats = result_df.select(
+                (
+                    100.0
+                    * pl.struct("sequence", "hard_negative")
+                    .map_elements(
+                        lambda r: sum(
+                            a != b
+                            for a, b in zip(r["sequence"], r["hard_negative"])
+                        )
+                        / max(1, len(r["sequence"])),
+                        return_dtype=pl.Float64,
+                    )
+                ).alias("pct_mutated")
+            )["pct_mutated"]
+            logger.info(
+                "Mutated fraction: median %.1f%% (identity to anchor ~%.1f%%)",
+                stats.median(),
+                100 - stats.median(),
             )
 
         sort_cols = [c for c in ["clan_id", "family_id"] if c in result_df.columns]
         if sort_cols:
-            result_df = result_df.sort(sort_cols)
+            result_df = result_df.sort(sort_cols, maintain_order=True)
 
         result_df = result_df.rechunk()
         result_df.write_parquet(output_path)
@@ -2946,12 +2963,31 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--hard_negative_threshold",
+        "--hard_negative_max_evalue",
         type=float,
-        default=-16.0,
+        default=1.0,
         help=(
-            "pfam_hard_negatives: total Delta-S threshold for the "
-            "single explicit negative (default -16)"
+            "pfam_hard_negatives: a mutant is accepted as a negative once its "
+            "E-value against its own family exceeds this (default 1.0)"
+        ),
+    )
+    parser.add_argument(
+        "--hard_negative_evalue_z",
+        type=float,
+        default=1e6,
+        help=(
+            "pfam_hard_negatives: effective database size for E-value "
+            "calculation, pinned so acceptance is batch-independent "
+            "(default 1e6)"
+        ),
+    )
+    parser.add_argument(
+        "--hard_negative_max_mut_frac",
+        type=float,
+        default=0.5,
+        help=(
+            "pfam_hard_negatives: cap on the fraction of aligned positions "
+            "that may be mutated (default 0.5)"
         ),
     )
     parser.add_argument(
@@ -2973,21 +3009,12 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--length_tolerance",
-        type=float,
-        default=0.10,
-        help=(
-            "pfam_hard_negatives: allowed median length mismatch fraction "
-            "between family sequences and HMM model length (default 0.10)"
-        ),
-    )
-    parser.add_argument(
-        "--proposals_per_k",
+        "--min_aligned_positions",
         type=int,
-        default=2048,
+        default=20,
         help=(
-            "pfam_hard_negatives: rejection-sampling proposals per mutation "
-            "count k (default 2048)"
+            "pfam_hard_negatives: skip anchors aligning to fewer match states "
+            "(default 20)"
         ),
     )
     parser.add_argument(
@@ -2995,14 +3022,6 @@ def main() -> None:
         type=int,
         default=0,
         help="pfam_hard_negatives: worker threads (default 0 = auto)",
-    )
-    parser.add_argument(
-        "--patch_missing_only",
-        action="store_true",
-        help=(
-            "pfam_hard_negatives: only resample rows with null hard_negative in "
-            "existing output parquet and merge updates"
-        ),
     )
 
     args = parser.parse_args()
@@ -3047,13 +3066,13 @@ def main() -> None:
         )
     elif args.dataset == "pfam_hard_negatives":
         dp.prep_pfam_hard_negatives(
-            hard_negative_threshold=args.hard_negative_threshold,
+            max_evalue=args.hard_negative_max_evalue,
+            evalue_z=args.hard_negative_evalue_z,
+            max_mutation_fraction=args.hard_negative_max_mut_frac,
+            min_aligned_positions=args.min_aligned_positions,
             force=args.force,
-            patch_missing_only=args.patch_missing_only,
             max_total_rows=args.max_total_rows,
             max_seqs_per_family=args.max_seqs_per_family,
-            length_tolerance=args.length_tolerance,
-            proposals_per_k=args.proposals_per_k,
             workers=args.workers,
         )
 
