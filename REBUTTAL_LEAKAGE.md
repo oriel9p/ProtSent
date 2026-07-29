@@ -663,12 +663,15 @@ with the source that settles it. These are not stylistic preferences.
    than the ProtTucker precedent verified in §2. The draft concedes the leakage
    point instead of citing this work.
 
-8. **Keep one story about R@1 across all three responses.** The measured table in
-   §3 shows a tuned alignment baseline beating ProtSent 35M at top-1. Asserting a
-   top-1 win to two reviewers while conceding it to a third is inconsistent, and
-   the data does not support the win. The consistent, defensible claim is that
-   the effect is in ranking depth (R@10/R@30/MAP), which survives both the
-   alignment comparison and the decontamination subset.
+8. **Keep one story about R@1 across all three responses — and note it changed
+   with V2.** The measured table in §3 shows a tuned alignment baseline beating
+   the *submitted* model at top-1 (0.5029 vs 0.4490). It does **not** beat the
+   decontaminated retrained model: ProtSent-V2 reaches R@1 0.5256, R@10 0.7073,
+   MAP 0.4955, i.e. it leads MMseqs2 at every cutoff. So the honest framing is
+   two-part: for the paper as submitted, the defensible claim is ranking depth
+   (R@10/R@30/MAP), not top-1; for V2, the top-1 win is real and measured. Never
+   retro-claim the top-1 win for the submitted model, and never concede it for
+   V2. Asserting different things to different reviewers is what must be avoided.
 
 9. **The n=92 strict-subset analysis has a ceiling of 57/92 = 0.620**, which the
    draft does not state, so its R@30 of 0.500 reads against an implied 1.0.

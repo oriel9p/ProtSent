@@ -1,0 +1,738 @@
+ProtSent: Protein Sentence Transformers
+Dan Ofer∗
+Department of Biological Chemistry
+The Hebrew University of Jerusalem
+Oriel Perets∗
+Stein Faculty of Computer and Information Science
+Ben-Gurion University of the Negev
+Michal Linial
+Department of Biological Chemistry
+The Hebrew University of Jerusalem
+Nadav Rappoport
+Stein Faculty of Computer and Information Science
+Ben-Gurion University of the Negev
+Abstract
+Protein language models (pLMs) produce per-residue representations that capture
+evolutionary and structural information, yet their mean-pooled sequence embed-
+dings are not explicitly trained to reflect functional, evolutionary or structural
+similarity between proteins. We present Protein Sentence Transformers (Prot-
+Sent), a contrastive fine-tuning framework for adapting PLMs into general-purpose
+embedding models. ProtSent trains with MultipleNegativesRankingLoss across
+five protein-pair datasets: Pfam families, structurally derived hard negatives, Al-
+phaFold DB structural pairs, and StringDB protein–protein interactions, and Deep
+Mutational Scanning data. We evaluate on 23 downstream tasks using frozen
+embeddings with a k-nearest-neighbor probe to measure embedding neighborhood
+quality. On ESM-2 150M, ProtSent improves 15 of 23 tasks, with gains of +105%
+on remote homology detection, +17% on variant effect prediction, and +19.9%
+Recall@1 on SCOPe-40 structural retrieval. The 35M variant improves 16 of 23
+tasks with +40.5% on remote homology and +15.5% Recall@1 on SCOPe-40.
+Contrastive fine-tuning restructures the embedding space to better capture pro-
+tein function and structure, without any task-specific supervision. We release the
+models, public data, and training recipe and code.
+1 Introduction
+In natural language processing, this analogous limitation of BERT-style models was addressed by
+Sentence-BERT [Reimers and Gurevych, 2019], which applies contrastive learning to restructure the
+embedding space so that semantically similar sentences become neighbors. Contrastive objectives
+optimizes the metric that downstream tasks rely on: embedding proximity.
+We apply this principle to protein language models. Our framework, Protein SentenceBERT (Prot-
+Sent), fine-tunes PLM backbones end-to-end using MultipleNegativesRankingLoss (MNRL) [Hender-
+son et al., 2017] across multiple datasets, each capturing a different axis of biological relatedness. We
+combine five data sources: (i) Pfam family membership and (ii) structurally derived hard negatives,
+(iiI) AlphaFold DB structural pairs, (iv) StringDB interaction pairs and (v) deep mutational scanning
+(DMS) data, using a CoSENT loss [Su, 2022] to capture continuous fitness landscapes.
+We evaluate ProtSent on a suite of 23 downstream tasks using a deliberately simple protocol:
+embeddings are frozen and evaluated with a k-nearest-neighbor (KNN) probe. This evaluation
+strategy measures the quality of the embedding space geometry, instead of the capacity of a learned
+∗Equal contribution.
+Preprint.
+classifier on top of it. The rationale is that if contrastive training successfully restructures the
+neighborhood structure, a probe that relies entirely on neighbor identity should be the most sensitive
+detector of improvement.
+Our contributions are as follows:
+• We introduce ProtSent, a contrastive fine-tuning framework for protein language models
+that combines five protein-pair datasets with round-robin sampling.
+• We demonstrate that contrastive fine-tuning produces substantial gains on tasks that depend
+on embedding neighborhood quality, including +105% on remote homology detection and
++19.9% Recall@1 on SCOPe-40 structural retrieval (ESM-2 150M), with similar gains at
+the 35M scale (+40.5%and+15.5%respectively).
+• We show that these improvements are consistent across two model scales (35M and 150M
+parameters) and multiple biological tasks spanning function, structure, engineering and
+mutation.
+• We provide ablation studies isolating the contribution of each training data source and the
+sampling strategy to the final performance.
+• We release the models 2, code3, public data, and training recipe.
+2 Related work
+Protein language models.Self-supervised protein language models learn residue-level representa-
+tions from large sequence databases. ESM-1b and ESM-2 [Rives et al., 2021, Lin et al., 2023] train
+Transformer encoders with masked language modeling on millions of UniRef sequences, producing
+embeddings that encode evolutionary conservation, secondary structure, and contact information.
+ESMFold [Lin et al., 2023] extended this approach to atomic-resolution structure prediction. Prot-
+Trans [Elnaggar et al., 2022] explored several architectures (BERT, Albert, T5) at billion-parameter
+scale and showed that per-residue representations transfer well to secondary-structure and localization
+tasks. TAPE [Rao et al., 2019] introduced a standardized benchmark suite and demonstrated that
+pretrained representations improve over hand-crafted features across five protein tasks. A common
+theme is that downstream transfer is typically mediated by a learned probe, a linear layer or small
+MLP trained on task-specific labels. In contrast, ProtSent targets the sequence-level embedding space,
+asking whether contrastive fine-tuning can restructure it so that nearest-neighbor lookup alone is
+sufficient for multiple downstream tasks.
+Contrastive fine-tuning of language models.In NLP, Sentence-BERT [Reimers and Gurevych,
+2019] showed that fine-tuning BERT with a siamese objective on natural-language inference pairs
+produces sentence embeddings whose cosine similarity correlates with semantic similarity, reduc-
+ing the computational cost of sentence comparison from quadratic cross-encoder inference to a
+single embedding lookup. Subsequent work extended this to multilingual and domain-specific set-
+tings [Reimers and Gurevych, 2020]. For proteins, Heinzinger et al. [2022] proposed ProtTucker,
+which fine-tunes ProtT5 with triplet loss on CATH superfamily labels (S30 subset, 3,186 training
+proteins) and demonstrated improved remote-homology detection. Independently, Redl et al. [2023]
+adapted the SentenceTransformers framework to ProtBERT and showed that contrastive training on
+disorder and stability annotations improves performance on those specific tasks. Our work differs
+from both in scale and breadth: ProtSent trains on over 70 million protein pairs drawn from five
+heterogeneous data sources (Pfam families, structural pairs, interaction networks, hard negatives, and
+DMS), and evaluates on 23 tasks spanning classification, regression, and retrieval, rather than a single
+axis of similarity. We aim to present a foundation model for universal use.
+Embedding-based protein search and retrieval.Traditional sequence search tools such as BLAST
+and HMMer rely on local alignment heuristics and profile Hidden Markov Models [Söding, 2005,
+Steinegger and Söding, 2017]. Recent works has explored learned embeddings as an alternative.
+PLMSearch [Liu et al., 2024] combines ESM-1b embeddings with a lightweight cross-attention
+module to re-rank homology search results, achieving higher sensitivity than HMMer on remote
+2https://huggingface.co/collections/oriel9p/protsent
+3https://github.com/oriel9p/ProtSent
+2
+homologs. Hong et al. [2024] introduced a dense homolog retrieval (DHR) system that trains a dual-
+encoder with contrastive learning on SCOPe domains and reports 93% sensitivity at 1% false-positive
+rate. Foldseek [van Kempen et al., 2024] takes a different approach, encoding 3D backbone geometry
+as a structural alphabet and performing fast structural search without full alignment. These systems
+are optimized end-to-end for retrieval; ProtSent instead targets general-purpose embeddings that
+transfer across diverse tasks, with retrieval (SCOPe-40) serving as one evaluation axis among many.
+Protein function prediction.Predicting enzyme class, fitness effects, or other functional prop-
+erties from sequence remains a core challenge. GOBeacon [Lin et al., 2025] recently proposed an
+ensemble framework that applies contrastive regularization to multi-label GO classifiers, reporting
+improvements on CAFA-style benchmarks [Jiang et al., 2016]. Unsupervised and anomaly-based
+approaches do not necessarily beat supervised methods [Michael-Pitschaze et al., 2024, Ofer and
+Linial, 2025]. A related subproblem is variant-effect prediction, where supervised approaches train on
+deep mutational scanning (DMS) assays and zero-shot methods leverage pLM log-likelihoods [Rives
+et al., 2021]. ProtSent takes a middle path: it uses DMS data during training as an auxiliary regression
+signal (CoSENT loss) but does not train a task-specific predictor, instead relying on the restructured
+embedding space to capture continuous fitness landscapes.
+3 Method
+3.1 Problem formulation
+Let fθ :S →R d denote a protein language model parameterized by θ that maps an amino acid
+sequence s∈ Sto a d-dimensional embedding. Given a set of protein pairs (si, sj) drawn from
+biological relationships (shared family, structural similarity, physical interaction), our goal is to
+fine-tune θ so that the cosine similarity sim(fθ(si), fθ(sj)) is high for biologically related pairs and
+low for unrelated pairs. After fine-tuning, the embedding space should support downstream tasks
+through simple nearest-neighbor lookup, without task-specific supervision.
+3.2 Backbone architecture
+We use ESM-2 [Lin et al., 2023] as the backbone encoder, wrapped in the SentenceTransformers
+framework [Reimers and Gurevych, 2019]. ESM-2 is a protein language model pretrained with
+masked language modeling on UniRef50 sequences [Suzek et al., 2015]. We experiment with
+two model scales: ESM-2 35M (12 layers, 480-dimensional embeddings) and ESM-2 150M (30
+layers, 640-dimensional embeddings). During contrastive fine-tuning, all Transformer layers are
+fine-tuned. Sequence-level embeddings are obtained by mean-pooling over non-padding residue
+tokens, producing a single vector h∈R d per protein. Input sequences are truncated to first 512
+residues; we do not apply center cropping.
+3.3 Training data
+ProtSent trains on five protein-pair datasets summarized in table Table 1. Further details and filtering
+parameters are in Appendix 12:
+Table 1: Training datasets after all filtering, clustering, and decontamination (raw upstream sizes are
+larger; see Appendix 12). “Group label” is the positive-pair criterion for MNRL sources; STRING is
+pair-native and DMS uses continuous CoSENT scores.
+Dataset (post-filter) Rows / pairs Group label Loss
+Pfam (linclust@70%) 32.9M domains Pfam family ID MNRL
+Pfam Hard Negatives 1.8M anchors (1.2M with HN) Pfam family ID + explicit neg. MNRL
+AFDB50, Foldseek-grouped 133.9M sequences Foldseek structural cluster MNRL
+STRING-DB v12 PPI 36.5M pairs Pair-native MNRL
+ProteinGym DMS / clinical 2.2M pairs Continuous score CoSENT
+Pfam family pairs.Pfam-A full-alignment domains. Positives are pairs belonging to the same
+family [Mistry et al., 2021]. We deduplicate with MMseqs2easy-linclust at 70% identity, leaving
+3
+32.9M domains in 26,796 families and 15,284 clans. In-batch negatives are other families within each
+batch. Singletons families are dropped. This dataset encodes evolutionary and functional homology
+at the domain level.
+Pfam hard negatives.We generate novel hard evolutionary negatives. For each anchor per family,
+using the Pfam-A Hidden Markov Model match-state emissions (PSSM), we sample mutants with
+≥3 point substitutions at distinct positions spaced at least max(6, L/8)apart, drawn from positions
+with per-residue ∆S <−1.0, until the total log-odds drop satisfies P
+i ∆Si ≤ −16.0. This is an
+arbitrary cutoff for being likely to "break the conserved profile" and be deleterious, while retaining
+>98% similarity. These hard negatives force the model to learn fine-grained discriminative features
+beyond simple sequence identity.
+AlphaFold DB structural pairs.AFDB50 sequences (pLDDT >70 , non-fragment), from Al-
+phaFold DB [Varadi et al., 2022, Barrio-Hernandez et al., 2023] predicted structures are joined on
+their AFDB50 representative with the Steinegger-Lab AFDB Foldseek [van Kempen et al., 2024]
+structural clusters (cluster flags{1,2} ). The positive label is the Foldseek cluster. This provides large
+scale structural supervision, forcing the embedding space to capture three-dimensional structural
+relationships. These are unsupervised, predicted clusters (unlike curated scop families).
+StringDB interaction pairs.Protein–protein interaction pairs from the STRING database [Szklar-
+czyk et al., 2023], filtered tocombined_score≥400 (medium confidence). These capture functional
+association, co-occurrence in pathways, complexes or co-expression, providing a distinct biological
+relationship axis from homology or structural similarity. Sequences with over 50% sequence identity,
+by MMseqs2 linclust, to any protein in the Bernett PPI benchmark test set were removed from the
+StringDB data to prevent data leakage. Remaining sequences were globally deduplicated to 50%
+identity, and filtered for lengths[10,1024].
+DMS fitness data.ProteinGym DMS and clinical substitutions and indels scores are per-assay
+z-scored, clipped to [−3,3] and rescaled to [0,1] ; clinical labels mapped Pathogenic →0 , Benign
+→1 . This auxiliary loss operates on single proteins rather than pairs. Assay families that overlap
+downstream evaluation (GB1 and GFP variants) are dropped, and the supervised-benchmark test fold
+is removed using its explicit split metadata where present, or the same deterministic per-group 80/20
+split otherwise, so no DMS row used in training is later evaluated as supervised regression.
+Leakage controls.The primary risk of train–test overlap arises from the Pfam and AlphaFold
+DB datasets. For Pfam, training pairs are sampled from family membership labels, which do not
+overlap with the held-out evaluation splits used for individual downstream tasks (e.g., the remote
+homology fold-level evaluation uses a disjoint fold partition, not family-level labels). For AlphaFold,
+training uses Foldseek cluster co-membership rather than SCOPe labels; we do not filter AFDB
+sequences against SCOPe test domains, so partial sequence overlap is possible. We note this as a
+limitation: while the training labels (Foldseek clusters) and evaluation labels (SCOPe superfamilies)
+are drawn from different classification systems, the underlying sequences may overlap. For DMS
+data we exclude ProteinGym from our evaluation due to overlap. For the remaining evaluation tasks
+(solubility, signal peptide, etc.), the training data provides only pairwise relationship labels, not
+task-specific annotations.
+3.4 Training objective
+The primary contrastive objective is MultipleNegativesRankingLoss (MNRL) [Henderson et al., 2017],
+defined over mini-batches of positive pairs. For a batch of N anchor-positive pairs {(si, sj)}N
+i=1, the
+loss treats all other positives in the batch as negatives:
+LMNRL =− 1
+N
+NX
+i=1
+log exp(sim(fθ(si), fθ(sj))/τ)PN
+j=1 exp(sim(fθ(si), fθ(s+
+j ))/τ)
+(1)
+where τ is a temperature parameter (we use τ= 0.05 , equivalently a scale factor of 20) and sim(·,·)
+denotes cosine similarity.
+4
+For the Pfam hard negatives dataset, explicit negative columns are appended to the batch, providing
+additional challenging negatives beyond the in-batch negatives.
+The auxiliary DMS loss uses CoSENTLoss [Su, 2022], a ranking-based objective that preserves the
+ordering of continuous fitness scores among protein variants. The DMS dataset is included as an
+additional entry in the round-robin sampler (Section 3.5), receiving equal per-step weight with the
+four MNRL datasets. At each training step, the sampler draws a batch from exactly one dataset;
+thus the DMS loss contributes to approximately one-fifth of all gradient updates rather than being
+weighted by an explicit coefficientλ.
+3.5 Multi-dataset sampling
+The datasets are combined using round-robin sampling: at each training step, the dataloader draws a
+batch from the next dataset in a cyclic order. This ensures equal representation of each biological
+signal source regardless of dataset size, preventing the largest dataset from dominating the gradient
+updates.
+3.6 Training configuration
+Models were trained on a single NVIDIA RTX 6000 Ada GPU (48 GB). We use AdamW with a
+cosine learning rate schedule, 0.1 dropout and an effective batch size of 1024. Up to 70M training
+pairs are generated from the source datasets. Full hyperparameters are listed in Table 6 (Appendix 8).
+4 Experiments
+4.1 Evaluation protocol
+We evaluate all models using a frozen embedding protocol: the fine-tuned (or baseline) model
+encodes each protein sequence into a fixed-length vector, and a k-nearest-neighbor (KNN) probe
+with k=3 and Euclidean distance is trained on the resulting embeddings. Although training optimizes
+cosine similarity, for approximately L2-normalized embeddings (as produced by contrastive training),
+Euclidean distance and cosine distance induce the same neighbor ranking:∥a−b∥ 2 = 2(1−cos(a, b))
+when ∥a∥=∥b∥= 1 . We use the scikit-learn default (Euclidean) for compatibility; the SCOPe-40
+retrieval evaluation (Section 5.2) uses cosine distance and shows similar results.
+For binary and multiclass classification tasks, we report Area Under the ROC Curve (AUC). For
+multiclass tasks, we report macro-averaged F1 score. For regression tasks, we report Spearman rank
+correlation. Evaluation uses a held-out test split where available, with 4-fold cross-validation on the
+training set as a fallback.
+4.2 Benchmark tasks
+We evaluate on 23 tasks in three types:
+Binary classification (8 tasks).Protein–protein interaction prediction (Bernett Gold Standard PPI
+dataset), solubility prediction (DeepSol [Khurana et al., 2018]), peptide-HLA binding, metal ion
+binding, signal peptide prediction (SignalP [Teufel et al., 2022]), neuropeptide precursor predic-
+tion (NeuroPID [Ofer and Linial, 2015]), binary subcellular localization, and material production
+classification.
+Multiclass classification (5 tasks).Remote homology detection at the fold level, enzyme commis-
+sion (EC) number classification, subcellular localization (10-class), antibiotic resistance mechanism
+classification, and temperature stability classification (thermophile/mesophile/psychrophile).
+Regression (10 tasks).Variant effect prediction (GB1 fitness landscape), fluorescence prediction
+(TAPE benchmark [Rao et al., 2019]), protein stability (Biomap), thermostability (FLIP bench-
+mark [Dallago et al., 2021]), optimal pH prediction, enzyme catalytic efficiency (kcat), cloning
+classification, beta-lactamase fitness (PEER benchmark), AA V capsid fitness (FLIP), and RhlA
+enzyme mutation effects.
+5
+4.3 SCOPe-40 structural retrieval
+In addition to the probe-based evaluation, we evaluate embedding quality through a retrieval task on
+the SCOPe-40 structural classification database. For each query protein, we retrieve the nearest neigh-
+bors by cosine similarity in embedding space and measure Recall@K for K∈ {1,10,30}, where a
+retrieval is considered correct if the retrieved protein belongs to the same structural superfamily as
+the query.
+5 Results
+5.1 KNN probe evaluation
+Table 2 presents the KNN probe evaluation across all 23 tasks for both the 35M and 150M backbones.
+ProtSent improves 16 of 23 tasks at the 35M scale and 15 of 23 at 150M, with the largest gains on
+tasks that depend on structural or functional grouping in embedding space.
+At the 35M scale, the strongest improvements appear on remote homology detection (+40.5%), RhlA
+enzyme mutations (+77.2%), beta-lactamase fitness (+18.5%), and fluorescence (+15.6%). These
+tasks require the model to group proteins by structural fold or mutational phenotype, contrastive
+training on Pfam families and AlphaFold structural pairs is designed to capture this relationship.
+Binary classification tasks improve broadly: PPI ( +5.3%), peptide-HLA binding ( +3.6%), and
+solubility (+2.7%).
+The 150M backbone exhibits the same pattern with several notable differences. Remote homology
+detection reaches +105%, and EC classification improves by +15.9% (vs. +0.3% at 35M), showing
+the larger backbone provides enough capacity for contrastive training to separate enzyme classes.
+GB1 variant effect prediction improves by +17.3% whereas the 35M model showed a slight decrease
+(−0.8%), indicating that capturing mutational fitness relationships benefits from additional model
+capacity. Conversely, RhlA degrades at 150M ( −27.1%) despite its large gain at 35M, and beta-
+lactamase shows only+0.1%at 150M vs.+18.5%at 35M.
+Stability and thermostability regression degrade modestly at both scales, possibly because the
+sequence level representation does not specifically preserve ordinal relationships within a protein’s
+mutational neighborhood in the case of point mutations.
+5.2 SCOPe-40 structural retrieval
+Table 3 reports retrieval performance on the SCOPe-40 structural classification benchmark for both
+model scales. ProtSent achieves consistent double-digit improvements across all recall thresholds,
+demonstrating that contrastive fine-tuning meaningfully reorganizes the embedding space to place
+structurally similar proteins closer together.
+The improvements are similar across both model scales and all recall thresholds. The 150M model
+shows even larger gains ( +19.9% at Recall@1) than the 35M ( +15.5%), indicating the larger
+backbone provides more capacity for contrastive fine-tuning to reorganize the embedding space. The
+single nearest neighbor in the ProtSent embedding space is substantially more likely to share the
+query protein’s structural fold compared to the baseline ESM-2 representation.
+5.3 Ablation studies
+We conduct six ablation experiments on the ESM-2 35M backbone. Each ablation removes one
+data source, we also replace round-robin with proportional sampling, retraining from scratch with
+otherwise identical hyperparameters.
+Removing Pfam family pairs causes the largest degradation, reducing the number of improved tasks
+from 16 to 15 and the mean improvement from +6.7% to +4.6% (Table 4). Individual tasks that
+depend on evolutionary homology are most affected: beta-lactamase fitness drops −8.8% and RhlA
+enzyme mutations drops −31.5% relative to the full model. This confirms that Pfam provides the
+dominant contrastive signal.
+Training without the hard negatives dataset yields a surprising result: 20 of 23 tasks improve over
+the baseline, compared to 16 for the full model, with a higher mean delta ( +7.9% vs. +6.7%)
+6
+Table 2: KNN probe evaluation on 23 downstream tasks: baseline ESM-2 vs. ProtSent at two model
+scales (35M and 150M parameters). ∆% = 100×(Trained−Baseline)/Baseline . Positive ∆%
+values arebolded. Tasks are grouped by type.
+ESM-2 35M ESM-2 150M
+Task Metric Base ProtSent∆% Base ProtSent∆%
+Multiclass classification
+Remote Homology (Fold) F1 M .223 .313+40.5.190 .390+105.0
+EC Classification F1 M .450 .452+0.3.408 .473+15.9
+Subcellular Localisation AUC .784 .794+1.3.797 .813+1.9
+Antibiotic Resistance AUC .785 .786+0.1.786 .790+0.6
+Temperature Stability F1 M .896 .873−2.6.906 .881−2.8
+Binary classification
+PPI (Bernett) AUC .560 .589+5.3.556 .592+6.4
+Peptide-HLA Binding AUC .748 .775+3.6.749 .772+3.1
+Solubility (DeepSol) AUC .692 .711+2.7.712 .719+1.1
+Neuropeptide (NeuroPID) AUC .948 .956+0.9.963 .945−1.8
+Binary Subcel. Loc. AUC .925 .932+0.8.936 .922−1.5
+Signal Peptide AUC .965 .971+0.7.971 .972+0.1
+Metal Ion Binding AUC .825 .830+0.5.808 .843+4.3
+Material Production AUC .755 .758+0.4.754 .759+0.6
+Regression
+RhlA Enzyme Mutations Spr. .236 .418+77.2.345 .252−27.1
+Beta-lactamase (PEER) Spr. .670 .793+18.5.732 .733+0.1
+Fluorescence (TAPE) Spr. .490 .567+15.6.504 .569+12.7
+Variant Effect (GB1) Spr. .656 .651−0.8.670 .785+17.3
+Optimal pH Spr. .498 .514+3.1.509 .512+0.6
+AA V Fitness (FLIP) Spr. .742 .729−1.7.706 .725+2.6
+Cloning Classification Spr. .398 .394−1.0.386 .389+0.8
+Enzyme Cat. Efficiency Spr. .705 .687−2.6.705 .699−0.9
+Stability (Biomap) Spr. .568 .547−3.7.588 .569−3.3
+Thermostability (FLIP) Spr. .475 .449−5.3.467 .460−1.4
+Tasks improved 16 / 23 15 / 23
+Table 3: SCOPe-40 structural retrieval results. Recall@K measures the fraction of queries for which
+a protein from the same structural superfamily appears among the top-Knearest neighbors.
+Model Recall@1 Recall@10 Recall@30
+ESM-2 35M (baseline) 0.385 0.588 0.641
+ProtSent 35M0.445 0.651 0.710
+∆% +15.5 +10.7 +10.9
+ESM-2 150M (baseline) 0.423 0.589 0.644
+ProtSent 150M0.507 0.685 0.724
+∆% +19.9 +16.4 +12.3
+(Table 7). This suggests that explicit hard negative mining, while potentially useful for fine-grained
+discrimination, may introduce overly aggressive contrastive gradients that perturb the embedding
+space on some tasks. EC classification improves by +7.4% relative to the full model when hard
+negatives are removed. We hypothesize that the in-batch negatives alone provide sufficient contrastive
+signal for most downstream tasks, and that hard negative selection warrants further investigation.
+Removing AlphaFold DB structural pairs causes the second-largest degradation after Pfam: the
+number of improved tasks drops from 16 to 13 and the mean delta falls from +6.7% to +3.2%. EC
+classification is hit hardest ( −11.0% vs. baseline), and remote homology drops to +15.3% (from
++40.5% with the full model), confirming that structural supervision from Foldseek clusters provides
+a complementary signal that Pfam family labels alone do not fully capture. Removing StringDB
+has a milder effect: 17 tasks still improve and the mean delta matches the full model (+5.9%). PPI
+prediction drops to −0.5% (from +5.3%), confirming that StringDB interaction pairs drive the PPI
+improvement. However, the overall embedding quality remains largely intact, suggesting the other
+three data sources provide sufficient contrastive signal for most tasks.
+Replacing round-robin with proportional sampling yields 16 improved tasks with a mean delta of
++7.0%, comparable to the full model. The modest difference indicates that the training is relatively
+7
+Table 4: Ablation study results (ESM-2 35M, KNN probe). Each row shows the number of tasks
+improved (out of 23) and the mean relative change (%) across all tasks, both measured against the
+stock ESM-2 baseline. The full model row corresponds to the default ProtSent configuration.
+Configuration Tasks improved (/23) Mean∆%
+Full model (ProtSent) 16 +6.7
+w/o Pfam families 15 +4.6
+w/o hard negatives 20 +7.9
+w/o AlphaFold DB 13 +3.2
+w/o StringDB 17 +5.9
+w/o DMS (CoSENT) 15 +5.8
+Proportional sampling 16 +7.0
+Table 5: Few-shot evaluation (ESM-2 35M, KNN probe). Relative improvement (∆%) of ProtSent
+over baseline at each sample size. Bold indicates improvement.
+Task TypeN=50N=100N=500N=1000
+Remote Homology Multi. N/A+244.5 +97.8 +90.2
+Subcellular Loc. Multi.+29.5 +19.7 +20.9 +5.6
+EC Classification Multi.−61.5+64.9 +39.1 +14.1
+Fluorescence Reg.+7.0 +7.8 +8.7 +27.8
+Peptide-HLA Bin.+2.0 +3.3 +8.2 +1.1
+Metal Ion Binding Bin.−0.2+17.1 +0.9−1.0
+Solubility Bin.+7.5 +14.3−5.2−0.4
+Neuropeptide Bin.−0.9+1.9 +1.9 +2.2
+Signal Peptide Bin.−3.6+1.8 +2.3 +1.8
+PPI (Bernett) Bin.−24.0−5.1+3.7 +1.9
+Enzyme Cat. Eff. Reg.−126.9−22.1+4.0 +18.0
+Beta-lactamase Reg.+30.2−62.7−8.8+2.4
+Variant Effect (GB1) Reg.−67.3−40.2−0.5−2.3
+Stability (Biomap) Reg.−53.2−49.9−7.4−3.4
+Tasks improved 6/14 10/14 10/14 10/14
+robust to the sampling strategy, though individual task variation exists (e.g., optimal pH drops−9.4%
+vs. the full model under proportional sampling).
+Removing the DMS CoSENT loss modestly reduces performance (15/23 tasks, +5.8% vs. 16/23,
++6.7%). Fitness-regression tasks are most affected: fluorescence drops from +15.6% to +10.4% and
+thermostability degrades further. The auxiliary DMS signal thus provides a small but steady benefit
+to fitness-landscape tasks without harming broader embedding quality. Detailed per task changes
+per ablation are provided in the appendix. These are single-factor ablations; interactions between
+components remain unexplored and could yield additional insights.
+5.4 Few-shot evaluation
+A key motivation better embedding neighborhoods is improved performance under label scarcity. We
+evaluate ProtSent in a few-shot setting by subsampling the training set to N∈ {50,100,500,1000}
+labeled examples per task and evaluating with the KNN probe (k=3). Table 5 reports the relative
+improvement (∆%) of ProtSent over the baseline ESM-2 35M at each sample budget.
+At N≥100, ProtSent improves 10 of 14 evaluable tasks. The largest gains appear on tasks that require
+grouping by structural or functional similarity: remote homology detection ( +244.5% at N=100,
++90.2% at N=1000), subcellular localisation (+5.6–29.5%), and EC classification (+14.1–64.9%).
+These tasks benefit most from improved neighborhood structure because the KNN probe relies on
+finding correctly labeled neighbors in a small training set. At N=50, results are noisy: with k=3
+and only 50 training points, the probe is highly sensitive to stochastic neighbor selection, and several
+regression tasks show large negative deltas that stabilize at higher budgets. Notably, tasks where
+ProtSent degrades in the few-shot regime (Variant Effect, Stability) are the same tasks that show
+8
+modest degradation with the full dataset, possibly representing a trade-off of the contrastive objective
+rather than a few-shot-specific failure mode.
+6 Discussion
+Neighborhood structure as the primary improvement axis.The consistent pattern across both
+model scales is that tasks requiring accurate embedding neighborhoods, remote homology, structural
+retrieval, fluorescence prediction, show the largest improvements. Contrastive training optimizes
+angular relationships between embeddings, restructuring neighborhoods to reflect the biological
+similarities encoded in the training data. Tasks where the baseline already performed well (e.g., signal
+peptide, temperature stability) show smaller or negative changes, hinting the global reorganization of
+the space can disrupt incidental structure that the pretrained model had learned.
+Task-specific analysis.The +105% improvement on remote homology detection (150M, KNN)
+and +40.5% (35M, KNN) is the most dramatic result. Fold-level homology requires recognizing
+structural similarity between proteins with minimal sequence identity, precisely the capability that
+contrastive training on Pfam families and AlphaFold structural pairs should confer. The improvement
+on PPI prediction ( +5–6% across scales) confirms that interaction partners are brought closer in
+embedding space by training on StringDB pairs.
+Regression tasks.Fluorescence and beta-lactamase fitness improve at both scales, indicating that
+contrastive training preserves local manifold structure relevant to mutational effects. GB1 variant
+effect prediction presents a scale-dependent result: −0.8% at 35M but +17.3% at 150M, indicating
+the larger backbone allows the contrastive objective to capture fitness landscape relationships without
+disrupting other properties. Some regression tasks (thermostability, stability) degrade at both scales,
+possibly because the contrastive objective does not specifically preserve ordinal relationships within
+a single protein’s mutational neighborhood. ProtSent is not designed to compete with specialized
+variant-effect prediction methods that use supervised heads or retrieval-augmented inference; instead,
+the VEP results characterize a side effect of general-purpose embedding improvement on a task that
+was not directly optimized.
+Limitations.The training data also limited to the relationship types captured by the five source
+datasets; protein relationships not represented (e.g., enzymatic mechanism similarity, expression
+patterns) are not specifically optimized. We do not compare to specialized retrieval systems (Prot-
+Tucker, PLMSearch, DHR) on matched benchmarks; our goal is general-purpose embeddings rather
+than retrieval-optimized models, but such comparisons would help quantify the generality–accuracy
+trade-off. Finally, all results are from single training runs without multi-seed uncertainty estimates;
+the few-shot results in particular show high variance at small N, and confidence intervals would
+strengthen the robustness claims.
+7 Conclusion
+We presented ProtSent, a contrastive fine-tuning framework that transforms protein language model
+representations into function-aware embeddings where proximity reflects biological relatedness.
+By training with multiple data sources and round-robin sampling, ProtSent achieves substantial
+improvements on tasks that depend on embedding neighborhood quality. The uniform improvements
+across two model scales suggest that contrastive fine-tuning is a broadly applicable strategy for
+adapting pretrained protein language models to produce embeddings suitable for retrieval, clustering,
+and few-shot transfer.
+9
+References
+Inigo Barrio-Hernandez, Jingi Yeo, Jürgen Jänes, Milot Mirdita, Cameron L. M. Gilchrist, Tanita
+Wein, Mihaly Varadi, Sameer Velankar, Pedro Beltrao, and Martin Steinegger. Clustering predicted
+structures at the scale of the known protein universe.Nature, 622(7983):637–645, October
+2023. ISSN 1476-4687. doi: 10.1038/s41586-023-06510-w. URL https://www.nature.com/
+articles/s41586-023-06510-w.
+Christian Dallago, Jody Mou, Kadina E Johnston, Bruce J Wittmann, Nicholas Bhatt, David Goldman,
+Ali Sadler, Zecheng Wang, et al. FLIP: Benchmark tasks in fitness landscape inference for proteins.
+bioRxiv, 2021.
+Ahmed Elnaggar, Michael Heinzinger, Christian Dallago, Ghalia Rehawi, Yu Wang, Llion Jones, Tom
+Gibbs, Tamas Feher, Christoph Angerer, Martin Steinegger, Debsindhu Bhowmik, and Burkhard
+Rost. ProtTrans: Toward understanding the language of life through self-supervised learning.IEEE
+Transactions on Pattern Analysis and Machine Intelligence, 44(10):7112–7127, 2022.
+Michael Heinzinger, Maria Littmann, Ian Sillitoe, Christine A Orengo, and Burkhard Rost. Con-
+trastive learning on protein embeddings enlightens midnight zone.NAR Genomics and Bioinfor-
+matics, 4(2):lqac043, 2022.
+Matthew Henderson, Rami Al-Rfou, Brian Strope, Yun-Hsuan Sung, László Lukács, Ruiqi Guo,
+Sanjiv Kumar, Balint Miklos, and Ray Kurzweil. Efficient natural language response suggestion
+for smart reply. InarXiv preprint arXiv:1705.00652, 2017.
+Liang Hong, Siqi Sun, Liangzhen Li, Hao Tian, Mingchen Li, et al. Dense homolog retrieval for
+protein function and structure prediction.Nature Biotechnology, 2024.
+Yuxiang Jiang, Tal Ronnen Oron, Wyatt T. Clark, et al. An expanded evaluation of protein function
+prediction methods shows an improvement in accuracy.Genome Biology, 17(1), January 2016.
+ISSN 1474760X. doi: 10.1186/s13059-016-1037-6. URL http://arxiv.org/abs/1601.
+00891. arXiv: 1601.00891 Genre: Quantitative Methods.
+Sameer Khurana, Reda Rawi, Khalifeh Kuber, Saad Patchber, Wensheng Bai, Matthew R Garvin,
+Trey Ideker, Wu-Jun Zhang, Stephan Doerr, Nicolas Guilhot, et al. DeepSol: a deep learning
+framework for sequence-based protein solubility prediction.Bioinformatics, 34(15):2605–2613,
+2018.
+Zeming Lin, Halil Akin, Roshan Rao, Brian Hie, Zhongkai Zhu, Wenting Lu, Nikita Smetanin,
+Robert Verkuil, Ori Kabeli, Yaniv Shmueli, et al. Evolutionary-scale prediction of atomic-level
+protein structure with a language model.Science, 379(6637):1123–1130, 2023.
+Zijie Lin, Chuyu Xu, et al. GOBeacon: Gene ontology prediction with ensemble learning and
+contrastive regularization.Protein Science, 34, 2025.
+Wei Liu, Ziye Wang, Ronghui You, Chenghan Xie, Hong Wei, Yi Xiong, Jianyi Yang, and Shanfeng
+Zhu. PLMSearch: Protein language model powers accurate and fast sequence search for remote
+homology.Nature Communications, 15(1):2775, 2024.
+Tomer Michael-Pitschaze, Niv Cohen, Dan Ofer, Yedid Hoshen, and Michal Linial. Detecting
+anomalous proteins using deep representations.NAR Genomics and Bioinformatics, 6(1):lqae021,
+March 2024. ISSN 2631-9268. doi: 10.1093/nargab/lqae021. URL https://doi.org/10.
+1093/nargab/lqae021.
+Jaina Mistry, Sara Chuguransky, Lowri Williams, Matloob Qureshi, Gustavo A Salazar, Erik LL
+Sonnhammer, Silvio CE Tosatto, Lisanna Paladin, Shriya Raj, Lorna J Richardson, et al. Pfam:
+The protein families database in 2021.Nucleic Acids Research, 49(D1):D99–D105, 2021.
+Dan Ofer and Michal Linial. ProFET: Feature engineering captures high-level protein functions.
+Bioinformatics, 31(21):3429–3436, 2015.
+Dan Ofer and Michal Linial. Protein Language Models Expose Viral Immune Mimicry.Viruses, 17
+(9), August 2025. ISSN 1999-4915. doi: 10.3390/v17091199. URL https://www.mdpi.com/
+1999-4915/17/9/1199.
+10
+Roshan Rao, Nicholas Bhatt, Andrès Lu, Matthew C Cowperthwaite, Philip A Romero, and Alan
+Zhong. Evaluating protein transfer learning with TAPE.Advances in Neural Information Processing
+Systems, 32, 2019.
+Istvan Redl, Rajesh Lunkad, Carlo Genis-Chalamanch, Sandro Bottaro, Hugo Penedones, and Olivier
+Michielin. Optimizing protein language models with Sentence Transformers. InNeurIPS 2023
+Workshop on Machine Learning for Structural Biology, 2023.
+Nils Reimers and Iryna Gurevych. Sentence-BERT: Sentence embeddings using siamese BERT-
+networks. InProceedings of the 2019 Conference on Empirical Methods in Natural Language
+Processing (EMNLP), pages 3982–3992, 2019.
+Nils Reimers and Iryna Gurevych. Making monolingual sentence embeddings multilingual using
+knowledge distillation. InProceedings of the 2020 Conference on Empirical Methods in Natural
+Language Processing (EMNLP), pages 4512–4525, 2020.
+Alexander Rives, Joshua Meier, Tom Sercu, Siddharth Goyal, Zeming Lin, Jason Liu, Demi Guo,
+Myle Ott, C Lawrence Zitnick, Jerry Ma, and Rob Fergus. Biological structure and function
+emerge from scaling unsupervised learning to 250 million protein sequences.Proceedings of the
+National Academy of Sciences, 118(15):e2016239118, 2021.
+Martin Steinegger and Johannes Söding. MMseqs2 enables sensitive protein sequence searching for
+the analysis of massive data sets.Nature Biotechnology, 35(11):1026–1028, November 2017. ISSN
+1087-0156, 1546-1696. doi: 10.1038/nbt.3988. URL http://www.nature.com/articles/
+nbt.3988.
+Jianlin Su. Cosent: A more efficient sentence vector scheme than sentence-bert.Blog post, 2022.
+https://kexue.fm/archives/8847.
+Baris E Suzek, Yuqi Wang, Hongzhan Huang, Peter B McGarvey, and Cathy H Wu. UniRef
+clusters: a comprehensive and scalable alternative for improving sequence similarity searches.
+Bioinformatics (Oxford, England), 31(6):926–32, March 2015. ISSN 1367-4811. doi: 10.1093/
+bioinformatics/btu739. URL http://www.pubmedcentral.nih.gov/articlerender.fcgi?
+artid=4375400&tool=pmcentrez&rendertype=abstract.
+Damian Szklarczyk, Rebecca Kirsch, Mikaela Koutrouli, Katerina Nastou, Farrokh Mehryary, Radja
+Hachilif, Annika L Gable, Tao Fang, Nadezhda T Doncheva, Sampo Pyysalo, et al. The STRING
+database in 2023: protein–protein association networks and functional enrichment analyses for any
+sequenced genome of interest.Nucleic Acids Research, 51(D1):D483–D489, 2023.
+Johannes Söding. Protein homology detection by HMM-HMM comparison.Bioinformatics, 21
+(7):951–960, 2005. ISSN 13674803. doi: 10.1093/bioinformatics/bti125. ISBN: 1367-4803
+(Print)\r1367-4803 (Linking).
+Felix Teufel, José Juan Almagro Armenteros, Alexander Rosenberg Johansen, Magnús Halldór
+Gíslason, Silas Irby Piber, Konstantinos D Tsirigos, Ole Winther, Søren Brunak, Gunnar von
+Heijne, and Henrik Nielsen. SignalP 6.0 predicts all five types of signal peptides using protein
+language models.Nature Biotechnology, 40(7):1023–1025, 2022.
+Michel van Kempen, Stephanie S Kim, Charlotte Tumescheit, Milot Mirdita, Jeongjae Lee, Cameron
+L M Gilchrist, Johannes Söding, and Martin Steinegger. Fast and accurate protein structure search
+with Foldseek.Nature Biotechnology, 42(2):243–246, 2024.
+Mihaly Varadi, Stephen Anyango, Mandar Deshpande, Sreenath Nair, Cindy Natassia, Galabina
+Yordanova, David Yuan, Oana Stroe, Gemma Wood, Agata Laydon, et al. AlphaFold Protein
+Structure Database: massively expanding the structural coverage of protein-sequence space with
+high-accuracy models.Nucleic Acids Research, 50(D1):D439–D444, 2022.
+Thomas Wolf, Lysandre Debut, Victor Sanh, Julien Chaumond, Clement Delangue, Anthony Moi,
+Pierric Cistac, Tim Rault, Rémi Louf, Morgan Funtowicz, et al. Transformers: State-of-the-art
+natural language processing. InProceedings of the 2020 Conference on Empirical Methods in
+Natural Language Processing: System Demonstrations, pages 38–45, 2020.
+11
+8 Additional training details
+Training was conducted on NVIDIA RTX 6000 Ada GPUs (48 GB VRAM) on an HPC cluster. The
+35M model trains in approximately 3–4 hours; the 150M model trains in approximately 1.3 days. We
+use the SentenceTransformers library [Reimers and Gurevych, 2019] built on top of HuggingFace
+Transformers [Wolf et al., 2020]. All models are trained for a single epoch over 70M generated pairs.
+Full hyperparameters are listed in Table 6.
+Table 6: Training hyperparameters for both model scales.
+Hyperparameter ESM-2 35M ESM-2 150M
+Per-device batch size 64 16
+Gradient accumulation 16 64
+Effective batch size 1024 1024
+Learning rate3×10 −4 2×10 −4
+Warmup steps 500 1000
+LR scheduler Cosine with min LR
+Max sequence length 512
+Optimizer AdamW (fused)
+Dropout 0.1
+Max training pairs 70M
+Epochs 1
+Multi-dataset sampler Round-robin
+9 Full benchmark task descriptions
+Below we provide additional details for selected evaluation tasks. Metrics and probe types for all 23
+tasks are specified in Section 4.1 and the results tables.
+Remote homology detection.Fold-level classification from the SCOPe database. Training and
+test sets are split by superfamily so that no superfamily appears in both; the model must recognize
+structural similarity across evolutionary distant sequences. We report macro-averaged F1 across fold
+classes.
+SCOPe-40 structural retrieval.A retrieval task over SCOPe domains filtered at 40% sequence
+identity. For each query, we retrieve nearest neighbors by cosine similarity and evaluate Recall@K
+for K∈ {1,10,30}, where a hit is correct if it shares the query’s structural superfamily. This task
+uses the full validation set (100,000 proteins) with no subsampling.
+Variant effect prediction (GB1).Regression on the GB1 protein fitness landscape, where each
+variant is scored by its experimentally measured binding affinity. We report Spearman rank correlation
+between predicted and true fitness values. The GB1 landscape contains∼150,000 single and multi-site
+variants.
+Other tasks.The remaining tasks follow standard formulations from the TAPE [Rao et al., 2019],
+FLIP [Dallago et al., 2021], and PEER benchmark suites. Binary classification tasks (PPI, solubil-
+ity, signal peptide, metal ion binding, peptide-HLA, neuropeptide, binary subcellular localization,
+material production) are evaluated by AUC. Multiclass tasks (EC number, subcellular localization,
+antibiotic resistance, temperature stability) use AUC or macro F1. Regression tasks (fluorescence,
+stability, thermostability, optimal pH, enzyme catalytic efficiency, cloning, beta-lactamase, AA V ,
+RhlA) use Spearman correlation. All tasks use held-out validation splits where available, with 4-fold
+cross-validation as a fallback.
+10 UMAP Visualization of Embedding Space
+Figure 1 shows UMAP projections of protein embeddings from the baseline ESM-2 and ProtSent
+models, computed on held-out SCOPe-40 domains colored by fold-level and superfamily-level
+12
+(a) SCOPe-40, fold level
+(b) Pfam families
+Figure 1: UMAP projections of baseline ESM-2 150M (left in each panel) vs. ProtSent 150M
+(right). Points are colored by the 10 most frequent groups; remaining groups in gray. Scopr-40 at the
+superfamily level, and Pfam families.
+labels, as well as on Pfam sequences colored by family. Across all three groupings and both model
+scales, the ProtSent embeddings exhibit visually tighter and more separated clusters compared to the
+baseline. The effect is most pronounced at the fold level, where baseline embeddings show substantial
+overlap between structural classes that is reduced after contrastive fine-tuning. We note that UMAP
+projections are sensitive to hyperparameters and do not constitute a quantitative evaluation; these
+visualizations are intended as a qualitative complement to the retrieval and probe results.
+11 Full Per-Task Ablation Results
+Table 7 provides the complete per-task breakdown of all ablation experiments. Each cell reports
+the relative change (%) of the ablated model compared to the stock ESM-2 35M baseline, using a
+KNN probe (except multilabel tasks which require a linear probe). The summary row counts tasks
+improved and reports the mean relative delta across the 23 KNN-evaluated tasks.
+12 Dataset construction details
+Each training parquet is reproduced by python data_prep.py –dataset X at default flags (with
+one exception, noted below for AFDB).
+12.1 Pfam (pfam_sorted.parquet)
+Source. Pfam-A.fasta.gz and Pfam-A.clans.tsv.gz from
+ftp.ebi.ac.uk/pub/databases/Pfam/current_release. Headers parse to (domain_id,
+family_id, sequence)with the PFxxxxx version stripped.
+13
+Table 7: Per-task ablation results (ESM-2 35M, KNN probe except multilabel tasks which use linear
+probe). Each cell shows the relative change (%) vs. the stock ESM-2 baseline. Bold indicates best
+configuration per task.
+Task Metric Full−Pfam−HardNeg−AFDB−StringDB Prop.−DMS
+Binary
+PPI AUC +5.3 +5.9 +4.3 +5.5−0.5+6.6+5.9
+Peptide-HLA AUC +3.6 +4.0+7.0+4.0 +4.9 +6.2 +5.0
+Solubility AUC +2.7 +2.5 +2.6+2.8+1.3 +2.8 +2.4
+Neuropeptide AUC +0.9 +0.1+1.1+0.1 +0.1 +0.8 +0.2
+Binary SubCell AUC +0.8 +1.0 +0.9 +0.7 +0.8+1.4+0.8
+Signal Peptide AUC +0.7 +1.0 +1.2−0.3 +0.1+1.4−0.1
+Metal Ion AUC +0.5 +1.6+1.7−1.8 +0.7 +0.9 +0.7
+Material Prod. AUC +0.4 +0.8 +0.6−0.3 +0.7 +1.1+1.2
+Multiclass
+Remote Homology F1 +40.5 +42.5 +49.5 +15.3 +43.3+54.7+40.6
+SubCell Loc. AUC +1.3 +1.8+2.2+1.5−3.1 +1.6 +2.0
+EC Number F1 +0.3−1.3+7.7−11.1 +3.7 +2.5−2.1
+Antibiotic Res. AUC +0.1−0.2 +0.0 +0.2+0.7+0.6−0.3
+Temp. Stability F1−2.6−1.1−1.3−1.2−9.3−1.2−1.9
+Multilabel (linear probe)
+CAFA5 F1−2.1−1.7−1.1−6.7−5.6+0.6−1.2
+Mol. Function F1−4.6−4.1−2.4−7.2−5.0+1.0−3.3
+Regression
+RhlA Sp.+77.2+21.3 +48.6 +38.0 +36.2 +59.3 +59.3
+Beta-lactamase Sp. +18.5 +8.1 +17.8 +7.2+19.5+9.3 +8.9
+Fluorescence Sp. +15.6 +20.6+24.2+22.0 +19.6 +18.4 +10.4
+Optimal pH Sp. +3.1−3.7+5.9−6.0 +4.7−6.6 +2.2
+Variant (GB1) Sp.−0.8 +9.0 +7.9 +11.8 +13.8 +8.4+14.7
+Cloning Sp.−1.0−1.4−1.2−6.9−0.6−1.4−0.9
+AA V Fitness Sp.−1.7 +0.2+3.6+1.2−1.5−0.2−1.1
+Enzyme Eff. Sp.−2.6−1.8 +0.1−3.7+1.3−0.1 +0.0
+Stability Sp.−3.7−5.4+1.0−2.2−5.8−2.5−3.2
+Thermostability Sp.−5.3−0.6−4.4−3.3+5.2−2.1−11.8
+Tasks improved16/23 15/23 20/23 13/23 17/23 16/23 15/23
+Mean∆%+6.7 +4.6 +7.9 +3.2 +5.9 +7.0 +5.8
+Pipeline.(1) MMseqs2 easy-linclust –min-seq-id 0.7 –cov-mode 1 -c 0.8 on the raw
+Pfam-A FASTA (global asymmetric clustering; family members assigned to representatives from
+other families are dropped). (2) Left-join family → clan; orphan families inherit clan_id :=
+family_id. (3) Drop singleton families. (4) Sort by (clan_id, family_id) so windowed slicing
+preserves clan-level diversity during training.
+Final.32,943,498 sequences, 26,796 families, 15,284 clans (input: ∼62M raw Pfam-A FASTA
+records).
+12.2 Pfam hard negatives (pfam_hard_negatives.parquet)
+Source.pfam_sorted.parquetabove plusPfam-A.hmm.gz(parsed withpyhmmer).
+PSSM.For each Pfam HMM, take match-state emissions ei,a and the pyhmmer amino-acid back-
+groundb a (both clipped at10 −9), setS i,a = log2 ei,a −log 2 ba.
+Eligibility.Drop families whose median sequence length differs from the HMM model length by
+more than10%. Per row: keep5< L <1024; cap at100sequences/family.
+Sampling.For an anchor of length L, use direct map i→i for i <min(L,model_len) ; compute
+∆Si,a =S i,a −S i,wt(i) and zero-out self-substitutions and non-standard residues. The candidate
+pool is positions (i, a)with ∆Si,a <−1.0 . Rejection-sample k-tuples (per-family seed 42 +i , up to
+2,048 proposals per k) with kmin = max(6,⌈−16.0/min i ∆S(min)
+i ⌉) and kmax ≤50 , accepting the
+first proposal that satisfies P
+i ∆Si ≤ −16.0and pairwise position spacing≥max(6, L/8).
+Final.1,821,068 anchors over 24,047 families (of 26,796 in pfam_sorted, after the ±10% length
+filter and the per-family cap of100); 1,210,230 anchors (66%) carry a non-nullhard_negative.
+14
+12.3 AFDB Foldseek structural pairs (afdb_sorted.parquet)
+Sources.(i) willdaspit/afdb_clustered_seqs (HuggingFace) — AFDB se-
+quences with their AFDB50 representative IDs, plus per-row plddt and fragment
+flags. (ii) 1-AFDBClusters-repId_entryId_cluFlag_taxId.tsv.gz from
+afdb-cluster.steineggerlab.workers.dev/v6/ — the upstream Foldseek S-cluster
+mapping. We retaincluFlag∈ {1,2}(singleton and small-cluster flags are excluded).
+Pipeline.(1) Lazy-scan HF parquets, filter plddt> 70 and fragment= 0. (2) Inner-join
+on HF.repId == Steinegger.entry_id; carry the Foldseek representative as group_id and
+the AFDB50 representative as afdb50_cluster_id. (3) Pre-shuffle (seed 42) then sort by
+afdb50_cluster_id. (4) Run uncapped: we use –limit_gb 0 (the CLI default of 25 GB caps at
+∼50M rows).
+Final.133,856,004 sequences in 815,712 Foldseek structural clusters spanning 1,815,626 AFDB50
+representatives (input: ∼214M AFDB sequences upstream; the pLDDT >70 + non-fragment filter
+and thecluFlag∈ {1,2}inner-join produce the drop).
+Disambiguation.“AFDB”, “AFDB50”, and “AFDB Foldseek clusters” name three different objects:
+the full AlphaFold Database; AFDB sequences clustered at 50% identity (the AFDB50 release);
+and AFDB structural clusters from Foldseek over predicted structures (the v6 S-cluster file). The
+contrastive positive label is the third; the underlying sequence resource is the second.
+12.4 STRING-DB PPI (stringdb_train.parquet)
+Sources.STRING v12.0 protein.sequences.v12.0.fa.gz and
+protein.physical.links.full.v12.0.txt.gzfromstringdb-downloads.org.
+Pipeline.(1) Pre-filter the FASTA to proteins that appear in some link with combined_score≥400
+(STRING medium-confidence; reduces ∼59M →∼25M proteins). (2) Bernett decontamination: load
+theSynthyra/bernett_gold_ppi test split, write each test sequence under aBERNETT_* ID, run a
+single MMseqs2easy-linclust at 50% identity / 80% target coverage on the union, and drop any
+STRING protein whose linclust cluster contains anyBERNETT_* member. (3) Two-stage clustering of
+survivors (all–cov-mode 1): easy-linclust at 65%/85% then cascadedcluster at 50%/75%
+on stage-1 reps, with mappings composed member→rep 65 →rep 50. (4) Pair construction: filter
+links by score, join both endpoints to rep-50 clusters, drop self-cluster edges, canonicalise unordered
+cluster pairs, sort by score descending, deduplicate keeping the highest-scoring edge per cluster pair.
+(5) Length filter[10,1024]on both endpoints; final shuffle (seed42); write only(seq1, seq2).
+Final.36,502,692 pairs over 6.73M unique proteins per endpoint (input: STRING v12.0 has
+∼59M proteins and >20B physical links; the score ≥400 filter, Bernett decontam, and cluster-pair
+deduplication account for the reduction).
+12.5 ProteinGym DMS / clinical (dms_cosent.parquet)
+Source. OATML-Markslab/ProteinGym_v1 on HuggingFace, splits DMS_substitutions,
+DMS_indels,clinical_substitutions,clinical_indels.
+Pipeline.(1) Continuous DMS: per-assay z-score of DMS_score clipped to [−3,3] and rescaled to
+[0,1] . (2) Clinical: Pathogenic →0.0 , Benign →1.0 . (3) Drop assays with DMS_id startingGB1_ or
+GFP_AEQVI_ (overlap with our protein-level benchmarks). (4) Test-fold drop: if a recognised split
+column (stage,split,set,fold) carriestrain/test labels, drop test rows; otherwise apply the
+supervised benchmark’s deterministic per-group 80/20 split (RandomState(42), groups of DMS_id
+for DMS rows or protein_id for clinical rows). Groups with fewer than 10 rows are not split
+(the supervised benchmark also skips these at evaluation, so this introduces no leak). Pairs that
+appear in any test row are also removed globally as a final pass. (5) Final shuffle (seed 42). Optional
+mutant–mutant intra-assay pairing is disabled.
+Final.2,175,734 pairs over 3,576 unique wild-type targets and 2.09M unique mutants (input: ∼3M
+raw ProteinGym v1 rows across the four splits; the GB1/GFP assay drop and the supervised-test-fold
+drop account for the reduction). CoSENT preserves the score-induced ordering of pairs rather than
+training to absolute targets.
+15
+12.6 Compute and reproducibility
+End-to-end on a single 48-thread workstation: STRING two-stage clustering under 6 h, AFDB join
+∼30 min on NVMe, Pfam hard-negative generation∼2k anchors/s on 32 threads. All thresholds, iden-
+tity cutoffs, and seeds are fixed indata_prep.py; re-running with default flags (plus –limit_gb 0
+for AFDB) reproduces every parquet bit-for-bit against a fixed snapshot of the upstream HuggingFace,
+EBI, and STRING-DB releases.
+16
