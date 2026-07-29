@@ -130,6 +130,52 @@ Cross-validated: two independent implementations
 `scope_identity_correlation.compute_per_query`) agree to four decimals
 (V2 0.92203 vs 0.9220; V1 0.85115 vs 0.8512; ESM-2 0.76137 vs 0.7614).
 
+## 4a. 95% bootstrap confidence intervals — reviewer HNXd's explicit request
+
+HNXd asked for "95% confidence intervals for the reported metrics, computed by
+bootstrapping over individual predictions". Retrieval answers that exactly: every
+metric is a mean over per-query values, so resampling the 1,693 eligible queries
+gives the sampling distribution with no refitting. `bootstrap_ci.py`,
+10,000 resamples, `results/benchmarks/scope40_bootstrap_ci.json`.
+
+Marginal intervals (eligible queries):
+
+| method | Recall@1 | Recall@10 | MAP |
+|---|---|---|---|
+| ESM-2 35M | 0.4991 [0.4755, 0.5227] | 0.7614 [0.7407, 0.7815] | 0.4222 [0.4056, 0.4391] |
+| MMseqs2 | 0.6556 [0.6326, 0.6781] | 0.7401 [0.7194, 0.7608] | 0.4098 [0.3913, 0.4283] |
+| ProtSent-V1 | 0.5859 [0.5623, 0.6090] | 0.8512 [0.8334, 0.8677] | 0.5511 [0.5343, 0.5677] |
+| ProtSent-V2 | 0.6846 [0.6621, 0.7064] | 0.9220 [0.9090, 0.9344] | 0.6454 [0.6299, 0.6606] |
+
+**Quote the paired intervals, not the marginal ones.** The same queries are
+scored by every method, so overlapping marginal intervals do not mean a
+difference is unresolved. Paired per-query differences:
+
+| comparison | Recall@1 | Recall@10 | MAP |
+|---|---|---|---|
+| V1 - ESM-2 | +0.0868 [+0.0614, +0.1122] | +0.0898 [+0.0685, +0.1105] | +0.1289 [+0.1129, +0.1447] |
+| V2 - ESM-2 | +0.1855 [+0.1618, +0.2097] | +0.1607 [+0.1412, +0.1802] | +0.2232 [+0.2082, +0.2383] |
+| V2 - V1 | +0.0986 [+0.0762, +0.1211] | +0.0709 [+0.0555, +0.0862] | +0.0943 [+0.0814, +0.1074] |
+| V2 - MMseqs2 | +0.0289 [+0.0035, +0.0544] | +0.1819 [+0.1607, +0.2026] | +0.2356 [+0.2159, +0.2551] |
+
+**Every one of those intervals excludes zero.** V2's top-1 lead over a tuned
+MMseqs2 is small but statistically resolved, and its lead at depth is large.
+
+Two results that must be reported alongside, because they cut against the paper:
+
+- **MMseqs2 beats ESM-2 35M at top-1** by +0.1565 [+0.1276, +0.1855]. An untuned
+  pLM is worse than alignment at finding the single best homolog.
+- **MMseqs2 vs ESM-2 at Recall@10 (-0.0213 [-0.0484, +0.0047]) and MAP
+  (-0.0125 [-0.0351, +0.0102]) is unresolved.** Do not claim ESM-2 beats
+  alignment at depth; the data does not support it. ProtSent does, significantly.
+- **MMseqs2 beats ProtSent-V1 at top-1** by +0.0697 [+0.0413, +0.0975] —
+  significant. This is a real weakness of the submitted model and stating it
+  first is what makes the V2 result credible.
+
+Caveat to state: this bootstraps the query sample, so it quantifies uncertainty
+from which proteins are in the benchmark. It does not quantify training-seed
+variance, which is what the seed sweep below addresses.
+
 ## 5. MMseqs2-only baseline across the whole benchmark
 
 `mmseqs_baseline.py`, 23 tasks, same metric definitions as the embedding path
