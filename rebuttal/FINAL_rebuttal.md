@@ -100,7 +100,7 @@ That is a narrower paper than we submitted and a better-supported one. If it is 
 
 ## Response to Reviewer jVGf
 
-<!-- character count of the pasted body below: 8812 (limit 10,000) -->
+<!-- character count of the pasted body below: 8698 (limit 10,000) -->
 <!-- BEGIN jVGf -->
 Structural supervision is the single largest contributor, as you suspected, and our own Table 4 says so against the paper's own text. Removing AlphaFold DB drops improved tasks from 16 of 23 to 13 and the mean relative gain from +6.7% to +3.2%, while removing Pfam drops them to 15 and +4.6%. The sentence calling Pfam "the dominant contrastive signal" is contradicted by the table beneath it. That is our error, and no reviewer caught it.
 
@@ -122,13 +122,7 @@ An embedding always returns a ranked list, so its metric is never a property of 
 
 SCOPe-40, family level, 2,207-domain gallery, leave-one-out, self excluded, no-hit as failure. Only 1,693 queries have a non-self same-family neighbour, and every row uses those.
 
-| method | R@1 | R@10 | R@30 | MAP |
-|---|---|---|---|---|
-| MMseqs2 (`-s 7.5 -e 10`) | 0.656 | 0.740 | 0.757 | 0.410 |
-| HMMER (phmmer) | 0.697 | 0.781 | 0.798 | 0.475 |
-| ESM-2 35M | 0.499 | 0.761 | 0.834 | 0.421 |
-| ProtSent-V1 35M | 0.585 | 0.851 | 0.926 | 0.551 |
-| ProtSent-V2 35M | 0.685 | 0.922 | 0.963 | 0.646 |
+The full table is in our response to Reviewer Yi1G, item 7. Against the better of the two alignment tools, phmmer: R@1 0.697 against 0.685 for ProtSent-V2, R@10 0.781 against 0.922, MAP 0.475 against 0.646.
 
 Paired bootstrap, 10,000 resamples, the same queries scoring every method. We do not beat alignment at top-1: V2 minus HMMER at Recall@1 is -0.012 [-0.037, +0.012], unresolved, and V1 minus HMMER is -0.111 [-0.139, -0.083], a clear loss. The embedding wins at depth against both: V2 minus HMMER is +0.141 [+0.120, +0.162] at Recall@10 and +0.171 [+0.151, +0.191] at MAP; V2 minus MMseqs2 is +0.182 [+0.161, +0.203] and +0.236 [+0.216, +0.255].
 
