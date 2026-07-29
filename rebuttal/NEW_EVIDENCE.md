@@ -434,6 +434,44 @@ probe too (+0.0894).
    few-shot differences are within or near seed noise, and ESM-2 wins several
    cells. Only stability and remote homology show a consistent ProtSent gain.
 
+## 4g. SCOPe decontaminated on the benchmark side — the control that was missing
+
+SCOPe-40 cannot be filtered at corpus level (no train/test split; filtering
+against it would delete every structured domain from the corpus). The benchmark
+side can be filtered instead: drop the *queries* that have a close pretraining
+neighbour, re-score on what remains. `scope_clean_subset.py`,
+`results/benchmarks/scope40_clean_subset.json`.
+
+Eligible queries retained by maximum identity to our corpus, with 10,000-resample
+CIs:
+
+| queries | n | HMMER R@10 | V2 R@10 | HMMER MAP | V2 MAP |
+|---|---:|---|---|---|---|
+| <0.4 identity | 164 | 0.774 | **0.890** | 0.480 | **0.620** |
+| <0.5 | 287 | 0.774 | **0.909** | 0.481 | **0.637** |
+| <0.7 | 479 | 0.785 | **0.912** | 0.487 | **0.641** |
+| all | 1,693 | 0.781 | **0.922** | 0.475 | **0.645** |
+
+Paired V2 - HMMER on the same queries:
+
+| queries | R@1 | R@10 | MAP |
+|---|---|---|---|
+| <0.4 (n=164) | -0.043 [-0.128, +0.043] | **+0.116 [+0.049, +0.189]** | **+0.140 [+0.075, +0.207]** |
+| <0.5 (n=287) | -0.010 [-0.073, +0.049] | **+0.136 [+0.087, +0.188]** | **+0.156 [+0.108, +0.204]** |
+| <0.7 (n=479) | -0.027 [-0.073, +0.017] | **+0.127 [+0.090, +0.165]** | **+0.154 [+0.117, +0.190]** |
+| all (n=1,693) | -0.012 [-0.037, +0.012] | **+0.141 [+0.120, +0.162]** | **+0.171 [+0.151, +0.191]** |
+
+**The conclusion does not move.** At every threshold, including the 164 queries
+furthest from anything we trained on, ProtSent-V2 ties the best alignment
+baseline at top-1 and leads it at depth and MAP by intervals excluding zero. The
+margin does not shrink as the queries get cleaner.
+
+**State the limit of this control in the same breath**: it bounds
+identity-level exposure only. Supervision is Foldseek-cluster and Pfam-family
+co-membership, so a training pair sharing a query's *fold* at 15% identity
+survives any identity threshold. This is a weaker control than corpus filtering,
+and it is the one SCOPe permits.
+
 ## 5. MMseqs2-only baseline across the whole benchmark
 
 `mmseqs_baseline.py`, 23 tasks, same metric definitions as the embedding path
