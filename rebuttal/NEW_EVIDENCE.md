@@ -312,6 +312,63 @@ The gap to the published number is therefore not a probe artifact, and we do not
 claim it is; a matched comparison would need their split and metric definition,
 which we could not verify within the rebuttal window.
 
+## 4d. Embedding-space organisation — HNXd's first request, now measured
+
+HNXd asked for "either a direct retrieval/clustering evaluation, or an analysis
+showing how ProtSent changes the local and global organization of the protein
+embedding space", and named silhouette and distance-vs-property-similarity
+explicitly. Earlier drafts conceded this was not computed. **It is now**
+(`embedding_geometry.py`, `results/benchmarks/embedding_geometry.json`).
+
+SCOPe-40 labels are four-level — `class.fold.superfamily.family` — so the
+benchmark carries its own ground-truth hierarchy and needs no outside
+annotation. 2,207 domains, 917 families, cosine distance.
+
+| measure | ESM-2 35M | ProtSent-V1 | ProtSent-V2 |
+|---|---:|---:|---:|
+| silhouette (family) | -0.1426 | -0.0441 | **+0.0529** |
+| NMI vs true families | 0.8225 | 0.9004 | **0.9174** |
+| **ARI vs true families** | **0.0544** | 0.4165 | **0.5071** |
+| intra/inter distance ratio | 0.4174 | **0.2694** | 0.3524 |
+| Spearman(distance, shared hierarchy) | -0.1055 | **-0.3125** | -0.2097 |
+
+Mean pairwise distance by how much SCOPe hierarchy two domains share
+(0 = different class, 4 = same family):
+
+| shared levels | 0 | 1 | 2 | 3 | 4 |
+|---|---:|---:|---:|---:|---:|
+| ESM-2 35M | 0.156 | 0.140 | **0.146** | 0.123 | 0.064 |
+| ProtSent-V1 | 0.733 | 0.654 | 0.536 | 0.345 | 0.190 |
+| ProtSent-V2 | 0.865 | 0.821 | 0.780 | 0.571 | 0.299 |
+
+Three findings worth stating, in this order:
+
+1. **ARI rises from 0.054 to 0.507.** Clustering the untuned ESM-2 space at the
+   true number of families recovers almost nothing — 0.054 is near chance. Both
+   ProtSent models recover a large part of the family partition. This is the
+   single clearest evidence that the space is reorganised rather than rescaled,
+   and it is a 9x change, not a marginal one.
+2. **Silhouette crosses zero.** In ESM-2, families overlap more than they
+   separate (-0.14). In ProtSent-V2 they separate (+0.05). That is a qualitative
+   change of sign, not a shift along a scale.
+3. **ESM-2's distances are not monotone in the hierarchy; ProtSent's are.**
+   ESM-2 puts domains sharing two hierarchy levels *further apart* (0.146) than
+   domains sharing one (0.140) — the ordering is broken. Both ProtSent models are
+   strictly monotone across all five levels. This is the "global organisation"
+   HNXd asked about, and it is the measure that cannot be gamed by tightening
+   individual families.
+
+**Report the two places V1 beats V2**: intra/inter ratio (0.2694 vs 0.3524) and
+the hierarchy correlation (-0.3125 vs -0.2097). V2 has the better clustering
+recovery and the better silhouette; V1 has the tighter relative geometry. Do not
+claim V2 dominates on geometry — it does not, and the retrieval metrics are where
+V2's advantage is unambiguous.
+
+Note also that ESM-2's absolute distances are tiny (0.064-0.156 across the whole
+range), i.e. the untuned space is highly anisotropic; contrastive training
+expands it. Silhouette and ARI are scale-invariant, so the comparison is not an
+artifact of that expansion.
+
 ## 5. MMseqs2-only baseline across the whole benchmark
 
 `mmseqs_baseline.py`, 23 tasks, same metric definitions as the embedding path

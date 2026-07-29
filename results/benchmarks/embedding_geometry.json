@@ -1,0 +1,59 @@
+{
+  "n_domains": 2207,
+  "models": {
+    "ESM-2-35M": {
+      "silhouette": -0.1425764411687851,
+      "nmi": 0.8225044395870701,
+      "ari": 0.05435101923683708,
+      "intra_family_distance": 0.06358375400304794,
+      "inter_family_distance": 0.15233643352985382,
+      "intra_over_inter": 0.4173903282998105,
+      "hierarchy_spearman": -0.10548679858267346,
+      "hierarchy_spearman_p": 0.0,
+      "mean_distance_by_shared_depth": {
+        "0": 0.15646199882030487,
+        "1": 0.1400904357433319,
+        "2": 0.14644755423069,
+        "3": 0.12253342568874359,
+        "4": 0.06358376145362854
+      },
+      "n_families": 917
+    },
+    "ProtSent-V1": {
+      "silhouette": -0.044060517102479935,
+      "nmi": 0.9004386712647916,
+      "ari": 0.41650659916208943,
+      "intra_family_distance": 0.19033336639404297,
+      "inter_family_distance": 0.7065167427062988,
+      "intra_over_inter": 0.26939682372561286,
+      "hierarchy_spearman": -0.3124904357758945,
+      "hierarchy_spearman_p": 0.0,
+      "mean_distance_by_shared_depth": {
+        "0": 0.7329853177070618,
+        "1": 0.6541066765785217,
+        "2": 0.5359957814216614,
+        "3": 0.3450217545032501,
+        "4": 0.19033336639404297
+      },
+      "n_families": 917
+    },
+    "ProtSent-V2": {
+      "silhouette": 0.052863042801618576,
+      "nmi": 0.9174379849394695,
+      "ari": 0.5070597884202782,
+      "intra_family_distance": 0.299243688583374,
+      "inter_family_distance": 0.8492449522018433,
+      "intra_over_inter": 0.35236440064497626,
+      "hierarchy_spearman": -0.20968473535835705,
+      "hierarchy_spearman_p": 0.0,
+      "mean_distance_by_shared_depth": {
+        "0": 0.8647390604019165,
+        "1": 0.8208372592926025,
+        "2": 0.7796852588653564,
+        "3": 0.5707765817642212,
+        "4": 0.299243688583374
+      },
+      "n_families": 917
+    }
+  }
+}
