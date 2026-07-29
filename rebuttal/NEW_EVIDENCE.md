@@ -176,6 +176,38 @@ Caveat to state: this bootstraps the query sample, so it quantifies uncertainty
 from which proteins are in the benchmark. It does not quantify training-seed
 variance, which is what the seed sweep below addresses.
 
+## 4b. The identity-vs-gain null survives a headroom control
+
+The obvious objection to §4: high-identity queries are already well solved by the
+baseline, so they have less room to improve, and regression to the mean alone
+would produce a flat-or-negative slope with no memorization story either way.
+Gain is bounded above by (1 - baseline), so gain and baseline are not
+independent. `scope_identity_partial.py`,
+`results/benchmarks/scope_identity_partial_v{1,2}.json`.
+
+Spearman between max pretraining identity and per-query gain in average
+precision, 1,693 eligible queries:
+
+| control | ProtSent-V1 | ProtSent-V2 |
+|---|---|---|
+| raw | -0.114 (p=2.8e-06) | -0.116 (p=1.6e-06) |
+| partial, controlling for baseline score | **-0.083 (p=6.8e-04)** | **-0.081 (p=9.0e-04)** |
+| headroom-normalised gain, gain/(1-baseline) | -0.109 (p=2.1e-05) | -0.110 (p=1.7e-05) |
+
+Within baseline-score quartiles, where headroom is roughly constant, every
+correlation for V2 is null or negative: +0.007, -0.090, -0.158, -0.057.
+None is positive.
+
+The cleanest single statement comes from Recall@10, which is binary, so the
+"baseline scored zero" stratum is exactly the set of queries with full headroom:
+**among the 404 queries the untuned backbone fails completely, identity to the
+pretraining corpus does not predict the gain** (V2 Spearman +0.038, p=0.45).
+
+So the negative slope is not a headroom artifact. The control was run because a
+blind reader raised it, and it did not change the conclusion. Say so — a
+pre-empted objection that survived its own control is worth more than the raw
+correlation alone.
+
 ## 5. MMseqs2-only baseline across the whole benchmark
 
 `mmseqs_baseline.py`, 23 tasks, same metric definitions as the embedding path
