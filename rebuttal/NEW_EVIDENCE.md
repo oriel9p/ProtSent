@@ -371,6 +371,62 @@ This is the single most important honesty constraint on the rebuttal: any
 4. **Eq. 1 is malformed** as the reviewer noted; corrected notation is in the
    revision.
 
+## 6b. Few-shot transfer with seed variability — HNXd's items 2, 4 and 5
+
+`fewshot_seeds.py`, `results/benchmarks/fewshot_seeds.json`. Test split held
+fixed at full size; only the training subset is resampled, 5 seeds per point, so
+the spread is exactly the few-shot variability HNXd asked about. Both probes are
+fit on the same subset. Absolute scores, as requested — never relative
+percentages.
+
+**Remote homology (accuracy), the task ProtSent targets:**
+
+| N | ESM-2 kNN | ESM-2 linear | V1 kNN | V1 linear | V2 kNN | V2 linear |
+|---|---|---|---|---|---|---|
+| 50 | 0.061±0.010 | 0.121±0.003 | 0.055±0.008 | 0.159±0.004 | 0.045±0.009 | 0.145±0.005 |
+| 100 | 0.115±0.007 | 0.222±0.006 | 0.135±0.008 | 0.282±0.007 | 0.125±0.024 | 0.258±0.009 |
+| 1000 | 0.185±0.002 | 0.288±0.014 | **0.318±0.015** | **0.377±0.008** | 0.289±0.016 | 0.355±0.009 |
+
+**Stability (Spearman):**
+
+| N | ESM-2 kNN | ESM-2 linear | V2 kNN | V2 linear |
+|---|---|---|---|---|
+| 50 | 0.178±0.054 | 0.216±0.202 | **0.327±0.161** | 0.200±0.131 |
+| 100 | 0.260±0.129 | 0.284±0.209 | **0.401±0.202** | 0.292±0.200 |
+| 1000 | 0.228±0.074 | 0.406±0.075 | 0.315±0.079 | 0.430±0.105 |
+
+Solubility and metal-ion binding were also run and ProtSent does **not** win
+there: at N=1000 ESM-2 leads metal-ion binding under a linear head (0.666±0.001
+vs V1 0.637±0.004, V2 0.595±0.001) and solubility is a wash. Report this.
+
+Three conclusions, and the first one goes against us:
+
+1. **HNXd's proposed framing is not supported by our data.** They suggested that
+   under label scarcity a linear classifier degrades while k-NN stays
+   competitive. A trained linear head beats 3-NN in almost every
+   model/task/N cell here, including at N=50. We do not claim the crossover, and
+   we withdraw the label-scarcity framing that implied it.
+2. **ProtSent's few-shot advantage is real but task-specific.** On remote
+   homology at N=1000 it is large under both probes (+0.133 kNN, +0.089 linear
+   for V1 over ESM-2). On solubility and metal-ion binding it is absent.
+3. **Seed spread at small N is enormous, which is the real answer on Table 5.**
+   Stability at N=100 has a standard deviation of ±0.20 on a mean of 0.28-0.40 —
+   the spread is as large as the effect. A single-run relative change computed
+   against a near-zero baseline, such as the -126.9% cell, was never
+   interpretable. This is HNXd's own concern, confirmed by measurement, and it is
+   why the reporting now uses absolute means with seed standard deviations.
+
+**Full-data evaluation, by contrast, is essentially deterministic.** Re-running
+the benchmark across 5 seeds with full training data moves nothing: remote
+homology 0.5835±0.0000, metal-ion binding 0.7402±0.0000, solubility
+0.5102±0.0000, variant effect 0.6582±0.0000, stability 0.6435±0.0001, only
+thermostability showing any spread at ±0.0126
+(`results/benchmarks/seeds/`). Given a fixed test split and a deterministic
+probe over deterministic embeddings, there is nothing left to vary. So the
+uncertainty that matters for the main tables is **which proteins are in the test
+set**, which is what the bootstrap intervals in §4a quantify — not seed noise.
+Say both halves; quoting only one of them would misrepresent the analysis.
+
 ## 6a. The linear-probe comparison is a final-layer artifact — measured
 
 Both probes in the benchmark pool the **final** layer. That is the measurement
