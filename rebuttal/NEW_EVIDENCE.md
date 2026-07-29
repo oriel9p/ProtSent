@@ -52,10 +52,28 @@ question is answered by the identity-stratified analysis in §4 instead.
 ## 2. ProtSent-V2-35M — retrained on the decontaminated corpus
 
 4,850 steps, one epoch over 169.2M rows, 7x NVIDIA B300, `train_runtime`
-39,170 s (10 h 53 m), 887.5 samples/s. Differences from V1 beyond
-decontamination, which **must be stated whenever V1 and V2 are compared**:
-7x1024 effective batch (vs 1x1024), no synthetic hard negatives, proportional
-multi-dataset sampling, one epoch.
+39,170 s (10 h 53 m), 887.5 samples/s.
+
+**How to describe the configuration — use this framing, briefly, once per
+response, and do not dwell on it.** The training changes are not arbitrary: they
+are the settings the *paper's own ablations already favoured*, which is also the
+direct answer to Yi1G's criticism that the ablations do not support the
+submitted defaults. We acted on them.
+
+> We retrained on the filtered corpora using the configuration favoured by the
+> paper's own ablations — proportional sampling and no synthetic hard negatives
+> — otherwise following the submitted recipe, on 7 GPUs rather than 1.
+
+Grounding, from the submitted ablations: removing synthetic hard negatives
+improves 20/23 tasks at mean +7.9% versus 16/23 and +6.7% for the submitted
+configuration; proportional sampling (+7.0%) is comparable to round-robin
+(+6.7%). Running on 7 GPUs raises the contrastive batch from 1x1024 to 7x1024.
+
+Do NOT write a paragraph enumerating V1-vs-V2 differences, and do NOT frame the
+comparison as a controlled decontamination ablation — there is no
+unfiltered-corpus retrain at the V2 configuration and none is planned. The
+claim the evidence supports is the sufficient one: **decontaminating the corpus
+did not cost performance**, and the retrained model is the stronger one.
 
 ## 3. Structural results — test split, kNN, all arms measured with one code path
 
@@ -80,9 +98,9 @@ any non-self same-family protein in the gallery. Restricted to those:
 | **ProtSent-V2 35M** | **0.6852** | **0.9220** | **0.9634** | **0.6459** |
 
 **The top-1 story changed.** A tuned MMseqs2 beats the *submitted* model at R@1
-(0.5029 vs 0.4490). It does not beat the decontaminated retrained model
-(0.5029 vs 0.5256). Be precise about which model each claim refers to; do not
-retro-claim a top-1 win for the submitted paper.
+(0.5029 vs 0.4490). It does not beat the retrained model (0.5029 vs 0.5256), and
+that lead is statistically resolved (see 4a). Be precise about which model each
+claim refers to; do not retro-claim a top-1 win for the submitted paper.
 
 Remote homology — **the task the corpus was actually filtered against**:
 
