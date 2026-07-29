@@ -378,5 +378,21 @@
     "Spearman": 0.2844648540172835,
     "MSE": 2.4666756763105475,
     "hit_coverage": 1.0
+  },
+  {
+    "Model": "HMMER phmmer (alignment baseline)",
+    "Task": "AAV Fitness (FLIP)",
+    "task_key": "aav_flip",
+    "main_metric": "Spearman",
+    "problem_type": "regression",
+    "eval_split": "test",
+    "n_train": 1500,
+    "n_test": 1500,
+    "hmmer_flags": "phmmer -E 10.0 --max-hits 300, rank by bitscore desc",
+    "max_samples": 1500,
+    "search_seconds": 784.6,
+    "Spearman": 0.36978742017869926,
+    "MSE": 11.56896593172933,
+    "hit_coverage": 1.0
   }
 ]

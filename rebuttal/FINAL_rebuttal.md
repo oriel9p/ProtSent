@@ -1,475 +1,512 @@
-# ProtSent — NeurIPS 2026 rebuttal (submission 28056) — FINAL
+# ProtSent — NeurIPS 2026 rebuttal (submission 28056) — POSTABLE FINAL
 
-Post each response under its own review. No links, no attachments. Every number
-appears in the response text with its metric, split and model.
+Post each response under its own review. No links, no attachments, no figures.
+Every number appears in the response text with its metric, split and model.
 
 Naming used throughout: **V1** = the submitted/published 35M model.
 **V2** = the 35M model retrained during the rebuttal on the decontaminated corpora.
+
+Paste unit = everything strictly between `<!-- BEGIN X -->` and `<!-- END X -->`,
+stripped of leading and trailing whitespace. The character count stated above each
+BEGIN marker is that body; the comment itself sits outside the paste unit.
 
 ---
 
 ## Response to Reviewer HNXd
 
+<!-- character count of the pasted body below: 9610 (limit 10,000) -->
 <!-- BEGIN HNXd -->
-**What the paper claims after this rebuttal, in one sentence:** contrastive
-training over multiple relation types reorganizes a frozen 35M ESM-2 embedding so
-that family, fold and interaction relations become locally recoverable — measured
-as structural retrieval and remote homology — and it does **not** improve general
-property prediction under a trained readout. The general-purpose superiority claim
-is withdrawn. Your question 2 is what killed it.
+**All five questions now carry measurements**, absolute few-shot scores with seed
+SDs included. Two of the answers go against us.
 
-Both probes are now complete on all 23 tasks, `--eval_split test`, for stock
-ESM-2 35M and both ProtSent models. Against ESM-2 35M:
+**What we defend, narrower than the paper:** contrastive fine-tuning of a 35M
+ESM-2 backbone, evaluated frozen, makes family/fold relations *locally*
+recoverable — SCOPe-40 retrieval depth and remote homology — and adds nothing a
+trained linear head could not already extract from mean-pooled ESM-2. Withdrawn:
+general-purpose superiority (your Q2 killed it), the label-scarcity claim, Table
+5, all 150M results. Our strongest surviving result sits on SCOPe-40, the one
+benchmark we could not decontaminate.
 
-| probe | ProtSent-V1 | ProtSent-V2 |
+### 1. Retrieval and how the space reorganises (Q1)
+
+**We computed no clustering statistics — no silhouette, NMI or ARI.** We ran
+direct retrieval, a per-query organisation analysis, and a layer sweep.
+
+SCOPe-40, **family** level, 2,207-domain gallery, leave-one-out, self excluded,
+no-hit queries scored as failures. Only 1,693 of 2,207 queries have a non-self
+same-family neighbour; every row is restricted to those, where the Recall ceiling
+is 1.0 (over all 2,207 each method's Recall scales by 1,693/2,207 = 0.7671).
+
+| method (1,693 eligible queries) | R@1 | R@10 | R@30 | MAP |
+|---|---|---|---|---|
+| MMseqs2 (`-s 7.5 -e 10 --max-seqs 300`) | 0.6556 | 0.7401 | 0.7566 | 0.4098 |
+| HMMER (phmmer, `-E 10`, top 300) | **0.6970** | 0.7809 | 0.7980 | 0.4747 |
+| ESM-2 35M | 0.4991 | 0.7614 | 0.8340 | 0.4210 |
+| ProtSent-V1 35M (submitted) | 0.5854 | 0.8512 | 0.9256 | 0.5509 |
+| ProtSent-V2 35M (retrained) | 0.6852 | **0.9220** | **0.9634** | **0.6459** |
+
+**Alignment is the better top-1 method**, and V1 loses top-1 to both tools. Our
+advantage is ranking *depth*, and part of that margin is list coverage rather
+than ranking: 691 of 2,207 queries return no phmmer hit at `-E 10` and score 0 at
+every K, and both tools flatten from R@10 to R@30 (+0.0171, +0.0165) where the
+embeddings do not (+0.0726 ESM-2, +0.0414 V2). Until both are re-run with that
+threshold removed, the depth margin is an upper bound.
+
+Where the reorganisation happens: V2's per-query R@10 gain over ESM-2 is flat in
+each query's maximum identity to our pretraining corpus (+0.1524 at [0.2,0.4),
+n=164; +0.1565 at [0.7,1.0], n=1,214), and among the 404 queries where ESM-2
+fails outright at R@10, identity does not predict the gain
+(Spearman +0.038, p=0.45). This is identity-level only; it cannot see fold-level
+overlap.
+
+V2 is a retrain on corpora filtered at 40% identity / 80% coverage against the
+remote-homology and PPI test sets — the only two filter targets, SCOPe-40 was not
+one — with the settings our own ablations favour and a true 1,024-example
+contrastive batch where V1's loss call saw 64. **V2 - V1 is therefore not a
+decontamination ablation**; no unfiltered-corpus retrain at that recipe exists.
+
+### 2. Linear probe, and a frozen linear baseline under label scarcity (Q2)
+
+23 tasks, `--eval_split test`, frozen mean-pooled embeddings, vs stock ESM-2 35M:
+
+| probe (20 comparable tasks) | V1 | V2 |
 |---|---|---|
 | 3-NN | 11 win / 3 tie / 6 lose, median +0.0075 | 10 / 3 / 7, median +0.0041 |
 | linear | 4 / 4 / 12, median **-0.0139** | 2 / 7 / 11, median -0.0107 |
 
-Read this before the counts: (i) the tie band is **±0.005** on each task's main
-metric — with 7 ties of 20 it materially decides the linear record; (ii) counts are
-over **20 of the 23** tasks. `antibiotic_resistance`, `remote_homology` and
-`temperature_stability` are excluded from *both* columns because their main metric
-is multiclass AUC and the test split contains classes absent from train, so
-one-vs-rest AUC is undefined for the embedding arms. That drops remote homology,
-our best task, out of the tally; its accuracy is reported separately below and is
-not in the 20; (iii) three *different* tasks — `ec_classification`, `go_mf`,
-`scope40_retrieval` — use a built-in evaluator that ignores the requested probe, so
-their rows are one measurement printed in both tables. SCOPe retrieval therefore
-has **one** measurement, not two, and we do not claim it "survives both probes";
-(iv) the linear probe is scikit-learn defaults on frozen mean-pooled embeddings —
-`StandardScaler` + `LogisticRegression(solver="liblinear")` or `Ridge(alpha=1.0)`,
-no per-arm tuning. It is untuned, and an undertuned probe would move this record in
-either direction; (v) every benchmark number here is a single run at benchmark seed
-42.
+Reading rules, all against us. The ±0.005 tie band is in absolute units across
+accuracy, Spearman, F1 and AUC; no setting of it turns the linear record into a
+win. Three tasks are outside the 20 — `antibiotic_resistance`, `remote_homology`,
+`temperature_stability` — dropped from *both* columns because one-vs-rest AUC is
+undefined when the test split holds a class absent from train, which removes our
+best task from the tally. Three inside the 20 use a built-in evaluator that
+ignores the probe flag and contribute identically to both rows: EC (F1-macro
+0.598 ESM-2 vs 0.562 V1) and GO-MF (0.459 vs 0.443), both losses, and SCOPe-40
+retrieval, a win. So only 17 of 20 cells differ by probe. The probe is
+scikit-learn defaults, untuned.
 
-### 1. Direct retrieval evaluation (your question 1)
+Remote homology (pooled 457-class, test split), where contrastive training does
+add something: 3-NN accuracy 0.5835 (ESM-2) / 0.6587 (V1) / **0.6668** (V2);
+linear accuracy 0.6868 / 0.6899 / **0.7016**; linear macro-F1 0.4414 / **0.4281**
+/ 0.4527 — V1 is *below* the untuned backbone there, and V1's +0.0031 linear
+accuracy is a tie by our own band. Only V2 improves on both metrics under both
+probes.
 
-**We did not compute clustering-geometry statistics** — no silhouette, NMI or ARI.
-You asked for either a retrieval/clustering evaluation or a geometry analysis; we
-ran the first, plus the per-query analysis in section 3. The second is missing.
+One diagnostic, not a defence: both probes pool the **final** layer, and a
+per-layer linear sweep (subsampled 8,000 train / 3,000 test, so not comparable to
+the numbers above) shows that is the worst layer for remote homology in *both*
+models — ESM-2 0.6373 there vs 0.6703 at layer 6; V2 0.6803 vs 0.7033 at layer 8,
+with V2 ahead at every layer from 6 up. Two tasks, one scale; it does not
+overturn the table.
 
-SCOPe-40, **family** level, 2,207-sequence gallery, self excluded, no-hit queries
-scored as failures. **Recall@K is upper-bounded at 0.7671**: only 1,693 of 2,207
-queries have any non-self same-family protein in the gallery, so 514 are
-unachievable for every method.
+**Your level-gap hypothesis: tested, and the probe is not the cause.** BIOMAP
+`stability_prediction` labels are continuous floats and our suite scores the task
+by Spearman, so our "58.8%" is a correlation ×100, not an accuracy commensurate
+with 69.08% linear / 77.69% LoRA; we withdraw that comparison. And 3-NN scores
+*higher* than our linear probe there for every arm (ESM-2 35M Spearman 0.6435 vs
+0.4395), so the probe change you suggested moves the number the wrong way.
 
-| method (all 2,207 queries) | R@1 | R@10 | R@30 | MAP |
-|---|---|---|---|---|
-| MMseqs2 (`-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3`) | 0.5029 | 0.5637 | 0.5641 | 0.3100 |
-| ESM-2 35M | 0.3829 | 0.5840 | 0.6398 | 0.3230 |
-| ProtSent-V1 35M (submitted) | 0.4490 | 0.6529 | 0.7100 | 0.4226 |
-| ProtSent-V2 35M (retrained) | 0.5256 | 0.7073 | 0.7390 | 0.4955 |
+### 3. Bootstrap confidence intervals (Q3)
 
-V2 is a retrain on corpora from which every sequence within 40% identity / 80% coverage
-of the remote-homology and PPI test sets was removed (those two test sets were the only
-filter targets; SCOPe-40 and the other benchmarks were not filtered). We retrained on the
-filtered corpora using the configuration favoured by the paper's own ablations —
-proportional sampling and no synthetic hard negatives — otherwise following the submitted
-recipe, on 7 GPUs rather than 1.
-
-V1's R@30 of 0.7100 is 92.6% of the attainable 0.7671. The advantage is in ranking
-depth, not top-1: a tuned MMseqs2 **beats the submitted model at top-1** (0.5029 vs
-0.4490) and only V2 passes it. One caveat that cuts against us: MMseqs2's R@10 and
-R@30 differ by 0.0004 because at `-e 10 --max-seqs 300` it returns few candidates
-past rank 10, so part of the depth gap is coverage, not ranking quality. Top-1 is
-the coverage-free comparison, and it is the one the submitted model loses.
-
-### 2. Linear probes and label scarcity (your question 2)
-
-The aggregate is the 4/4/12 above. Per task the two probes disagree in a specific
-way: on AAV fitness (Spearman) ESM-2 0.4667 vs V1 0.5553 under 3-NN, but ESM-2
-0.5639 vs V1 0.4362 under the linear probe. Contrastive training makes relations
-*local*; it does not add information a trained head could not already extract from
-mean-pooled ESM-2 features.
-
-Remote homology (pooled 457-class task, accuracy, test split) is where it does add
-something: 3-NN 0.5835 (ESM-2) / 0.6587 (V1) / 0.6668 (V2); linear 0.6868 / 0.6899
-/ 0.7016. Under the linear probe **V1's +0.0031 is inside our own ±0.005 band and
-is a tie** — only V2 clears it. Note also that the submitted paper's "+40.5%" for
-this task is a relative change in macro-F1 (.223 → .313) computed under the suite's
-default split; the numbers here are accuracy on the test split. Different metric,
-different split — they are not two views of one result and we do not mix them.
-
-That also explains the level difference you flagged against the literature: every
-number in our tables is a frozen 35M backbone under a 3-NN or linear probe, not a
-fine-tuned larger model, and printing them beside published fine-tuned numbers was
-wrong.
-
-**We did not run a fine-tuning sweep and we have no few-shot linear-probe
-baseline.** The label-scarcity claim has no supporting control; we withdraw it.
-
-### 3. 95% confidence intervals (your question 3)
-
-Retrieval answers your request exactly as you posed it — every metric is a mean
-over per-query values, so resampling queries gives the sampling distribution with
-no refitting. 10,000 resamples, **paired** (the same queries score every method),
-over the **1,693 eligible** queries. The intervals therefore sit on a different
-denominator from the table above; here is that denominator explicitly:
-
-| method (1,693 eligible queries) | R@1 | R@10 | R@30 | MAP |
-|---|---|---|---|---|
-| MMseqs2 | 0.6556 | 0.7348 | 0.7354 | 0.4041 |
-| ESM-2 35M | 0.4991 | 0.7614 | 0.8340 | 0.4210 |
-| ProtSent-V1 | 0.5854 | 0.8512 | 0.9256 | 0.5509 |
-| ProtSent-V2 | 0.6852 | 0.9220 | 0.9634 | 0.6459 |
+Every retrieval metric is a mean over per-query values, so resampling the 1,693
+queries needs no refitting. 10,000 resamples, **paired**; this run reproduces
+every cell of the table above to within 0.0012.
 
 | paired difference | Recall@1 | Recall@10 | MAP |
 |---|---|---|---|
-| V1 - ESM-2 | +0.0868 [+0.0614, +0.1122] | +0.0898 [+0.0685, +0.1105] | +0.1289 [+0.1129, +0.1447] |
 | V2 - ESM-2 | +0.1855 [+0.1618, +0.2097] | +0.1607 [+0.1412, +0.1802] | +0.2232 [+0.2082, +0.2383] |
-| V2 - V1 | +0.0986 [+0.0762, +0.1211] | +0.0709 [+0.0555, +0.0862] | +0.0943 [+0.0814, +0.1074] |
+| V2 - HMMER | **-0.0124 [-0.0372, +0.0124]** | +0.1412 [+0.1205, +0.1618] | +0.1708 [+0.1511, +0.1905] |
 | V2 - MMseqs2 | +0.0289 [+0.0035, +0.0544] | +0.1819 [+0.1607, +0.2026] | +0.2356 [+0.2159, +0.2551] |
 
-(Interval centres are bootstrap means and differ from the table's point estimates
-by under 0.001.)
+**We do not claim to beat alignment at top-1**: V2 ties HMMER and passes only the
+weaker tool. V1 - HMMER is -0.1110 [-0.1388, -0.0827] and V1 - MMseqs2 -0.0697
+[-0.0975, -0.0413], outright losses.
 
-Three results from the same procedure that cut against us: MMseqs2 beats ESM-2 35M
-at top-1 by +0.1565 [+0.1276, +0.1855]; MMseqs2 beats ProtSent-V1 at top-1 by
-+0.0697 [+0.0413, +0.0975]; and MMseqs2 vs ESM-2 at R@10 (-0.0213 [-0.0484,
-+0.0047]) and MAP (-0.0125 [-0.0351, +0.0102]) is **unresolved**, so we do not
-claim an untuned pLM beats alignment at depth. V2's top-1 lead over alignment is
-+0.0289 with a lower bound of +0.0035 — resolved, but small, and we present it as
-small. This bootstrap quantifies which proteins are in the benchmark; it does not
-quantify training-seed variance.
+**We computed no intervals for the 23-task table; your objection stands there.**
+Each cell is one run at seed 42, any delta inside ±0.005 is called a tie, and the
+checkpoint spread below is at or above that band, so a large part of that table
+is unresolved by our own standard.
 
-**We did not compute intervals for the 23-task table.** This is an omission, not an
-obstacle: the fitted probe can be held fixed and the held-out predictions
-resampled, which requires no refitting. Without them your objection stands on its
-own — each cell is one run at one seed, and any delta inside ±0.005 is unresolved
-and is reported as a tie, not an improvement.
+### 4-5. Few-shot: absolute scores and seed variability (Q5, Q4)
 
-### 4-5. Seed variability and Table 5 (your questions 4 and 5)
+**Table 5 is replaced, not defended.** Its relative cells were uninterpretable —
+unbounded over near-zero Spearman baselines (-126.9% is a sign flip of magnitude
+0.269× the baseline) — and the estimator was not constant across it, since the
+code sets `n_neighbors = max(1, min(3, train_size))`. Re-run with absolute
+scores, 5 training-subset draws per point, test split held at full size, both
+probes fit on the same subset. **Remote homology, accuracy, mean ± SD, kNN /
+linear:**
 
-**We have no multi-seed results**, for training seeds or probe seeds. So Table 5 is
-withdrawn rather than re-presented in absolute units from the same single-seed run.
+| N | ESM-2 35M | ProtSent-V1 | ProtSent-V2 |
+|---|---|---|---|
+| 50 | 0.061±0.010 / 0.121±0.003 | 0.055±0.008 / 0.159±0.004 | 0.045±0.009 / 0.145±0.005 |
+| 1000 | 0.185±0.002 / 0.288±0.014 | **0.318±0.015 / 0.377±0.008** | 0.289±0.016 / 0.355±0.009 |
 
-The cells you flagged are an arithmetic artifact compounded by an estimator change.
-A relative change of -126.9% on a Spearman correlation is a sign flip of magnitude
-0.269x the baseline, not a 127-point drop; +244.5% on a near-zero baseline is
-likewise unbounded. And at small N the probe silently reduces k, because the code
-sets `n_neighbors = max(1, min(3, train_size))` — so the smallest few-shot cells
-are not even the same estimator. Relative change over near-zero denominators, one
-run, varying k: the wrong instrument, and the claim it supported goes with it.
+Stability (Spearman) at N=50: ESM-2 0.178±0.054 kNN / 0.216±0.202 linear vs V2
+0.327±0.161 / 0.200±0.131. Metal-ion binding at N=1000 under the linear head:
+ESM-2 0.666±0.001 beats V1 0.637±0.004 and V2 0.595±0.001.
 
-The one variance measurement we have is checkpoint sensitivity. The final V2
-checkpoint is the last training step and was not selected on any benchmark; a
-near-trough checkpoint (step 4,000, where the 3-cycle cosine schedule bottoms) was
-benchmarked as a control and differs by 0.005-0.008 on every structural metric.
-That bounds one nuisance factor; it is not a seed replicate.
+Three conclusions, the first against us. (i) **Your proposed framing is not
+supported by our data**: a trained linear head beats 3-NN in almost every
+model/task/N cell, including N=50, so "linear degrades while k-NN stays
+competitive" is false here, and the label-scarcity claim is withdrawn rather than
+reframed. (ii) The few-shot advantage is real but task-specific — large on remote
+homology, absent on metal-ion binding. (iii) At small N the seed spread is as
+large as the effect (Stability at N=100: ±0.20 on means of 0.28-0.40), your
+concern confirmed. **We ran no fine-tuning sweep**, so how a fine-tuned ESM-2
+compares is unmeasured.
+
+Full-data evaluation is near-deterministic: 5 seeds × 8 tasks × 3 arms under 3-NN
+gives a median SD of 0.0000 across 24 rows, since fixed embeddings and a fixed
+test split make that probe deterministic; only `thermostability` subsamples (SD
+0.013-0.017). Two caveats we volunteer: one *training* run per model exists, so
+training-seed variance is unmeasured; and checkpoint 4,000 — the snapshot nearest
+the last cosine trough at step 4,208 — differs from the final V2 checkpoint by
+0.005-0.008 on every structural metric. We therefore call no sub-0.01 structural
+delta resolved, including the +0.0079 V1→V2 remote-homology gap.
 
 ### Errors we found in our own submission
 
-All new evidence above is 35M. **There is no 150M model on the decontaminated
+All evidence here is 35M. **There is no 150M model on the decontaminated
 corpus**, so we do not defend the submitted 150M numbers, including the abstract's
-+105% and +19.9%. Further: SCOPe is evaluated on the **family** field over **2,207**
-sequences, not superfamily over 100,000 — the 100,000 is the evaluator's
-`max_samples` cap echoed into the results table (a separate superfamily-level
-evaluation still improves at 35M, R@1 0.639 -> 0.726; no interval computed for it).
-Our remote-homology test split is TAPE's three holdouts pooled (718 fold + 1,254
-superfamily + 1,272 family = 3,244) with no column marking which, not
-hierarchy-disjoint as we wrote. Eq. 1 is malformed. Two protocol facts we should
-have printed: `thermostability` has no official test split (the suite takes a
-seeded 80/20 split of train), and `peptide_hla` inputs are pipe-joined
-`HLA_pseudoseq|peptide` strings.
++105% and +19.9%. SCOPe is evaluated on the **family** field over **2,207**
+sequences, not superfamily over 100,000 — that figure is the evaluator's
+`max_samples` cap. Our remote-homology test split is TAPE's three holdouts pooled
+(718 + 1,254 + 1,272 = 3,244), not hierarchy-disjoint as written, so its pooled
+macro AUC is not comparable to published per-holdout accuracies; and the paper's
+"+40.5%" there is a relative macro-F1 change (.223 → .313) on the suite's default
+split, not the test-split numbers above, which we do not mix. The camera-ready is
+therefore a 35M retrieval-and-remote-homology paper, both probes on the test
+split.
 
-If the withdrawals and the measurements above change your assessment, we ask you to
-reconsider. If one item remains decisive, name it and we will answer in discussion.
+If that changes your assessment we ask you to reconsider; if one item remains
+decisive, name it and we will answer it in discussion.
 <!-- END HNXd -->
 
 ---
 
 ## Response to Reviewer jVGf
 
+<!-- character count of the pasted body below: 9234 (limit 10,000) -->
 <!-- BEGIN jVGf -->
-Your two axes turned out to be one axis, and answering it changed what we claim.
-**The paper's claim after this rebuttal:** multi-relational contrastive training on
-a frozen 35M backbone buys retrieval geometry — structural and homology search —
-and buys nothing on tasks where a trained head already extracts the label. The
-general-purpose framing is withdrawn. Here is the position on the curve, measured.
+Both of your axes now carry measurements, and the first goes against us:
+structural supervision is the single largest contributor, and under a trained
+linear probe ProtSent loses to its own untuned backbone on most tasks, so the
+general-purpose framing is withdrawn. What we defend is a *measured* position on
+the generality-accuracy curve, plus evidence that the non-structural sources do
+distinct work. Everything below is 35M: **there is no 150M model on the
+decontaminated corpus** and we do not defend the submitted 150M results.
 
-### 1. Where ProtSent sits on the generality-accuracy trade-off (your Q3 / W2)
+### 1. Where ProtSent sits on the generality-accuracy trade-off (Q3 / W2)
 
-We ran MMseqs2 as a full alternative pipeline across all 23 benchmark tasks under
-identical metric definitions — family-level Recall@K with self excluded, per-class
-max bitscore for classification so AUC stays comparable, 1-NN by bitscore for
-regression. No-hit queries are scored as failures, not dropped. Flags: `-s 7.5 -e
-10 --max-seqs 300 --alignment-mode 3`; at the default `-s 5.7` the same baseline
-gives SCOPe R@1 0.3847, so any MMseqs2 number needs its sensitivity stated.
+We ran MMseqs2 as a full alternative pipeline over all 23 tasks under identical
+metric definitions (family-level Recall@K with self excluded, per-class max
+bitscore for classification so AUC stays comparable, 1-NN by bitscore for
+regression; no-hit queries scored as failures, not dropped), at
+`-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3` rather than the much weaker
+default — at `-s 5.7` the same baseline gives SCOPe R@1 0.3847, so any MMseqs2
+number needs its sensitivity stated. We also ran HMMER (phmmer, `-E 10`, top 300
+hits per query, identical scoring code) on SCOPe-40, because it is the harder
+alignment baseline and the one that costs us a claim.
 
-Alignment beats the best embedding model outright on **3 of 23 tasks under a 3-NN
-probe** (EC classification, GO molecular function, beta-lactamase) and **6 under a
-linear probe** (those plus enzyme catalytic efficiency, optimal pH, stability). The
-margins are not small: EC classification F1-macro 0.710 (MMseqs2) vs 0.598 (ESM-2
-35M) and 0.562 (ProtSent-V1); GO-MF 0.585 vs 0.459 / 0.443. On beta-lactamase
-(Spearman, 3-NN) the full set is MMseqs2 0.8026, ESM-2 0.7272, V1 0.7676, V2
-0.7153 — alignment wins and our retrained model is the worst of the four. Where
-annotation transfers by homology, alignment is simply better.
+**Alignment beats the best embedding model outright on 3 of 23 tasks under a 3-NN
+probe** (EC classification, GO molecular function, beta-lactamase fitness) **and
+6 under a linear probe** (those plus enzyme catalytic efficiency, optimal pH,
+stability). The margins are large: EC classification F1-macro 0.710 (MMseqs2) vs
+0.598 (ESM-2 35M) and 0.562 (V1); GO-MF 0.585 vs 0.459 / 0.443; beta-lactamase
+Spearman 0.8026, above every embedding arm including our retrained model. Where
+annotation transfers by homology, alignment is simply better. At the other end
+MMseqs2 is *below chance* on DeepSol solubility (AUC 0.4185) — homology
+label-transfer is anti-correlated there.
 
-The other end of the curve is SCOPe-40 (family level, 2,207-sequence gallery, self
-excluded, no-hit = failure; **Recall@K upper-bounded at 0.7671**, since only 1,693
-queries have a non-self same-family neighbour):
+SCOPe-40, family level, 2,207-domain gallery, self excluded, no-hit = failure.
+Only 1,693 queries have a non-self same-family neighbour; all rows use those
+1,693, where the Recall ceiling is 1.0 (over all 2,207 every method scales by
+1,693/2,207 = 0.7671).
 
-| method | R@1 | R@10 | R@30 | MAP |
+| method (1,693 eligible queries) | R@1 | R@10 | R@30 | MAP |
 |---|---|---|---|---|
-| MMseqs2 (`-s 7.5 -e 10`) | 0.5029 | 0.5637 | 0.5641 | 0.3100 |
-| ESM-2 35M | 0.3829 | 0.5840 | 0.6398 | 0.3230 |
-| ProtSent-V1 35M (submitted) | 0.4490 | 0.6529 | 0.7100 | 0.4226 |
-| ProtSent-V2 35M (retrained, decontaminated) | 0.5256 | 0.7073 | 0.7390 | 0.4955 |
+| MMseqs2 (`-s 7.5 -e 10`) | 0.6556 | 0.7401 | 0.7566 | 0.4098 |
+| HMMER (phmmer) | **0.6970** | 0.7809 | 0.7980 | 0.4747 |
+| ESM-2 35M | 0.4991 | 0.7614 | 0.8340 | 0.4210 |
+| ProtSent-V1 35M (submitted) | 0.5854 | 0.8512 | 0.9256 | 0.5509 |
+| ProtSent-V2 35M (decontaminated retrain) | 0.6852 | **0.9220** | **0.9634** | **0.6459** |
 
-V2 is a retrain on corpora from which every sequence within 40% identity / 80% coverage
-of the remote-homology and PPI test sets was removed (those two were the only filter
-targets; SCOPe-40 was not filtered). We retrained on the filtered corpora using the
-configuration favoured by the paper's own ablations — proportional sampling and no
-synthetic hard negatives — otherwise following the submitted recipe, on 7 GPUs rather
-than 1.
+Paired bootstrap, 10,000 resamples, the same queries scoring every method (it
+reproduces the table above to within 0.0012). **We do not beat alignment at
+top-1**: V2 - HMMER at R@1 is -0.0124 [-0.0372, +0.0124], unresolved, and V1 -
+HMMER is -0.1110 [-0.1388, -0.0827], a clear loss; V2 leads MMseqs2 by only
++0.0289 [+0.0035, +0.0544] while V1 loses to it by -0.0697 [-0.0975, -0.0413].
+The embedding wins at depth against both: V2 - HMMER +0.1412 [+0.1205, +0.1618]
+at R@10 and +0.1708 [+0.1511, +0.1905] at MAP; V2 - MMseqs2 +0.1819 [+0.1607,
++0.2026] and +0.2356 [+0.2159, +0.2551].
 
-Paired bootstrap over the 1,693 eligible queries, 10,000 resamples: MMseqs2 **beats
-the submitted model** at top-1 by +0.0697 [+0.0413, +0.0975]; the retrained model
-leads MMseqs2 at R@1 by +0.0289 [+0.0035, +0.0544], at R@10 by +0.1819 [+0.1607,
-+0.2026] and MAP by +0.2356 [+0.2159, +0.2551]. Two honest qualifications: the
-top-1 lead is small and its lower bound is +0.0035; and MMseqs2's R@10 and R@30
-differ by only 0.0004, meaning it returns few candidates past rank 10, so part of
-the depth margin is candidate coverage rather than ranking. At the other extreme
-MMseqs2 is *below chance* on DeepSol solubility (AUC 0.4185), where there is no
-homology signal to transfer.
+**Two limits on that depth result, both ours.** Part of it is list coverage
+rather than ranking quality: 691 of 2,207 queries return no phmmer hit at `-E 10`
+and are scored 0 at every K, and both tools flatten from R@10 to R@30 (+0.0171
+HMMER, +0.0165 MMseqs2) where the embeddings do not (+0.0726 ESM-2, +0.0414 V2).
+We did not re-run either tool with the reporting threshold removed, so the depth
+margin is an upper bound. And SCOPe-40 was never a decontamination target:
+per-query R@10 gain over ESM-2 does not grow with a query's maximum identity to
+our corpus (V2 +0.1524 at [0.2,0.4), n=164; +0.1810 at [0.4,0.7), n=315; +0.1565
+at [0.7,1.0], n=1,214) and among the 404 queries where ESM-2 fails outright
+identity does not predict the gain (Spearman +0.038, p=0.45) — which rules out
+identity-level memorization but not fold-level overlap, since our supervision is
+Foldseek-cluster and Pfam-family co-membership and a training pair sharing a test
+domain's fold at 15% identity survives a 40%-identity filter. The fold-exclusion
+control is the experiment we did not run.
 
-That is the trade-off, measured rather than asserted: alignment wins single-best-hit
-and homology-transferable annotation; the embedding wins ranking depth and is the
-only one of the two that yields a fixed-width vector for tasks with no alignment
-signal. We do not claim it dominates.
+The trade-off, then: alignment wins single-best-hit and homology-transferable
+annotation; the embedding wins ranking depth and is the only one of the two that
+yields a fixed-width vector where there is no alignment signal at all. That last
+property belongs to embeddings generally, not to ProtSent — under a linear probe
+stock ESM-2 35M is the better embedding on 12 of 20 comparable tasks (V1 4 win /
+4 tie / 12 lose, median -0.0139; V2 2 / 7 / 11, median -0.0107; tie band ±0.005,
+test split, one seed each). That record is why the general-purpose claim goes.
 
-The same trade-off appears against the untuned backbone, and it is why the
-general-purpose framing goes. Over the 20 tasks comparable in both arms (three
-multiclass tasks are excluded because one-vs-rest AUC is undefined when the test
-split contains classes absent from train), tie band ±0.005, test split, single
-seed: V1 is 11 win / 3 tie / 6 lose under 3-NN (median +0.0075) and **4 / 4 / 12
-under a frozen linear probe** (median -0.0139); V2 is 10/3/7 and 2/7/11. On remote
-homology (accuracy) the gain does hold under both probes for V2 — 3-NN 0.5835 ->
-0.6668, linear 0.6868 -> 0.7016 — while V1's linear gain (+0.0031) is a tie by our
-own band. MMseqs2 on that task reaches macro-OvR AUC 0.6523 at 88.9% hit coverage,
-which is a different metric and is not comparable to those accuracies.
+### 2. Is this more than structural-information injection? (Q1 / W1)
 
-### 2. Is this more than structural-information injection? (your Q1 / W1)
+Partly not, and our own ablation says how much: removing AFDB drops the mean
+relative gain from +6.7% to +3.2%, improved tasks from 16/23 to 13/23, and remote
+homology from +40.5% to +15.3%. Structural supervision is the largest single
+contributor.
 
-Partly not, and the submitted ablation says how much. Removing AFDB drops the mean
-relative gain from +6.7% to +3.2%, improved tasks from 16/23 to 13/23, and the
-remote-homology gain from +40.5% to +15.3%. Structural supervision is the single
-largest contributor and we say so first.
+The remainder is not structure, and each source leaves a fingerprint on a
+different task family: without Pfam the model still improves 15/23 (mean +4.6%);
+removing STRING moves PPI from +5.3% to -0.5% while leaving most other tasks
+intact; removing the DMS objective reduces fitness gains (fluorescence +15.6% →
++10.4%). A pure structure-distillation model has no PPI dial and no fitness dial.
+**The limit on that argument, stated plainly:** those are single-run
+relative-percent numbers from the submitted, pre-decontamination model on the
+suite's default split — the same reporting convention we withdraw for sub-1%
+cells elsewhere in this rebuttal. They support the *direction* of source-specific
+effects at 2-25 relative points and nothing finer, and they cannot establish that
+the sources fail to interfere; the linear-probe record above is consistent with
+the shared space costing something. **We did not run the joint no-AFDB/no-Pfam
+ablation you asked for**, so "does anything survive when both structural sources
+are gone" is unanswered.
 
-The remainder is not structure, and each source leaves a fingerprint on a different
-task family: without Pfam the model still improves 15/23 (mean +4.6%); removing
-STRING moves the PPI task from +5.3% to -0.5% while leaving most others intact;
-removing the DMS objective reduces fitness gains (fluorescence +15.6% -> +10.4%). A
-pure structure-distillation model has no PPI dial and no fitness dial. The claim we
-can support is a sequence-level metric space shaped jointly by family,
-structural-cluster, interaction and fitness-order relations.
+One decontaminated, absolute, non-structural number does exist: GB1 variant
+effect (Spearman, 3-NN, test split, mean over 5 seeds) is 0.6582 (ESM-2 35M) /
+0.7108 (V1) / 0.7806 (V2), SD 0.0000. Fitness ordering is a relation no structure
+distillation model supervises.
 
-The honest limit on that argument: those are single-run relative-percent numbers
-from the submitted tables, with no intervals — the reporting we withdraw for
-sub-1% cells elsewhere in this rebuttal. We use them only for the direction and
-size of source-specific effects, which are 3-40 points, not for the small ones. **We did
-not run the joint no-AFDB/no-Pfam ablation you asked for.**
+### 3. Positioning against ESM-S, S-PLM, ISM, Magneton, ProTrek (W1)
 
-### 3. The CoSENT objective on DMS data (your Q4)
+Those four inject structure into a sequence model by distilling a structure
+encoder or structural tokens: one relation type, a structure-model teacher, and a
+residue- or sequence-level target that mimics it. ProtSent supervises a
+heterogeneous relation *graph* over sequences — Pfam family co-membership,
+Foldseek cluster co-membership, STRING interaction, DMS fitness order — with no
+structure encoder anywhere, at training or inference. The claim is that relation
+*type* is a design axis (section 2 shows each type moving a different task
+family), not that this beats structure distillation: we have **no matched runs
+against any of the four and claim no superiority to them**. ProTrek is the
+trimodal (sequence/structure/text) retrieval-optimized point on the same curve;
+we add it to Related Work as such, expect it to win retrieval accuracy against a
+35M sequence-only encoder, and did not run it.
 
-Your reading is a fair reading of our text, and our text is wrong: the paper says
-the DMS loss "operates on single proteins rather than pairs." The released code
-writes `(sentence_0, sentence_1, score)` rows — `sentence_0` is the wild-type,
+**Not run: ProtTucker, Foldseek, PLMSearch, DHR, ProTrek**, nor Redl et al. 2023.
+ProtTucker is the closest published analogue to our protocol — contrastive
+fine-tuning for remote homology — and its absence is the one we would most want
+to fix. **We also did not apply ProtSent to SaProt or ProSST**: the blocker is
+data, not code, since both consume residue-level structure tokens and we have no
+predicted structures for the Pfam and STRING sequences, which are the majority of
+the corpus.
+
+### 4. The CoSENT objective on DMS data (Q4)
+
+Your reading is fair and our text is wrong: the paper says the DMS loss "operates
+on single proteins rather than pairs." The released code writes
+`(sentence_0, sentence_1, score)` rows — `sentence_0` is the wild-type,
 `sentence_1` the mutant, `score` the within-assay normalized fitness rescaled to
-[0,1] (clinical rows map benign to 1.0, pathogenic to 0.0). CoSENT is then ordinal
-over those pairs, exactly as for sentences: within a batch, if pair p scores higher
-than pair q, the loss pushes cos(WT_p, mut_p) above cos(WT_q, mut_q). There is no
-absolute cosine target and no term pulling high-fitness mutants to a common point,
-so it does not flatten the assay. The real limitation is narrower and we state it:
-the pairing is **wild-type-anchored**, so mutant-mutant geometry within an assay is
-constrained only indirectly.
+[0,1] (clinical rows map benign to 1.0, pathogenic to 0.0). CoSENT is ordinal
+over those pairs exactly as for sentences: within a batch, if pair p scores above
+pair q, the loss pushes cos(WT_p, mut_p) above cos(WT_q, mut_q). There is no
+absolute cosine target and no term pulling high-fitness mutants toward a common
+point, so it does not flatten an assay. The real limitation is narrower and we
+state it: the pairing is **wild-type-anchored**, so mutant-mutant geometry within
+an assay is constrained only indirectly.
 
-### 4. Scale, baselines, related work
+The "?" at line 21 is a broken citation key, not a missing reference: Heinzinger
+et al. 2022 (ProtTucker) and Redl et al. 2023 are both in Related Work.
 
-Everything above is 35M. **There is no 150M model on the decontaminated corpus**;
-the submitted 150M numbers were trained on the uncontrolled corpus and we do not
-defend them. Every claim we now make is a 35M claim.
-
-**Not run: ProtTucker, Foldseek, HMMER, PLMSearch, DHR, ProTrek.** We offer no
-excuse for their absence; they are missing, we claim no superiority to any of them,
-and ProtTucker in particular is the closest published analogue to our protocol —
-contrastive fine-tuning for remote homology — not a distant one. **We also did not
-apply ProtSent to SaProt or ProSST**: that is not a backbone swap at the data
-level, since both need residue-level structure tokens for the entire Pfam and
-STRING corpora (>100M sequences).
-
-ESM-S, S-PLM, ISM and Magneton belong with the structure-injection line; we
-position ProtSent as a different supervision graph, not a better one, with no
-matched runs. The "?" at line 21 is a broken citation key, not a missing reference:
-Heinzinger et al. 2022 (ProtTucker) and Redl et al. 2023 are both discussed in
-Related Work.
-
-If the measured trade-off and the source fingerprints answer your two axes, we ask
-you to reconsider; if one of them is still open, say which and we will address it in
-discussion.
+If the measured trade-off, the source fingerprints and the positioning answer
+your two axes, we ask you to reconsider. If the missing no-AFDB/no-Pfam ablation
+or the missing ProtTucker run is the decisive one, say which and we will address
+it in discussion.
 <!-- END jVGf -->
 
 ---
 
 ## Response to Reviewer Yi1G
 
+<!-- character count of the pasted body below: 9969 (limit 10,000) -->
 <!-- BEGIN Yi1G -->
-Your leakage objection was correct and we treated it as decisive: we re-filtered the
-pretraining corpora, retrained from scratch, and re-ran every benchmark. Your eight items
-in order.
+Your leakage objection was correct and we treated it as decisive: all three
+corpora re-filtered, retrained from scratch, benchmarks re-run. HMMER and MMseqs2
+were both run. Every number defended below is **V2**'s, not the submitted
+model's.
 
 ### 1. Leakage
 
-**Decontamination, completed.** MMseqs2 `easy-search`, corpus as query, test set as
-target, 40% identity / 80% coverage of the test sequence (`--min-seq-id 0.4 --cov-mode 1
--c 0.8 -e 1e-3`); any pretraining sequence with a hit is dropped. Pfam 28,530,684 ->
-27,929,772 rows (-600,912) and AFDB 135,404,259 -> 126,301,607 (-9,102,652) against
-`remote_homology` test (fold_prediction, 3,244 seqs); STRING 76,070,154 -> 71,891,417
-pairs (-4,178,737) against `ppi_bernett` test (3,022 seqs).
+**Decontamination, done.** MMseqs2 `easy-search`, corpus as query, test set
+as target, 40% identity / 80% coverage; any corpus sequence with a hit is
+dropped. Pfam 28,530,684 → 27,929,772 rows and AFDB 135,404,259 → 126,301,607
+against `remote_homology` test (3,244 seqs); STRING 76,070,154 → 71,891,417 pairs
+against `ppi_bernett` test (3,022 seqs). **Those two test sets were the only
+filter targets** — every other benchmark test set, SCOPe-40 included, was not.
+Verified on the parquet files training actually opened, by semi-join with the
+removal lists: **0 flagged sequences survived**, row counts
+summing to the 169,231,379 in the training log. Negative controls (1,000 random
+sequences per *filtered* corpus, re-searched; AFDB's exhaustively, its k-mer
+prefilter being only 89.4% recall) return **0 hits**, which by the rule of three
+bounds the residual only at ~0.3%.
 
-**Scope limit, stated up front because you would otherwise find it yourself: those two
-test sets were the only filter targets.** Every other benchmark test set, including
-SCOPe-40, was **not** filtered against; no claim below covers them.
+**What the retrain shows, and what it does not.** Remote homology (pooled
+457-class, test split), ESM-2 35M / V1 / V2: 3-NN accuracy 0.5835 / 0.6587 /
+0.6668; linear accuracy 0.6868 / 0.6899 / 0.7016; linear macro-F1 0.4414 /
+**0.4281** / 0.4527 — V1 below the untuned backbone there, only V2 improving on
+both metrics under both probes. But V2 also changes sampling, drops synthetic
+hard negatives, and uses a true 1,024-example contrastive batch where V1's loss
+call saw 64 (item 3). With no
+unfiltered-corpus retrain at the V2 configuration **nothing is attributable to
+decontamination in either direction**, and +0.0079 is inside item 6's checkpoint
+spread anyway. Only the weak claim is supported: a decontaminated corpus still
+trains a model at least as good as the submitted one on the filtered task.
 
-Controls: 1,000 random sequences from each *filtered* corpus, re-searched against its
-target, return **0 hits**. Pfam and STRING used an exhaustive GPU prefilter (100%
-recall); AFDB used k-mer `-s 5.7` (89.4% recall), so it may have missed ~10% of
-qualifying hits — its negative control was re-run exhaustively and still returned 0. The
-filter was then verified on the parquet files the training job actually opened, by
-semi-join with the removal lists: **0 flagged sequences survived**. Row arithmetic closes:
-27,929,772 + 126,301,607 + 15,000,000 = 169,231,379, the training-log total (STRING was
-subsampled to 15M rows for compute, which is not a leakage control).
+**PPI: no post-decontamination number exists, and we are not withholding one.**
+`ppi_bernett` is a pair-input task and is not in the 23-task sweep, so the filter
+target that cost 4,178,737 STRING pairs has no downstream result (the
+paper's +5.3% is a pre-decontamination V1 number). That half of weakness 1 is
+unanswered.
 
-**Retraining on the filtered corpora improved that task.** Remote homology
-(pooled 457-class, accuracy, test split): ESM-2 35M 0.5835, V1 0.6587, **V2 0.6668**
-under 3-NN; 0.6868 / 0.6899 / **0.7016** under a linear probe. We retrained using the
-configuration favoured by the paper's own ablations — proportional sampling and no
-synthetic hard negatives — otherwise following the submitted recipe, on 7 GPUs rather
-than 1. V1-vs-V2 is not a controlled decontamination ablation; the supported claim is
-sufficient — decontamination cost nothing.
+**SCOPe-40 cannot be decontaminated at the corpus level**: no train/test split
+(leave-one-out over 2,207 domains), median maximum identity to our corpus
+**0.908**, none below 20%, so filtering against it removes essentially every
+structured domain. The *evaluation* can still be restricted, and memorization
+would make queries with a closer pretraining neighbour gain more.
+V2's per-query R@10 gain over ESM-2 is instead flat in identity: +0.1524 at
+[0.2,0.4) (n=164), +0.1565 at [0.7,1.0] (n=1,214), the [0,0.2) bin empty. Those
+164 queries are themselves a decontaminated evaluation at the 40% threshold used
+on every corpus (V2's MAP gain there is +0.2859 vs +0.2232 overall).
+Identity-gain Spearman is -0.116 (average precision, p < 3e-6), negative after a
+headroom control (partial -0.081), and among the **404 queries the untuned
+backbone fails completely** identity does not predict the gain (+0.038, p=0.45).
 
-**SCOPe-40 cannot be decontaminated, by us or anyone**: it has no train/test split
-(leave-one-out self-retrieval over 2,207 domains), its median maximum identity to our
-corpus is **0.908** and none falls below 20%, so filtering removes essentially every
-structured domain. We therefore tested memorization directly: if the gain came from
-memorizing close pretraining neighbours, queries with a closer neighbour would gain more.
-Per-query Recall@10 gain over ESM-2 across the 1,693 eligible queries is flat across
-identity bins — V2 +0.1524 at [0.2, 0.4) (n=164) versus +0.1565 at [0.7, 1.0] (n=1,214);
-the [0, 0.2) bin is **empty**, which is the point above. Spearman between identity and
-gain is -0.038 (Recall@10) and -0.114 / -0.116 (average precision, p < 3e-6), and stays
-negative after controlling for headroom, since gain is bounded by 1 - baseline (partial
--0.083 / -0.081, p < 1e-3). Among the **404 queries the untuned backbone fails completely
-at Recall@10** identity does not predict the gain at all (V2 +0.038, p=0.45).
-
-**What these controls cannot rule out — stated by us, not found by you.** Our
-supervision is Foldseek structural-cluster and Pfam family co-membership, so a training
-pair sharing a test domain's *fold* at 15% identity survives a 40%-identity filter, and
-identity stratification cannot detect fold-level label overlap. We can say the corpus
-holds nothing within 40%/80% of the two filtered test sets and that the SCOPe advantage
-does not grow with proximity to pretraining data. We cannot say SCOPe-40, or the
-fold-level third of the remote-homology set, is free of structural-label overlap. The
-right experiment — excluding SCOPe queries whose fold appears among training clusters —
-we did not run.
+**What this cannot rule out.** Supervision is Foldseek cluster and Pfam family
+co-membership, so a training pair sharing a test domain's *fold* at 15% identity
+survives a 40%-identity filter: identity stratification cannot see fold-level
+*label* overlap, and a flat slope is what that leakage would also produce. We
+cannot say SCOPe-40, or the fold third of the remote-homology set, is free of it,
+and SCOPe carries our one surviving claim. The right experiment — excluding
+queries whose fold is among training clusters — we did not run.
 
 ### 2. DMS objective
 
-The ordering objective you describe is the one implemented; our text is wrong ("operates
-on single proteins rather than pairs"). Each row is (wild-type, mutant, within-assay
-normalized fitness in [0,1]), and CoSENT ranks pairs within a batch: if mutant a beats
-mutant b, the loss pushes cos(WT, a) above cos(WT, b). No absolute target, no term
-collapsing high-fitness variants together. The genuine limitation is that the pairing is
-WT-anchored, so mutant-mutant distances are constrained only indirectly.
+Implemented as you describe; our text ("operates on single proteins rather than
+pairs") is wrong. Rows are (wild-type, mutant,
+within-assay normalized fitness in [0,1]) and CoSENT ranks pairs within a batch:
+if mutant a beats mutant b, the loss pushes cos(WT, a) above cos(WT, b) — no
+absolute target, nothing collapsing high-fitness variants. The limitation: the
+pairing is WT-anchored, so mutant-mutant distances are only indirect.
 
 ### 3. MNRL batch semantics and Eq. 1
 
-Correct, and this is a real error. For the submitted models the 1,024 is an **optimizer**
-batch reached by gradient accumulation (35M: per-device 64 x 16 steps; 150M: 16 x 64, our
-Table 6), and accumulation does not share in-batch negatives across micro-batches — so
-each MNRL loss call saw **64** examples at 35M and **16** at 150M, not 1,024. The retrain uses
-`CachedMultipleNegativesRankingLoss`, where 1,024 is a true contrastive batch. In Eq. 1
-the numerator should use the positive paired with anchor i, and the denominator ranges
-over the positive members of all N pairs in the batch.
+Correct — a real error. The submitted 1,024 is an **optimizer** batch from
+gradient accumulation (35M: 64 per device × 16 steps; 150M: 16 × 64, our Table
+6), and accumulation does not share in-batch negatives, so each MNRL call saw
+**64** examples at 35M and **16** at 150M — misdescribed, and the likeliest
+explanation for the 150M results, which we no longer defend. The retrain uses a
+true 1,024-example batch per device. In Eq. 1 the numerator should use the positive
+paired with anchor i, the denominator the positives of all N pairs.
 
-### 4. Pair-level tasks
+### 4-5. Pair-level tasks and k-NN regression
 
-PPI: each partner is embedded independently and the two vectors concatenated
-(`np.concatenate([emb[s1], emb[s2]])`) before the probe. Peptide-HLA is **not** a
-two-input task here — the dataset supplies a single `seq` field, a pipe-joined
-`HLA_pseudoseq|peptide` string, so no combination operator is applied. Neither was in the
-paper.
-
-### 5. k-NN regression
-
-`KNeighborsRegressor(n_neighbors=3, metric="minkowski")`, default uniform weighting: an
-unweighted mean over 3 Euclidean neighbours. At small N the code sets `n_neighbors =
-max(1, min(3, train_size))`, so the smallest few-shot cells are not the same estimator.
-That, plus relative changes over near-zero Spearman baselines (which produce cells like
--126.9%, a sign flip of magnitude 0.269x baseline), makes the few-shot table
-uninterpretable; its claims are withdrawn.
+PPI: partners are embedded independently and the two vectors concatenated
+before the probe. Peptide-HLA is **not** a
+two-input task here — the dataset supplies one `seq` field, a pipe-joined
+`HLA_pseudoseq|peptide` string — so no operator applies. Neither was in the
+paper. k-NN regression is **uniform**: `KNeighborsRegressor(n_neighbors=3,
+metric="minkowski")`, an unweighted mean over 3 neighbours; at small N the code
+sets `n_neighbors = max(1, min(3, train_size))`, so the smallest few-shot cells
+are a different estimator — which, with relative changes over near-zero baselines,
+is why Table 5 is replaced by absolute means with seed SDs.
 
 ### 6. Ablations
 
-Agreed, and we acted on it rather than arguing. Removing synthetic hard negatives
-improves 20/23 tasks at mean +7.9% against 16/23 and +6.7% for the submitted
-configuration; proportional sampling gives +7.0% vs round-robin's +6.7%. Our own evidence
-does not establish the submitted defaults as optimal, so the retrain uses neither.
-Disclosure that follows: those ablations were scored on these same benchmark tasks, so
-V2's configuration was chosen with benchmark results in view. Its checkpoint was not: it
-is the last training step, and a near-trough control checkpoint differs from it by
-0.005-0.008 on every structural metric.
+Agreed, and we acted on it. Removing synthetic hard negatives improves 20/23
+tasks at mean +7.9% against 16/23 and +6.7% for the submitted configuration;
+proportional sampling gives +7.0% vs round-robin's +6.7%. V2 uses neither
+default. **The consequence, stated not implied:** those
+ablations were scored on these same benchmarks, so V2's configuration was chosen
+with benchmark results in view — a selection channel the corpus filter does not
+touch, and V2's numbers are therefore not a clean held-out measurement. The
+checkpoint was not chosen that way: it is the last training step, and checkpoint
+4,000 (the snapshot nearest the last cosine trough at step 4,208) differs from it
+by 0.005-0.008 on every structural metric, at or above item 8's ±0.005 band, so
+no sub-0.01 structural delta is resolved. They are also all we have on your
+single-space question: each source moves its own task family (STRING removal
+takes PPI +5.3% → -0.5%), which is not evidence against interference.
 
 ### 7. Baselines
 
-MMseqs2, run as a full alternative pipeline over all 23 tasks with identical metric
-definitions (self excluded; no-hit queries scored as failures), `-s 7.5 -e 10 --max-seqs
-300 --alignment-mode 3`. On SCOPe-40 (family level, 2,207-sequence gallery, **Recall@K
-upper-bounded at 0.7671**, since only 1,693 queries have a non-self same-family
-neighbour), R@1 / R@10 / MAP: MMseqs2 0.5029 / 0.5637 / 0.3100; ESM-2 35M 0.3829 / 0.5840
-/ 0.3230; V1 0.4490 / 0.6529 / 0.4226; V2 0.5256 / 0.7073 / 0.4955. Alignment beats the
-submitted model at top-1, and beats the best embedding model outright on 3 of 23 tasks
-under 3-NN and 6 under a linear probe (EC F1-macro 0.710 vs 0.598/0.562; GO-MF 0.585 vs
-0.459/0.443). Its remote-homology score, macro-OvR AUC 0.6523, is a
-different metric from item 1's accuracies.
+**HMMER (phmmer, `-E 10`, top 300 hits/query, no-hit = failure) was run**, same
+gallery, same scoring code as MMseqs2. SCOPe-40, **family** level, 2,207 domains;
+the 1,693 eligible queries are those with a non-self same-family neighbour, so
+the Recall ceiling is 1.0 (over all 2,207 every method scales by 0.7671):
 
-**Not run: ProtTucker, Foldseek, HMMER, PLMSearch, DHR, ProTrek.** No excuse offered; we
-claim no superiority to any.
+| method (1,693 eligible) | R@1 | R@10 | R@30 | MAP |
+|---|---|---|---|---|
+| HMMER (phmmer) | **0.6970** | 0.7809 | 0.7980 | 0.4747 |
+| MMseqs2 (`-s 7.5 -e 10`) | 0.6556 | 0.7401 | 0.7566 | 0.4098 |
+| ESM-2 35M | 0.4991 | 0.7614 | 0.8340 | 0.4210 |
+| ProtSent-V1 | 0.5854 | 0.8512 | 0.9256 | 0.5509 |
+| ProtSent-V2 | 0.6852 | 0.9220 | 0.9634 | 0.6459 |
+
+Paired bootstrap, 10,000 resamples, same queries throughout (it reproduces this
+table to within 0.0012). At R@1: **V2 - HMMER -0.0124 [-0.0372,
++0.0124], unresolved; V1 - HMMER -0.1110 [-0.1388, -0.0827]**, an outright loss;
+V2 - MMseqs2 +0.0289 [+0.0035, +0.0544]. At depth, V2 - HMMER +0.1412 [+0.1205,
++0.1618] (R@10) and +0.1708 [+0.1511, +0.1905] (MAP).
+
+**Alignment remains the better top-1 method.** Against our own depth claim: 691
+of 2,207 queries return no phmmer hit and score 0 at every K, and both tools
+flatten almost identically from R@10 to R@30 (+0.0171, +0.0165) where the
+embeddings do not (+0.0726 ESM-2, +0.0414 V2) — so part of the depth gap is
+candidate coverage, not ranking, and until both are re-run with that
+threshold removed the depth margin is an upper bound. MMseqs2, run over
+all 23 tasks, beats the best embedding arm on 3 under 3-NN and 6 under a linear
+probe.
+
+**Not run: ProtTucker, Foldseek, PLMSearch, DHR, ProTrek, or Redl et al. 2023**
+(in Related Work, no matched comparison). We claim no superiority to any;
+ProtTucker is the closest published analogue to our protocol.
 
 ### 8. Statistical evidence
 
-Paired bootstrap over the 1,693 eligible SCOPe queries, 10,000 resamples, paired (the
-same queries score every method). At R@1: V1 - ESM-2 +0.0868 [+0.0614, +0.1122];
-V2 - ESM-2 +0.1855 [+0.1618, +0.2097]; V2 - MMseqs2 +0.0289 [+0.0035, +0.0544]. At MAP,
-V2 - ESM-2 is +0.2232 [+0.2082, +0.2383]. Against interest: MMseqs2 beats ESM-2 at top-1
-by +0.1565 and V1 by +0.0697 [+0.0413, +0.0975], and MMseqs2 vs ESM-2 at R@10 and MAP is
-**unresolved**.
+The SCOPe intervals are in item 7. On Table 2 you are right: no intervals, one
+run at seed 42 per cell, ±0.005 called a tie — a
+convention narrower than item 6's checkpoint spread. A 5-seed probe sweep gives
+median SD 0.0000, which only shows a 3-NN probe is deterministic on fixed
+embeddings; training-seed variance is unmeasured, one training run per model
+existing. Relatedly, over the 20 tasks whose metric is defined for all arms
+(three multiclass-AUC tasks excluded, remote homology among them — its accuracies
+are in item 1), V1 beats ESM-2 35M 11/3/6 under 3-NN but **4 win / 4 tie / 12
+lose under a linear probe**; V2 is 10/3/7 and 2/7/11. Hence the withdrawal.
 
-For the 23-task table we have **no** intervals and no multi-seed results — an omission,
-not an obstacle: probes can be held fixed and predictions resampled. Your objection
-stands without them: every cell is one run at seed 42, so any delta inside ±0.005 is a
-tie. Against ESM-2 35M, V1 is 11 win / 3 tie / 6 lose under 3-NN (median +0.0075)
-and **4 / 4 / 12 under a linear probe** (median -0.0139); V2 is 10/3/7 and 2/7/11. That
-is why the general-purpose claim is withdrawn. Counts cover **20 of 23** tasks:
-`antibiotic_resistance`, `remote_homology` and `temperature_stability` have a
-multiclass-AUC main metric undefined when the test split holds a class absent from train
-— which drops remote homology, our best task, from the tally. And `ec_classification`,
-`go_mf` and `scope40_retrieval` use a built-in evaluator that ignores the probe flag, so
-those rows are one measurement printed twice.
+### Errors in our own submission
 
-### Errors we found in our own submission
+Two bear on weakness 1. The PPI decontamination description does not
+match the code (`easy-search` at 40% identity removing hit query
+IDs, not `easy-linclust` at 50% with cluster removal), and the remote-homology
+split is not hierarchy-disjoint — TAPE's three holdouts pooled (718 + 1,254 +
+1,272 = 3,244) — so its pooled macro AUC is not comparable to published
+per-holdout accuracies. Also: SCOPe is the family field over 2,207 sequences, not
+superfamily over 100,000, and everything here is `--eval_split test`, so not
+cell-comparable to the submitted tables.
 
-PPI decontamination is `easy-search` (STRING as query, Bernett test as target) at 40%
-identity, removing hit query IDs — not `easy-linclust` at 50% with cluster removal as our
-text says. The remote-homology split is not
-hierarchy-disjoint: TAPE's three holdouts pooled (718 fold + 1,254 superfamily + 1,272
-family), and its pooled macro AUC is not comparable to published per-holdout accuracies.
-SCOPe is the **family** field over **2,207** sequences, not superfamily over 100,000 —
-that figure is the evaluator's `max_samples` cap. The row counts above are the training
-parquets — what was actually trained on — and do not match our Table 1 (32.9M / 133.9M /
-36.5M). All numbers here are `--eval_split test`, not the suite's validation default, so
-they are not cell-comparable to the submitted tables.
-
-There is no 150M model on the decontaminated corpus, so the submitted 150M results stand
-on the unfiltered corpus and we do not defend them. If one of your eight items is still
-decisive, name it and we will answer it in discussion.
+If that bounds weakness 1 to the residual we state — untested fold-level overlap
+on SCOPe-40, no PPI measurement — we ask you to reconsider; if one remains
+decisive, say so and we will answer it.
 <!-- END Yi1G -->
