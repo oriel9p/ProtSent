@@ -76,6 +76,48 @@ Two traps recorded so they are not rediscovered:
 - Headroom at mini-batch 64 is ~22 GiB, which is thin. If a long-sequence batch
   OOMs mid-run, resume with `RESUME=1 MINI_BATCH=48 bash train_esm2_150m.sh`.
 
+## Resuming a run after a machine restart
+
+Resume is not a one-liner for this pipeline; two things break and both are fixed.
+
+**1. The checkpoint tokenizer cannot be instantiated.** Checkpoints are saved with
+`tokenizer_class: FastEsmTokenizer` but no `AutoTokenizer` entry in `auto_map`, so
+loading dies with `Unrecognized processing class`. Rewrite that one field to
+`EsmTokenizer` — the vocab is the standard 33-token ESM2 vocab in `vocab.txt`, and
+token ids were verified identical between the two tokenizers on residue strings,
+'J', and non-residue characters. Leave `config.json` alone so the model still loads
+through FastPLM's `auto_map` and keeps flash_attention_2.
+
+**2. The saved optimizer has 6 more parameters than the rebuilt model.** A fresh run
+builds the model with `load_model_for_training(args.model)` from a MaskedLM backbone
+and keeps its 6-tensor LM head (491 params at 150M). On resume the SentenceTransformer
+trainer rebuilds from the checkpoint directory, which round-trips as a plain encoder
+(485). Resume then fails with `loaded state dict contains a parameter group that
+doesn't match the size of optimizer's group`, and it fails *after* the full dataset
+rebuild, roughly eight minutes in.
+
+`fix_resume_optimizer.py <checkpoint>` repairs it. It aligns the optimizer's entries
+against the rebuilt model **per parameter group** — a global alignment can satisfy the
+total while leaving the per-group counts wrong, which is exactly how the first attempt
+still failed — and refuses to write unless every surviving moment tensor matches the
+model position for position. On checkpoint-2500 it dropped indices 182, 183 and
+487-490, all of which had **no Adam moments at all**, and verified the remaining 483
+against all 485 parameters. The original is kept as `optimizer.pt.orig`.
+
+Recipe:
+
+    python fix_resume_optimizer.py models/<run>/checkpoint-<N>
+    RESUME=1 MINI_BATCH=64 MAX_PAIRS_PER_CLUSTER=5 bash train_esm2_150m.sh
+
+**Do not change the GPU count when resuming.** The checkpoint stores one RNG state per
+rank, and the step count is derived from the world size, so moving 6 -> 7 GPUs would
+re-derive 3,890 steps as 3,334 and desynchronise the schedule from `global_step`.
+
+**Pass the same data knobs.** `MAX_PAIRS_PER_CLUSTER` determines the corpus size and
+therefore the step count; resuming with a different value silently trains on a
+different dataset. The k=5 run rebuilds AFDB to 8,612,331 pairs, which is the number
+to look for in the log.
+
 ## Not overwriting things
 
 - Each run has its own `RUN_NAME`, so its output is `models/$RUN_NAME` and its
