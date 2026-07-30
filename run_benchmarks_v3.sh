@@ -28,6 +28,12 @@ MODEL_BASE="${MODEL_BASE:-/storage/models/ESM2-35M}"
 # settled-LR comparison. Skipped if the snapshot is absent.
 MODEL_TROUGH="${MODEL_TROUGH:-models/protsent_esm2_35m_v3_snapshots/checkpoint-4000}"
 OUT="${OUT:-results/benchmarks/v3}"
+# Arm tags name the per-arm output directory. Overridable so the same sweep can run
+# at another scale without writing 35M-named directories for a 150M model.
+TAG_NEW="${TAG_NEW:-protsent_v3}"
+TAG_OLD="${TAG_OLD:-protsent_old}"
+TAG_BASE="${TAG_BASE:-esm2_35m}"
+TAG_TROUGH="${TAG_TROUGH:-protsent_v3_ckpt4000}"
 BATCH="${BATCH:-64}"
 DEVICE="${DEVICE:-cuda}"
 
@@ -152,10 +158,10 @@ fi
 #   protsent_old the published paper model (trained on the UNfiltered corpus)
 #   protsent_v3  retrained on the 40%/80%-decontaminated corpus
 for probe in knn linear; do
-  run_one "$MODEL_NEW"  protsent_v3  "$probe"
-  run_one "$MODEL_OLD"  protsent_old "$probe"
-  run_one "$MODEL_BASE" esm2_35m     "$probe"
-  [[ $HAVE_TROUGH -eq 1 ]] && run_one "$MODEL_TROUGH" protsent_v3_ckpt4000 "$probe"
+  run_one "$MODEL_NEW"  "$TAG_NEW"  "$probe"
+  run_one "$MODEL_OLD"  "$TAG_OLD"  "$probe"
+  run_one "$MODEL_BASE" "$TAG_BASE" "$probe"
+  [[ $HAVE_TROUGH -eq 1 ]] && run_one "$MODEL_TROUGH" "$TAG_TROUGH" "$probe"
 done
 
 echo
