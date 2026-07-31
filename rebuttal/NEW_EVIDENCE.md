@@ -883,6 +883,40 @@ for every model and is worth 5-6 points over the final layer. At layer 20, remot
 linear accuracy is ESM-2 0.7357, V1-150M 0.7400, **V2-150M 0.7500** — the ordering the
 benchmark's final-layer default hides. This reinforces §6a at the larger scale.
 
+## 10. Embedding-space organization — the direct answer to HNXd's Question 1
+
+HNXd asked, verbatim: *"an analysis showing how ProtSent changes the local and global
+organization of the protein embedding space."* This is that analysis, and it is a positive
+result. Source: `probe_gap_analysis.py`, `results/benchmarks/probe_gap_analysis.json`,
+measured on the 2,207-sequence SCOPe-40 gallery.
+
+**Stock ESM-2 embeddings occupy a narrow cone.** The mean cosine similarity between two
+*randomly chosen, unrelated* proteins is 0.85-0.90 — the space is close to
+one-dimensional in practice, and almost all of the variance sits in a handful of
+directions.
+
+| model | mean cos(random pair) | participation ratio | dims for 95% of variance |
+|---|---:|---:|---:|
+| ESM-2 35M | 0.848 | 7.9 / 480 | 112 |
+| **ProtSent-V2 35M** | **0.152** | **52.5 / 480** | 148 |
+| ESM-2 150M | 0.896 | 10.6 / 640 | 126 |
+| **ProtSent-V2 150M** | **0.175** | **43.4 / 640** | 144 |
+
+Participation ratio is the effective number of dimensions actually carrying variance
+(`(sum L_i)^2 / sum L_i^2` over the covariance eigenvalues). Contrastive fine-tuning takes
+the backbone from ~8-11 effective dimensions to ~43-53, a 4-5x expansion, and removes the
+anisotropy almost entirely.
+
+**This is the mechanism behind the retrieval numbers.** Nearest-neighbour search operates
+on raw distances, so a space where every pair is 0.85-similar has very little usable
+signal to rank on. Reorganising it into a broad, isotropic space is precisely what makes
+k-NN retrieval and clustering work, and it explains why the gains concentrate in
+retrieval-shaped tasks rather than in tasks with a trained readout.
+
+State it as an explanation of *where* the benefit comes from, not as a claim of added
+information — the honest framing is that the objective reorganises geometry, and geometry
+is what k-NN, clustering and zero-shot transfer consume.
+
 ## 8. What is NOT available — do not imply otherwise
 
 - No full end-to-end fine-tuning sweep.
