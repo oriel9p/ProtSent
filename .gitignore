@@ -27,3 +27,16 @@ tools/
 # Internal deliberation: strategy notes, agent reviews, unposted drafts.
 # The rebuttal branch is public and was cited to reviewers.
 private/
+
+# Internal deliberation kept out of the public branch (copies live in private/).
+COAUTHOR_BRIEF.md
+REBUTTAL_LEAKAGE.md
+rebuttal/NEW_EVIDENCE.md
+rebuttal/ADDITIONS_to_rebuttal_docx.md
+rebuttal/FOLLOWUP_openreview.md
+rebuttal/BLIND_headlines.md
+rebuttal/DRAFT_rebuttal.md
+rebuttal/DRAFT_rebuttal_edited.md
+rebuttal/check_*.md
+rebuttal/final_review_*.md
+rebuttal/review_*.md
