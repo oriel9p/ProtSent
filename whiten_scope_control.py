@@ -61,10 +61,16 @@ def whiten(x: np.ndarray, eps: float = 1e-5) -> np.ndarray:
 
 
 def rank_by_cosine(emb: np.ndarray) -> np.ndarray:
+    """Gallery order per query, self removed -- n-1 columns.
+
+    Self must be dropped, not merely ranked last: per_query_metrics builds its
+    relevance vector from every column it is given, so a trailing self-match
+    inflates average precision.
+    """
     e = emb / np.clip(np.linalg.norm(emb, axis=1, keepdims=True), 1e-12, None)
     sim = e @ e.T
     np.fill_diagonal(sim, -np.inf)
-    return np.argsort(-sim, axis=1)
+    return np.argsort(-sim, axis=1)[:, :-1]
 
 
 def main() -> int:
@@ -148,10 +154,10 @@ def _selfcheck() -> None:
 
     # Ranking must exclude self and be a permutation of the others.
     r = rank_by_cosine(np.eye(4))
-    assert r.shape == (4, 4)
+    assert r.shape == (4, 3), r.shape
     for q in range(4):
-        assert q not in r[q][:3] or True  # self pushed last by -inf
-        assert sorted(r[q].tolist()) == [0, 1, 2, 3]
+        assert q not in r[q].tolist(), (q, r[q])
+        assert sorted(r[q].tolist()) == sorted(set(range(4)) - {q})
     print("selfcheck ok")
 
 

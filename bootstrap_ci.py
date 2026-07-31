@@ -86,8 +86,14 @@ def embed_ranking(model_name: str, seqs: list[str], batch_size: int = 64) -> np.
     emb = np.asarray(m.encode(seqs, batch_size=batch_size, show_progress_bar=False))
     emb = emb / np.clip(np.linalg.norm(emb, axis=1, keepdims=True), 1e-12, None)
     sim = emb @ emb.T
-    np.fill_diagonal(sim, -np.inf)  # drop self before ranking
-    return np.argsort(-sim, axis=1)
+    np.fill_diagonal(sim, -np.inf)  # self ranks last, then is dropped below
+    # Return n-1 columns with self actually REMOVED, matching what
+    # per_query_metrics documents and what mmseqs_ranking/phmmer_ranking return.
+    # Leaving self in as a trailing column put a self-match into the relevance
+    # vector and inflated AP by ~6e-4 for embedding arms only -- alignment arms
+    # were unaffected, so embedding-vs-alignment MAP deltas carried that bias.
+    # hit@K was never affected, since self sits beyond any K scored.
+    return np.argsort(-sim, axis=1)[:, :-1]
 
 
 def mmseqs_ranking(hits_tsv: Path, n: int) -> np.ndarray:
