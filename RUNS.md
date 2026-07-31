@@ -156,16 +156,15 @@ MMseqs2's 0.6556.
 
 | comparison | R@1 | R@10 | MAP |
 |---|---|---|---|
-| ProtSent-V2-150M - HMMER | **+0.0455 [+0.0219, +0.0691]** | +0.1565 [+0.1364, +0.1766] | +0.2301 [+0.2111, +0.2492] |
+| ProtSent-V2-150M - HMMER (default filters) | +0.0455 [+0.0219, +0.0691] | +0.1565 [+0.1364, +0.1766] | +0.2301 [+0.2111, +0.2492] |
 | ProtSent-V2-150M - MMseqs2 | +0.0868 [+0.0620, +0.1116] | +0.1973 | +0.2950 |
 | ProtSent-V1-150M - HMMER | -0.0354 [-0.0608, -0.0100] | +0.1134 | +0.1610 |
 | HMMER - ESM-2 150M | +0.1441 [+0.1169, +0.1719] | +0.0106 [-0.0148, +0.0360] | +0.0504 [+0.0290, +0.0721] |
 
-**This is scale-dependent and the difference matters.** At 35M, ProtSent-V2 only *ties*
-HMMER at top-1 (-0.0124 [-0.0372, +0.0124]), which is why the standing guidance is never
-to claim ProtSent beats alignment at top-1. At 150M it beats HMMER significantly on every
-metric, and the published V1-150M still loses to HMMER at top-1. So the honest statement
-is per-scale, not global.
+**Correction: this comparison used phmmer with default filters, which overstates the model.**
+Against the filters-off phmmer (`hmmer_maxsens.json`, R@1 0.7525, R@10 0.8978, MAP 0.6067)
+ProtSent-V2-150M is **behind at top-1** (0.7431) and ahead at depth (0.9368) and MAP
+(0.7042). A maximally sensitive profile search leads at top-1 at both scales.
 
 Worth stating for credibility: HMMER beats vanilla ESM-2 150M at top-1 by +0.144 while
 losing at R@30, i.e. alignment remains the better top-1 finder than an untuned pLM and

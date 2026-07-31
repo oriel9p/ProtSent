@@ -834,15 +834,16 @@ Paired bootstrap, 10,000 resamples (`scope40_bootstrap_ci_150m.json`,
 |---|---|---|---|
 | V2-150M - V1-150M | +0.0809 [+0.0602, +0.1022] | +0.0431 [+0.0301, +0.0561] | +0.0607 [+0.0477, +0.0735] |
 | V2-150M - ESM-2 150M | +0.1896 [+0.1654, +0.2138] | +0.1672 [+0.1477, +0.1867] | +0.2806 [+0.2644, +0.2967] |
-| V2-150M - HMMER | **+0.0455 [+0.0219, +0.0691]** | +0.1565 [+0.1364, +0.1766] | +0.2301 [+0.2111, +0.2492] |
+| V2-150M - HMMER (default filters) | +0.0455 [+0.0219, +0.0691] | +0.1565 [+0.1364, +0.1766] | +0.2301 [+0.2111, +0.2492] |
 | V2-150M - MMseqs2 | +0.0868 [+0.0620, +0.1116] | +0.1973 [+0.1754, +0.2191] | +0.2950 [+0.2751, +0.3144] |
 
-**INSTRUCTION CHANGE 1 — the top-1 concession is scale-specific.** §3 says never to
-claim ProtSent beats alignment at top-1. That is correct **at 35M**, where V2 ties HMMER
-(-0.0124 [-0.0372, +0.0124]). At **150M it beats HMMER significantly** (+0.0455), and
-HMMER is the stronger of the two alignment tools. So: at 35M, alignment remains the
-better top-1 method and our advantage is ranking depth; at 150M we lead on every metric
-against both tools. Never state it globally.
+**INSTRUCTION CHANGE 1 — WITHDRAWN. Do not claim a top-1 win at 150M either.**
+An earlier version of this section said the top-1 concession was scale-specific and that
+the 150M beat HMMER at top-1 by +0.0455. That used phmmer with **default filters**, which
+§5-CORRECTION explicitly forbids: against the **filters-off** phmmer the standing is
+R@1 0.7525 (HMMER) vs 0.7431 (ProtSent-V2-150M) — alignment is ahead at top-1 at BOTH
+scales. The unchanged, supportable claim at both scales is ranking depth and MAP: at 150M,
+R@10 0.9368 vs 0.8978 and MAP 0.7042 vs 0.6067 against the same filters-off baseline.
 
 **INSTRUCTION CHANGE 2 — a decontaminated 150M now exists.** §8 previously said it did
 not. It is trained, benchmarked and reported here. It is still not in the submitted

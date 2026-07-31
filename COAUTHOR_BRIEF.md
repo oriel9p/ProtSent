@@ -184,13 +184,21 @@ Paired bootstrap over queries, 10,000 resamples (`bootstrap_ci.py`). All exclude
 | V2-150M − HMMER | +0.0455 [+0.0219, +0.0691] | +0.2301 [+0.2111, +0.2492] |
 | V2-150M − MMseqs2 | +0.0868 [+0.0620, +0.1116] | +0.2950 [+0.2751, +0.3144] |
 
-**The top-1 claim is scale-dependent; never state it globally.** At 35M, V2 is
-statistically tied with HMMER at top-1 (−0.0124 [−0.0372, +0.0124]) and beats only
-MMseqs2. At 150M it beats HMMER outright. Both submitted V1 models lose top-1 to both
-alignment tools.
+**Correction — we do NOT beat alignment at top-1 at either scale.** The +0.0455 above
+used phmmer with **default filters**. Against the filters-off phmmer
+(`hmmer_maxsens.json`: R@1 0.7525, R@10 0.8978, MAP 0.6067) ProtSent-V2-150M is *behind*
+at top-1 (0.7431) and ahead at depth (0.9368) and MAP (0.7042). At 35M it is a tie
+(−0.0124 [−0.0372, +0.0124]). Both submitted V1 models lose top-1 to both tools.
 
-We ran HMMER because Yi1G named it. It is the stronger baseline and it beats vanilla ESM-2
-150M at top-1 by +0.144.
+`NEW_EVIDENCE.md` §5-CORRECTION already required filters-off numbers for any HMMER
+comparison; the 150M table was built before that was applied, and an earlier draft of this
+brief claimed a scale-dependent top-1 win on that basis. It is withdrawn.
+
+The supportable claim at both scales is ranking depth and MAP, plus cost: one forward pass
+per sequence with indexable sub-linear search, versus an all-vs-all profile comparison.
+
+We ran HMMER because Yi1G named it. It beats vanilla ESM-2 150M at top-1 by +0.144 under
+default filters, and by more with filters off.
 
 ### 3.2 Remote homology — the task the corpus was filtered against
 
