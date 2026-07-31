@@ -7,9 +7,10 @@ number in a rebuttal response that is not on this page or in
 `rebuttal/PAPER_text.txt`.
 
 Naming: **V1** = the published/submitted `oriel9p/protsent-esm2-35M`.
-**V2** = ProtSent-V2-35M, retrained during the rebuttal on the decontaminated
-corpus. A 150M model on the same decontaminated data is planned but **will not
-be ready for this rebuttal** — do not imply otherwise.
+**V2** = the models retrained during the rebuttal on the decontaminated corpus:
+**ProtSent-V2-35M** and, now finished, **ProtSent-V2-150M** (§9). Always say which
+scale a number refers to — several claims differ between them, and the top-1
+alignment claim differs decisively.
 
 ---
 
@@ -809,9 +810,81 @@ training on the same pipeline and its results will appear in the camera-ready.
 Never present a number from it, never imply it exists now, and do not make its
 completion a reason to accept.
 
+## 9. ProtSent-V2-150M — finished, and it changes two standing instructions
+
+Trained on the same decontaminated corpus, 3,890 steps on 6 GPUs, `MAX_PAIRS_PER_CLUSTER=5`.
+Benchmarked with the same code path as every other arm: 4 arms x {3-NN, linear} x 23
+tasks, `--eval_split test`. Raw CSVs in `results/benchmarks/v2_150m/`, config and full
+detail in `RUNS.md`.
+
+**SCOPe-40 retrieval, eligible queries (n=1,693 of 2,207):**
+
+| method | R@1 | R@10 | MAP |
+|---|---:|---:|---:|
+| ESM-2 150M | 0.5535 | 0.7702 | 0.4236 |
+| MMseqs2 (`-s 7.5`) | 0.6556 | 0.7401 | 0.4098 |
+| HMMER (phmmer) | 0.6970 | 0.7809 | 0.4747 |
+| ProtSent-V1-150M (submitted) | 0.6615 | 0.8943 | 0.6431 |
+| **ProtSent-V2-150M** | **0.7431** | **0.9368** | **0.7046** |
+
+Paired bootstrap, 10,000 resamples (`scope40_bootstrap_ci_150m.json`,
+`alignment_paired_ci_150m.json`). Every one of these excludes zero:
+
+| comparison | R@1 | R@10 | MAP |
+|---|---|---|---|
+| V2-150M - V1-150M | +0.0809 [+0.0602, +0.1022] | +0.0431 [+0.0301, +0.0561] | +0.0607 [+0.0477, +0.0735] |
+| V2-150M - ESM-2 150M | +0.1896 [+0.1654, +0.2138] | +0.1672 [+0.1477, +0.1867] | +0.2806 [+0.2644, +0.2967] |
+| V2-150M - HMMER | **+0.0455 [+0.0219, +0.0691]** | +0.1565 [+0.1364, +0.1766] | +0.2301 [+0.2111, +0.2492] |
+| V2-150M - MMseqs2 | +0.0868 [+0.0620, +0.1116] | +0.1973 [+0.1754, +0.2191] | +0.2950 [+0.2751, +0.3144] |
+
+**INSTRUCTION CHANGE 1 — the top-1 concession is scale-specific.** §3 says never to
+claim ProtSent beats alignment at top-1. That is correct **at 35M**, where V2 ties HMMER
+(-0.0124 [-0.0372, +0.0124]). At **150M it beats HMMER significantly** (+0.0455), and
+HMMER is the stronger of the two alignment tools. So: at 35M, alignment remains the
+better top-1 method and our advantage is ranking depth; at 150M we lead on every metric
+against both tools. Never state it globally.
+
+**INSTRUCTION CHANGE 2 — a decontaminated 150M now exists.** §8 previously said it did
+not. It is trained, benchmarked and reported here. It is still not in the submitted
+paper, so present it as new rebuttal-period evidence, not as something reviewers can
+look up.
+
+**Remote homology at 150M — state the probe, because the direction flips.**
+
+| method | kNN acc | kNN macro-F1 | linear acc | linear macro-F1 |
+|---|---:|---:|---:|---:|
+| ESM-2 150M | 0.5194 | 0.2764 | 0.7500 | 0.5162 |
+| ProtSent-V1-150M | 0.7047 | 0.4297 | 0.7401 | 0.4775 |
+| ProtSent-V2-150M | 0.6612 | 0.3885 | 0.7503 | 0.4941 |
+
+Under 3-NN, decontamination costs 4.4 points versus V1 (0.7047 -> 0.6612) while both
+ProtSent models stay far above vanilla (0.5194). Under a linear probe the ordering
+reverses: V2 beats V1 on both accuracy and macro-F1, and ties vanilla on accuracy. The
+kNN drop is the expected consequence of removing pretraining sequences at >=40% identity
+to this test set; the larger model appears to have exploited that leakage more than the
+35M did, which is an argument *for* the decontamination, not against it.
+
+**The macro-F1 deficit against vanilla was independently verified**
+(`verify_remote_homology.py`, `verify_remote_homology_150m.json`). It reproduces, it is
+statistically real (paired bootstrap V2 - vanilla macro-F1 -0.0262 [-0.0450, -0.0071],
+while accuracy is unresolved at -0.0008 [-0.0108, +0.0092]), and it is **mostly a
+rare-class artifact**: the test set has 457 classes with median support 3 and 209 classes
+with <=2 examples, and restricting to classes with >=3 test examples shrinks the gap from
+-0.0257 to -0.0036. Quote accuracy and macro-F1 together and say what macro-F1 means on
+this label distribution.
+
+**Aggregate, V2-150M vs V1-150M across 23 tasks:** 12 win / 4 tie / 7 lose under 3-NN
+(median +0.0055), 7 / 6 / 10 under a linear probe (median -0.0045) — the same
+probe-dependence documented at 35M in §6.
+
+**Layer sweep at 150M** (`layer_probe_sweep_150m.json`), all models compared **at the
+same layer**, never at each model's own best: layer 20 of 30 is the best pooling layer
+for every model and is worth 5-6 points over the final layer. At layer 20, remote-homology
+linear accuracy is ESM-2 0.7357, V1-150M 0.7400, **V2-150M 0.7500** — the ordering the
+benchmark's final-layer default hides. This reinforces §6a at the larger scale.
+
 ## 8. What is NOT available — do not imply otherwise
 
-- No 150M model on the decontaminated data (running next, not ready).
 - No full end-to-end fine-tuning sweep.
 - No matched runs of ProtTucker, Foldseek, PLMSearch, DHR, ProTrek.
 - No SaProt/ProSST backbone substitution (needs residue-level structure tokens
