@@ -14,7 +14,7 @@ Every number is measured on our hardware and reproducible from the paths given.
 | 1 | V2 has **no DMS/ProteinGym source**; V1 had it (§2.3). Retrain for parity, or document? | **Document. Don't retrain.** |
 | 2 | The 150M saw **31% fewer training pairs** than the 35M (§2.2). Do we still make cross-scale claims? | **Only with the caveat attached.** |
 | 3 | Paper Tables 4/7 are V1-config ablations. V2 adopts two ablated settings, so "Full model" is no longer the shipped model (§6). | **Re-run or relabel for camera-ready.** |
-| 4 | Unfiltered-corpus retrain at V2 config — the one control that would make the decontamination claim airtight. ~17 h GPU. | **Skip for rebuttal, do for camera-ready.** |
+| 4 | Unfiltered-corpus retrain at V2 config — the one control that would make the decontamination claim airtight. ~11 h at 35M, ~26 h at 150M. | **Skip for rebuttal, do for camera-ready.** |
 | 5 | Lead the retrieval claim with R@10/MAP, not top-1 (§5.2 shows whitening erases the top-1 gap at 150M). | **Yes, lead with depth/MAP.** |
 | 6 | Whitened-vanilla control: rebuttal, camera-ready, or neither? | **Camera-ready only.** Anisotropy analysis does go in the rebuttal (§5.2). |
 
@@ -114,17 +114,17 @@ Defensible, but it was undocumented until now, and it confounds V1-vs-V2 on fitn
 | model | hardware | steps | wall clock |
 |---|---|---:|---|
 | ProtSent-V2-35M | 7x B300 | 4,850 | 10 h 53 m |
-| ProtSent-V2-150M | 6x B300 | 3,890 | ~17 h |
+| ProtSent-V2-150M | 6x B300 | 3,890 | ~26 h (19 h 46 m + 6 h 06 m after a machine restart) |
 
 Both: CachedMultipleNegativesRankingLoss, 1024 contrastive batch per device, no
 gather-across-devices, no synthetic hard negatives, proportional sampling, Matryoshka
 64/128/256, flash-attention-2, `max_seq_length` 512.
 (`train_esm2_35m.sh`, `train_esm2_150m.sh`, config detail in `RUNS.md`.)
 
-Dropping hard negatives and using proportional sampling is what the paper's own ablations
-already favoured — 20/23 tasks at +7.9% without hard negatives vs 16/23 at +6.7% with. That
-is also the direct answer to Yi1G's complaint that the ablations do not support the
-submitted defaults.
+Dropping hard negatives is what the paper's own ablations favoured — 20/23 tasks at +7.9%
+without vs 16/23 at +6.7% with. Proportional sampling is a **tie**, not an improvement
+(+7.0% vs round-robin's +6.7%), so describe it as "comparable, and we picked it". Together
+these answer Yi1G's complaint that the ablations do not support the submitted defaults.
 
 Full list of V1→V2 differences, so nobody is surprised: decontaminated corpus, no hard
 negatives, proportional sampling, no DMS source, 7x/6x larger effective batch, Matryoshka
@@ -235,20 +235,23 @@ complaint actually landed.
 
 **Seed variability** (`run_seed_variability.sh`, `fewshot_seeds.py`), two halves:
 
-- *Full-data evaluation is deterministic.* Across 5 seeds: remote homology 0.5835±0.0000,
-  metal-ion binding 0.7402±0.0000, solubility 0.5102±0.0000, stability 0.6435±0.0001. With
-  a fixed test split and a deterministic probe over deterministic embeddings there is
-  nothing to vary, so the uncertainty that matters is which proteins are in the test set —
-  which the bootstrap estimates. This is a complete answer to "single-run results".
+- *Full-data evaluation is near-deterministic on 7 of 8 tasks.* Across 5 seeds: remote
+  homology 0.5835±0.0000, metal-ion binding 0.7402±0.0000, solubility 0.5102±0.0000,
+  stability 0.6435±0.0001. Given a fixed test split and a deterministic probe over
+  deterministic embeddings there is nothing to vary. **The exception is Thermostability
+  (FLIP)**, sd 0.0126 (ESM-2 35M), 0.0172 (V1), 0.0156 (V2) — its split is a seeded
+  re-split, so the seed genuinely changes the data. Quote that alongside the zeros; a
+  blanket "nothing varies" is not true.
 - *Few-shot spread is large.* Stability at N=100 is ±0.20 on a mean of 0.28–0.40, which
   explains why Table 5's relative changes against near-zero baselines were uninterpretable.
 
 **Few-shot with a linear baseline.** HNXd proposed that under label scarcity a linear
 classifier degrades while k-NN stays competitive. Our data does not support it — a trained
 linear head beats 3-NN in almost every model/task/N cell, including N=50. We should
-withdraw the label-scarcity framing. What survives is task-specific: on remote homology at
-N=1000 ProtSent leads ESM-2 by +0.133 (k-NN) and +0.089 (linear); on solubility and
-metal-ion binding it does not win.
+withdraw the label-scarcity framing. What survives is task-specific, and the two models
+differ: on remote homology at N=1000, **V1** leads ESM-2 by +0.133 (k-NN) and +0.089
+(linear), while **V2** leads by +0.104 and +0.067. On solubility and metal-ion binding
+neither wins.
 
 **Identity-stratified SCOPe** (`scope_identity_correlation.py`, `scope_identity_partial.py`).
 Binning was impossible: the [0, 0.2) identity bin is empty and median max-identity is 0.908,
@@ -277,15 +280,28 @@ favourable to a backbone whose top of stack the contrastive objective never touc
 Sweeping the pooled layer (`layer_probe_sweep.py`), compared at a **common** layer, never
 at each model's own best:
 
-| remote homology, linear probe | layer 10 | layer 20 | layer 30 (benchmark default) |
+| remote homology, linear probe | layer 10 | layer 20 | layer 30 (final) |
 |---|---:|---:|---:|
 | ESM-2 150M | 0.6817 | 0.7357 | 0.6717 |
 | ProtSent-V1 150M | 0.6480 | 0.7400 | 0.7093 |
 | ProtSent-V2 150M | 0.6677 | **0.7500** | 0.7040 |
 
-Layer 20 of 30 is best for every model and worth 5–6 points over the final layer. At layer
-20 ProtSent-V2 leads by 1.4 points over vanilla and 1.0 over V1 — **no CI computed, and one
-task**, so this is a reason to distrust the final-layer default, not yet a result.
+Read this narrowly — it is weaker than it first looks:
+
+- On remote homology, layer 20 beats the final layer for all three models, by +0.064
+  (ESM-2), +0.031 (V1) and +0.046 (V2). **The largest gain goes to the stock backbone**, so
+  it does not by itself argue ProtSent is being undersold.
+- It does **not** generalise to the other task tested. On stability, layer 20 is ESM-2's
+  worst layer (0.2188) and its final layer its best (0.5866). At 35M the peaks are
+  elsewhere again (ESM-2 at layer 6, V2 at layer 8).
+- The layer-20 lead for V2 is +1.4 over vanilla and +1.0 over V1, on one task, **with no
+  confidence interval**.
+- The final-layer column is **not** the benchmark's number — this script subsamples to 8k
+  train / 3k test and runs its own probe on raw hidden states, which is why it reads 0.6717
+  for vanilla where §3.2 reads 0.7500.
+
+So: evidence that the pooling layer matters and should be reported, not yet evidence that
+the probe protocol hides a ProtSent advantage.
 
 ### 5.2 Much of the k-NN gain is isotropy
 
@@ -411,8 +427,9 @@ Scripts: `decontaminate_pretrain.py`, `verify_training_corpus.py`, `train_esm2_3
 `train_esm2_150m.sh`, `run_benchmarks_150m.sh`, `bootstrap_ci.py`,
 `scope_identity_correlation.py`, `scope_identity_partial.py`, `layer_probe_sweep.py`,
 `fewshot_seeds.py`, `probe_gap_analysis.py`, `whiten_scope_control.py`,
-`verify_remote_homology.py`, `mmseqs_baseline.py`, `hmmer_baseline.py`. Each has a
-`--selfcheck` that asserts its own behaviour on synthetic data.
+`verify_remote_homology.py`, `mmseqs_baseline.py`, `hmmer_baseline.py`. All except
+`probe_gap_analysis.py` have a `--selfcheck` asserting their behaviour on synthetic data;
+that one does not, and §5.2 rests on it.
 
 **Small numeric drift to expect**: §3.1 and §5.2 quote the same quantities to slightly
 different third decimals (e.g. ESM-2 150M R@1 0.5535 vs 0.5529). The benchmark suite and
@@ -424,7 +441,7 @@ non-determinism, not disagreement. Quote §3 numbers in the paper for consistenc
 ## 9. What we did NOT do
 
 - No unfiltered-corpus retrain at the V2 config, so V2-vs-V1 confounds filtering with the
-  other six config changes (§2.4). ~17 h GPU.
+  other six config changes (§2.4). ~26 h GPU at 150M, ~11 h at 35M.
 - No remote-homology gain on the 718 fold-level holdouts alone (§5.3).
 - No end-to-end fine-tuning or LoRA sweep.
 - No matched runs of ProtTucker, Foldseek, PLMSearch, DHR, ProTrek.
