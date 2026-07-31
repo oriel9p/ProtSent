@@ -116,8 +116,14 @@ def run_task(task: str, max_train: int, max_test: int, batch_size: int) -> dict:
            "n_test": len(te_seq), "by_model": {}}
     for name, path in MODELS.items():
         import json as _json
-        n_layers = _json.loads((Path(path) / "config.json").read_text())["num_hidden_layers"] \
-            if (Path(path) / "config.json").exists() else 12
+        cfg_path = Path(path) / "config.json"
+        if cfg_path.exists():
+            n_layers = _json.loads(cfg_path.read_text())["num_hidden_layers"]
+        else:
+            # Hub ids have no local config.json; ask transformers rather than guess,
+            # because a wrong depth silently probes the wrong layers.
+            from transformers import AutoConfig
+            n_layers = AutoConfig.from_pretrained(path, trust_remote_code=True).num_hidden_layers
         # hidden_states has n_layers+1 entries (embeddings + each block).
         layers = sorted({n_layers // 3, n_layers // 2, (2 * n_layers) // 3,
                          n_layers - 2, n_layers})
@@ -138,8 +144,13 @@ def main() -> int:
     ap.add_argument("--max_test", type=int, default=3000)
     ap.add_argument("--batch_size", type=int, default=32)
     ap.add_argument("--out", default="results/benchmarks/layer_probe_sweep.json")
+    ap.add_argument("--models", nargs="+", default=None, metavar="NAME=PATH",
+                    help="override the model set, e.g. ESM-2-150M=Synthyra/ESM2-150M")
     args = ap.parse_args()
     os.environ.setdefault("HF_HOME", "/storage/models/hf_home")
+    if args.models:
+        MODELS.clear()
+        MODELS.update(dict(m.split("=", 1) for m in args.models))
 
     report = [run_task(t, args.max_train, args.max_test, args.batch_size) for t in args.tasks]
     out = Path(args.out)

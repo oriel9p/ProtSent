@@ -1,0 +1,73 @@
+{
+  "n_train": 12312,
+  "n_test": 3244,
+  "n_classes_test": 457,
+  "models": {
+    "ESM-2-150M": {
+      "accuracy": 0.7506165228113441,
+      "macro_f1": 0.5185609615582706,
+      "weighted_f1": 0.733674005910685,
+      "macro_f1_support>=3": 0.7087297973815326,
+      "n_classes_support>=3": 248,
+      "macro_f1_support>=5": 0.7245822756742188,
+      "n_classes_support>=5": 170,
+      "macro_f1_support>=10": 0.7618208444759392,
+      "n_classes_support>=10": 90,
+      "n_classes_predicted": 388
+    },
+    "ProtSent-V1-150M": {
+      "accuracy": 0.7410604192355117,
+      "macro_f1": 0.4739867555454965,
+      "weighted_f1": 0.7266697570876309,
+      "macro_f1_support>=3": 0.6937941691540489,
+      "n_classes_support>=3": 248,
+      "macro_f1_support>=5": 0.7108003657371315,
+      "n_classes_support>=5": 170,
+      "macro_f1_support>=10": 0.7508550596343101,
+      "n_classes_support>=10": 90,
+      "n_classes_predicted": 420
+    },
+    "ProtSent-V2-150M": {
+      "accuracy": 0.749691738594328,
+      "macro_f1": 0.49294424790407326,
+      "weighted_f1": 0.7318783600772972,
+      "macro_f1_support>=3": 0.7050548768648291,
+      "n_classes_support>=3": 248,
+      "macro_f1_support>=5": 0.7180828763703361,
+      "n_classes_support>=5": 170,
+      "macro_f1_support>=10": 0.7538821532216584,
+      "n_classes_support>=10": 90,
+      "n_classes_predicted": 409
+    }
+  },
+  "paired_vs_vanilla": {
+    "ProtSent-V1-150M - ESM-2-150M": {
+      "accuracy": {
+        "delta": -0.009409987669543773,
+        "lo": -0.019736436498150472,
+        "hi": 0.0009247842170160281,
+        "excludes_zero": false
+      },
+      "macro_f1": {
+        "delta": -0.04432897332220778,
+        "lo": -0.06584334739936609,
+        "hi": -0.023491385353749006,
+        "excludes_zero": true
+      }
+    },
+    "ProtSent-V2-150M - ESM-2-150M": {
+      "accuracy": {
+        "delta": -0.0008259864364981504,
+        "lo": -0.010789149198520365,
+        "hi": 0.009247842170160281,
+        "excludes_zero": false
+      },
+      "macro_f1": {
+        "delta": -0.026154686715572112,
+        "lo": -0.04504505119521163,
+        "hi": -0.007136040432444798,
+        "excludes_zero": true
+      }
+    }
+  }
+}

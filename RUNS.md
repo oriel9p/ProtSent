@@ -148,10 +148,12 @@ Every one of these excludes zero:
 The near-trough checkpoint differs from the final by 0.002-0.021, so the final
 checkpoint is not an artifact of the 3-cycle schedule ending at peak LR.
 
-### Remote homology went DOWN after decontamination at 150M — report this
+### Remote homology at 150M — the direction depends on the probe, so state both
 
 Remote homology is the task the corpus was filtered against, so it is the load-bearing
-number, and at 150M it moves the opposite way to the 35M:
+number. **It moves in opposite directions under the two probes, and quoting only one is
+misleading** — an earlier version of this section led with the kNN drop alone, which
+overstated the case:
 
 | method | kNN acc | kNN macro-F1 | linear acc | linear macro-F1 |
 |---|---:|---:|---:|---:|
@@ -159,16 +161,38 @@ number, and at 150M it moves the opposite way to the 35M:
 | ProtSent-V1-150M | **0.7047** | **0.4297** | 0.7401 | 0.4775 |
 | ProtSent-V2-150M | 0.6612 | 0.3885 | **0.7503** | 0.4941 |
 
-Decontamination cost 4.4 points of kNN accuracy (0.7047 -> 0.6612) at 150M, where at
-35M it gained 0.8 (0.6587 -> 0.6668). The straightforward reading is that this is what
-the filtering is *for*: V1-150M trained on a corpus containing sequences at >=40%
-identity to this test set, and removing them removed the inflation with it. The larger
-model appears to have exploited that leakage more than the small one did.
+Under **3-NN**, decontamination costs 4.4 points (V1 0.7047 -> V2 0.6612), where the 35M
+gained 0.8. Both ProtSent models remain far above vanilla (0.5194). The straightforward
+reading is that this is what the filtering is *for*: V1-150M trained on a corpus
+containing sequences at >=40% identity to this test set, and removing them removed the
+inflation. The larger model appears to have exploited that leakage more.
 
-Do not present this as a loss to be explained away, and do not hide it. It is evidence
-the decontamination does real work. State the confound honestly too: V2-150M also
-differs from V1-150M in configuration and data budget (k=5 pairs per cluster), so this
-is not a single-variable ablation.
+Under a **linear probe the ordering reverses**: V2 (accuracy 0.7497, macro-F1 0.4929) is
+*better* than V1 (0.7411, 0.4740), and ties vanilla on accuracy. So decontamination did
+not uniformly cost performance here — it cost kNN and helped the linear probe.
+
+State the confound: V2-150M also differs from V1-150M in configuration and data budget
+(k=5 pairs per cluster), so this is not a single-variable ablation.
+
+**Verified independently** (`verify_remote_homology.py`,
+`results/benchmarks/verify_remote_homology_150m.json`), because the linear macro-F1 gap
+against vanilla looked suspicious. Findings:
+
+- The sweep's numbers reproduce from fresh embeddings (0.7497 vs 0.7503 accuracy,
+  0.4929 vs 0.4941 macro-F1). No reporting or row-selection error; same split, seed and
+  strategy for every arm.
+- The macro-F1 deficit against vanilla is **statistically real**, not noise: paired
+  bootstrap over the test set gives V2 - vanilla macro-F1 -0.0262 [-0.0450, -0.0071],
+  excluding zero, while accuracy is unresolved (-0.0008 [-0.0108, +0.0092]).
+- It is nonetheless **mostly a rare-class effect**. The test set has 457 classes with
+  median support 3 and 209 classes with <=2 examples. Restricting to classes with >=3
+  test examples shrinks the gap from -0.0257 to **-0.0036**; at >=10 it is -0.0079. So
+  roughly 86% of the deficit sits in classes too small to estimate reliably.
+- Against vanilla the *published* V1 is worse than V2 on this metric
+  (-0.0443 [-0.0658, -0.0235]), so decontamination improved it.
+
+When quoting remote homology, give accuracy and macro-F1 together, name the probe, and
+say that macro-F1 over 457 classes with median support 3 is dominated by rare classes.
 
 Aggregate across the 23 tasks, V2-150M vs V1-150M: **12 win / 4 tie / 7 lose** under
 3-NN (median +0.0055) and **7 / 6 / 10** under a linear probe (median -0.0045). The same
