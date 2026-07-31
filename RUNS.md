@@ -133,7 +133,7 @@ the kNN and linear rows are identical by construction):
 | ESM-2 150M | 0.5535 | 0.7702 | 0.4236 |
 | MMseqs2 (`-s 7.5`) | 0.6556 | 0.7401 | 0.4098 |
 | ProtSent-V1-150M (submitted) | 0.6615 | 0.8943 | 0.6431 |
-| **ProtSent-V2-150M** | **0.7431** | **0.9368** | **0.7046** |
+| **ProtSent-V2-150M** | **0.7431** | **0.9368** | **0.7042** |
 | V2-150M near-trough (ckpt3250) | 0.7295 | 0.9344 | 0.6841 |
 
 Paired bootstrap, 10,000 resamples (`results/benchmarks/scope40_bootstrap_ci_150m.json`).

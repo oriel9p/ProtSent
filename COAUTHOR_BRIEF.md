@@ -7,6 +7,25 @@ Every number is measured on our hardware and reproducible from the paths given.
 
 ---
 
+## Status: HNXd has raised their score
+
+Reviewer HNXd replied on 30 July and is raising their score. They accept the SCOPe-40
+analyses as addressing embedding-space organization and retrieval, accept that the
+linear-probe results justify the narrowed framing, and consider the confidence intervals,
+repeated few-shot runs and absolute scores to resolve their statistical concerns including
+the erroneous +244.5% cell. They no longer regard the absence of fine-tuning as critical.
+
+Their one remaining point is procedural: the claims changed enough that another review
+round may be warranted, and they leave that to the AC.
+
+**This changes where effort is worth spending.** HNXd is addressed. jVGf stated that
+positioning against structure-informed models plus the generality-accuracy trade-off would
+move them to accept — the trade-off is measured, the positioning is a writing task with no
+compute. That is now the highest-value remaining work, and §7 lists the six other
+writing-only asks alongside it.
+
+---
+
 ## 0. Open questions for you — defaults in bold, override any of them
 
 | # | Question | Default |
@@ -150,7 +169,7 @@ unachievable for any method, which caps R@K at 0.767 on the full set.
 | MMseqs2 (`-s 7.5`) | 0.6556 | 0.7401 | 0.4098 |
 | HMMER (phmmer) | 0.6970 | 0.7809 | 0.4747 |
 | ProtSent-V1 150M (submitted) | 0.6615 | 0.8943 | 0.6431 |
-| **ProtSent-V2 150M** | **0.7431** | **0.9368** | **0.7046** |
+| **ProtSent-V2 150M** | **0.7431** | **0.9368** | **0.7042** |
 
 Note V2-35M beats ESM-2 **150M** on every metric (0.6852/0.9220/0.6459 vs
 0.5535/0.7702/0.4236) and beats HMMER's MAP by 17 points — a 35M model outperforming a
@@ -332,7 +351,7 @@ the same gallery it is applied to — the most generous possible setting for the
 |---|---:|---:|---:|
 | ESM-2 150M raw | 0.5529 | 0.7702 | 0.4242 |
 | ESM-2 150M whitened | 0.7336 | 0.9155 | 0.6276 |
-| ProtSent-V2 150M raw | 0.7425 | 0.9374 | 0.7048 |
+| ProtSent-V2 150M raw | 0.7425 | 0.9374 | 0.7042 |
 
 V2-150M vs whitened vanilla: R@1 +0.0089 **unresolved**, R@10 +0.0219 significant, MAP
 +0.0772 significant. At 35M the margin is larger and significant on all three

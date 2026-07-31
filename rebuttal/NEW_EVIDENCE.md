@@ -825,7 +825,7 @@ detail in `RUNS.md`.
 | MMseqs2 (`-s 7.5`) | 0.6556 | 0.7401 | 0.4098 |
 | HMMER (phmmer) | 0.6970 | 0.7809 | 0.4747 |
 | ProtSent-V1-150M (submitted) | 0.6615 | 0.8943 | 0.6431 |
-| **ProtSent-V2-150M** | **0.7431** | **0.9368** | **0.7046** |
+| **ProtSent-V2-150M** | **0.7431** | **0.9368** | **0.7042** |
 
 Paired bootstrap, 10,000 resamples (`scope40_bootstrap_ci_150m.json`,
 `alignment_paired_ci_150m.json`). Every one of these excludes zero:
