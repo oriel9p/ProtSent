@@ -148,6 +148,29 @@ Every one of these excludes zero:
 The near-trough checkpoint differs from the final by 0.002-0.021, so the final
 checkpoint is not an artifact of the 3-cycle schedule ending at peak LR.
 
+### Alignment baselines at 150M — the top-1 concession does not apply at this scale
+
+`results/benchmarks/alignment_paired_ci_150m.json`, paired bootstrap, 10,000 resamples,
+eligible queries. HMMER (phmmer) is the stronger alignment baseline: R@1 0.6970 vs
+MMseqs2's 0.6556.
+
+| comparison | R@1 | R@10 | MAP |
+|---|---|---|---|
+| ProtSent-V2-150M - HMMER | **+0.0455 [+0.0219, +0.0691]** | +0.1565 [+0.1364, +0.1766] | +0.2301 [+0.2111, +0.2492] |
+| ProtSent-V2-150M - MMseqs2 | +0.0868 [+0.0620, +0.1116] | +0.1973 | +0.2950 |
+| ProtSent-V1-150M - HMMER | -0.0354 [-0.0608, -0.0100] | +0.1134 | +0.1610 |
+| HMMER - ESM-2 150M | +0.1441 [+0.1169, +0.1719] | +0.0106 [-0.0148, +0.0360] | +0.0504 [+0.0290, +0.0721] |
+
+**This is scale-dependent and the difference matters.** At 35M, ProtSent-V2 only *ties*
+HMMER at top-1 (-0.0124 [-0.0372, +0.0124]), which is why the standing guidance is never
+to claim ProtSent beats alignment at top-1. At 150M it beats HMMER significantly on every
+metric, and the published V1-150M still loses to HMMER at top-1. So the honest statement
+is per-scale, not global.
+
+Worth stating for credibility: HMMER beats vanilla ESM-2 150M at top-1 by +0.144 while
+losing at R@30, i.e. alignment remains the better top-1 finder than an untuned pLM and
+the embedding advantage is in ranking depth.
+
 ### Remote homology at 150M — the direction depends on the probe, so state both
 
 Remote homology is the task the corpus was filtered against, so it is the load-bearing
