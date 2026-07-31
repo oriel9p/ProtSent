@@ -9,7 +9,9 @@ which checkpoint produced it.
 | ProtSent-V1-35M | ESM-2 35M | **unfiltered** (as submitted) | `oriel9p/protsent-esm2-35M` (Hub) | `results/benchmarks/v3/protsent_old_*` | published, submitted paper |
 | ProtSent-V2-35M | Synthyra FastPLM ESM-2 35M | **decontaminated** dc40 | `models/protsent_esm2_35m_v3/final` | `results/benchmarks/v3/protsent_v3_*` | done 2026-07-29, 10 h 53 m |
 | ProtSent-V2-35M (near-trough) | same run, checkpoint 4000 | same | `models/protsent_esm2_35m_v3_snapshots/checkpoint-4000` | `results/benchmarks/v3/protsent_v3_ckpt4000_*` | control for the peak-LR final checkpoint |
-| **ProtSent-V2-150M** | Synthyra FastPLM ESM-2 150M | **decontaminated** dc40 | `models/protsent_esm2_150m_v2` | pending | **training, started 2026-07-29 16:03** |
+| ProtSent-V1-150M | ESM-2 150M | **unfiltered** (as submitted) | `oriel9p/protsent-esm2-150M` (Hub) | `results/benchmarks/v2_150m/protsent_v1_150m_*` | published, submitted paper |
+| **ProtSent-V2-150M** | Synthyra FastPLM ESM-2 150M | **decontaminated** dc40 | `models/protsent_esm2_150m_v2/final` | `results/benchmarks/v2_150m/protsent_v2_150m_*` | **done 2026-07-30 23:0x**, k=5, 3,890 steps |
+| ProtSent-V2-150M (near-trough) | same run, checkpoint 3250 | same | `models/protsent_esm2_150m_v2_snapshots/checkpoint-3250` | `results/benchmarks/v2_150m/protsent_v2_150m_ckpt3250_*` | control for the peak-LR final checkpoint |
 
 The internal `v3` in the 35M paths is an inherited `RUN_NAME`; the paper name for
 that model is **ProtSent-V2-35M**. The 150M directory is named for the paper
@@ -117,6 +119,76 @@ re-derive 3,890 steps as 3,334 and desynchronise the schedule from `global_step`
 therefore the step count; resuming with a different value silently trains on a
 different dataset. The k=5 run rebuilds AFDB to 8,612,331 pairs, which is the number
 to look for in the log.
+
+## ProtSent-V2-150M results
+
+Sweep: `run_benchmarks_150m.sh`, 4 arms x {3-NN, linear} x 23 tasks, `--eval_split test`,
+one code path for every arm. Raw CSVs under `results/benchmarks/v2_150m/`.
+
+**SCOPe-40 retrieval** (eligible queries, n=1,693 of 2,207; retrieval has no probe, so
+the kNN and linear rows are identical by construction):
+
+| method | R@1 | R@10 | MAP |
+|---|---:|---:|---:|
+| ESM-2 150M | 0.5535 | 0.7702 | 0.4236 |
+| MMseqs2 (`-s 7.5`) | 0.6556 | 0.7401 | 0.4098 |
+| ProtSent-V1-150M (submitted) | 0.6615 | 0.8943 | 0.6431 |
+| **ProtSent-V2-150M** | **0.7431** | **0.9368** | **0.7046** |
+| V2-150M near-trough (ckpt3250) | 0.7295 | 0.9344 | 0.6841 |
+
+Paired bootstrap, 10,000 resamples (`results/benchmarks/scope40_bootstrap_ci_150m.json`).
+Every one of these excludes zero:
+
+| comparison | R@1 | R@10 | MAP |
+|---|---|---|---|
+| V2-150M - V1-150M | +0.0809 [+0.0602, +0.1022] | +0.0431 [+0.0301, +0.0561] | +0.0607 [+0.0477, +0.0735] |
+| V2-150M - ESM-2 150M | +0.1896 [+0.1654, +0.2138] | +0.1672 [+0.1477, +0.1867] | +0.2806 [+0.2644, +0.2967] |
+| V2-150M - MMseqs2 | +0.0868 [+0.0620, +0.1116] | +0.1973 [+0.1754, +0.2191] | +0.2950 [+0.2751, +0.3144] |
+
+The near-trough checkpoint differs from the final by 0.002-0.021, so the final
+checkpoint is not an artifact of the 3-cycle schedule ending at peak LR.
+
+### Remote homology went DOWN after decontamination at 150M — report this
+
+Remote homology is the task the corpus was filtered against, so it is the load-bearing
+number, and at 150M it moves the opposite way to the 35M:
+
+| method | kNN acc | kNN macro-F1 | linear acc | linear macro-F1 |
+|---|---:|---:|---:|---:|
+| ESM-2 150M | 0.5194 | 0.2764 | 0.7500 | 0.5162 |
+| ProtSent-V1-150M | **0.7047** | **0.4297** | 0.7401 | 0.4775 |
+| ProtSent-V2-150M | 0.6612 | 0.3885 | **0.7503** | 0.4941 |
+
+Decontamination cost 4.4 points of kNN accuracy (0.7047 -> 0.6612) at 150M, where at
+35M it gained 0.8 (0.6587 -> 0.6668). The straightforward reading is that this is what
+the filtering is *for*: V1-150M trained on a corpus containing sequences at >=40%
+identity to this test set, and removing them removed the inflation with it. The larger
+model appears to have exploited that leakage more than the small one did.
+
+Do not present this as a loss to be explained away, and do not hide it. It is evidence
+the decontamination does real work. State the confound honestly too: V2-150M also
+differs from V1-150M in configuration and data budget (k=5 pairs per cluster), so this
+is not a single-variable ablation.
+
+Aggregate across the 23 tasks, V2-150M vs V1-150M: **12 win / 4 tie / 7 lose** under
+3-NN (median +0.0055) and **7 / 6 / 10** under a linear probe (median -0.0045). The same
+probe-dependence seen at 35M.
+
+### Identity-vs-gain at 150M, with the headroom control
+
+`scope_identity_correlation_150m_v2.json`, `scope_identity_partial_150m_v2.json`.
+
+| max identity to pretraining | n | dR@10 | dMAP |
+|---|---:|---:|---:|
+| [0.2, 0.4) | 164 | +0.1768 | +0.2885 |
+| [0.4, 0.7) | 315 | +0.1778 | +0.3028 |
+| [0.7, 1.0] | 1,214 | +0.1631 | +0.2737 |
+
+Raw Spearman between identity and per-query gain is negative (R@10 -0.062 p=0.011,
+MAP -0.083 p=6.1e-4). **After controlling for baseline headroom it collapses to a null**
+(R@10 -0.002 p=0.93, MAP -0.037 p=0.12) — unlike the 35M, where the partial correlation
+stayed significantly negative. Say "no relationship at 150M, slightly negative at 35M".
+Neither is positive, and memorization predicts positive; that is the whole claim.
 
 ## Not overwriting things
 

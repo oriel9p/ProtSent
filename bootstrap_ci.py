@@ -113,6 +113,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--models", nargs="+", required=True, metavar="NAME=PATH")
     ap.add_argument("--mmseqs_hits", default=None, help="hit TSV to score as an extra arm")
+    ap.add_argument("--hmmer", action="store_true",
+                    help="score phmmer as an extra arm (all-vs-all, CPU; ~tens of minutes)")
+    ap.add_argument("--hmmer_cpus", type=int, default=48)
     ap.add_argument("--out", default="results/benchmarks/scope40_bootstrap_ci.json")
     ap.add_argument("--n_boot", type=int, default=N_BOOT)
     args = ap.parse_args()
@@ -133,6 +136,16 @@ def main() -> int:
     if args.mmseqs_hits:
         print("scoring MMseqs2 hit table ...", flush=True)
         per_model["MMseqs2"] = per_query_metrics(mmseqs_ranking(Path(args.mmseqs_hits), n), labels)
+    if args.hmmer:
+        # phmmer is the stronger alignment baseline and the one Yi1G named. It is
+        # computed rather than read from disk because hmmer_baseline.py keeps hits in
+        # memory; phmmer_ranking already returns the dense gallery ordering this wants,
+        # with no-hit queries left in an arbitrary tail so they score as failures.
+        print(f"running all-vs-all phmmer on {n} sequences ...", flush=True)
+        sys.path.insert(0, str(Path(__file__).parent))
+        from hmmer_baseline import phmmer_ranking
+
+        per_model["HMMER"] = per_query_metrics(phmmer_ranking(seqs, cpus=args.hmmer_cpus), labels)
 
     eligible = next(iter(per_model.values()))["eligible"]
     print(f"eligible queries: {int(eligible.sum())}/{n}\n")
