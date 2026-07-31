@@ -22,3 +22,4 @@ data/
 # mmseqs binary: symlink to /storage/users/ddofer/software/mmseqs
 tools/
 .vscode/
+.env
