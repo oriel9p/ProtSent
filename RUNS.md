@@ -301,10 +301,12 @@ Accuracy fallback shifts ISM-C's linear median by -0.0063 and ours by +0.0006 â€
 procedure, asymmetric effect â€” which turns a real gap into "nearly identical" and reads as
 metric shopping. No kNN record is resolved by a sign test either way.
 
-**MMseqs2 inconsistency, unresolved.** The SCOPe-40 table above and `mmseqs_baseline.json`
-give eligible R@10 0.7348 / MAP 0.4041. `FINAL_rebuttal.md:34` (posted) and the 150M table
-earlier in this file give 0.7401 / 0.4098. Same method, same flags, two numbers. Reconcile
-before either appears in another public table.
+**MMseqs2 was scored twice; use the later one.** `mmseqs_baseline.json` (2026-07-29) gives
+eligible R@10 0.7348 / MAP 0.4041; `bootstrap_ci.py`'s own hit-table scoring (2026-07-31)
+gives 0.7401 / 0.4098, and hit30 differs by 0.021, so the two are genuinely different
+scorings rather than rounding. `ism_comparison.py` takes the later one, which is also the
+row already published in `FINAL_rebuttal.md:34`. Do not quote `mmseqs_baseline.json` for
+SCOPe-40 in anything reviewer-facing.
 
 Three of the 23 rows (EC, GO, SCOPe-40) are probe-invariant by construction: multilabel
 and retrieval tasks use a built-in evaluator and ignore `--probe_type`.
