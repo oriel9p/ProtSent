@@ -18,12 +18,12 @@ Set `HF_HOME=/storage/models/hf_home`. Most entry points also want the BLAS thre
 Several quantities were measured more than once. Using the wrong one has produced a
 published false claim before.
 
-- **HMMER on SCOPe-40**: use `hmmer_maxsens.json`, the **filters-off** run (eligible R@1
+- **HMMER on SCOPe-40**: use `results/benchmarks/hmmer_maxsens.json`, the **filters-off** run (eligible R@1
   0.7525). The default-filter run is weaker; quoting it once produced a claim that ProtSent
   beats profile search at top-1, which it does not, at either scale.
-- **MMseqs2 on SCOPe-40**: use the 2026-07-31 scoring in `scope40_bootstrap_ci_150m.json`
-  (eligible 0.6556 / 0.7401 / 0.4098). `mmseqs_baseline.json` is an earlier, different
-  scoring — hit30 differs by 0.021. `mmseqs_baseline.json` is still correct for the other
+- **MMseqs2 on SCOPe-40**: use the 2026-07-31 scoring in `results/benchmarks/scope40_bootstrap_ci_150m.json`
+  (eligible 0.6556 / 0.7401 / 0.4098). `results/benchmarks/mmseqs_baseline.json` is an earlier, different
+  scoring — hit30 differs by 0.021. `results/benchmarks/mmseqs_baseline.json` is still correct for the other
   22 tasks.
 - **SCOPe-40 retrieval**: report the **eligible-query** figures (n=1,693 of 2,207).
   Unrestricted values are exactly `eligible x 1693/2207`, since a query with no same-family
