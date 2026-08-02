@@ -6,7 +6,28 @@ Code for ["ProtSent: Protein Sentence Transformers"](https://arxiv.org/abs/2605.
 
 ProtSent applies contrastive fine-tuning (SentenceTransformers + MNRL) to ESM-2 protein language models, producing fixed-length embeddings where biological similarity maps to embedding proximity. Training uses five complementary data sources: Pfam families, structurally derived hard negatives, AlphaFold DB structural pairs, StringDB interactions, and deep mutational scanning fitness data.
 
-**Models:** [ProtSent-ESM2-35M](https://huggingface.co/oriel9p/protsent-esm2-35M) | [ProtSent-ESM2-150M](https://huggingface.co/oriel9p/protsent-esm2-150M)
+**Models:** [ProtSent-ESM2-35M](https://huggingface.co/oriel9p/protsent-esm2-35M) | [ProtSent-ESM2-150M](https://huggingface.co/oriel9p/protsent-esm2-150M) | [ProtSent-V2-35M](https://huggingface.co/GrimSqueaker/ProtSent-V2-35M) | [ProtSent-V2-150M](https://huggingface.co/GrimSqueaker/ProtSent-V2-150M)
+
+## Where the results are
+
+Start with **[RUNS.md](RUNS.md)** — one section per trained model, what it was trained on,
+where its numbers live, and which figures are authoritative when two exist.
+
+| you want | go to |
+|---|---|
+| Which model is which, and its config | [RUNS.md](RUNS.md), top table |
+| ProtSent-V2 vs the ESM-C / ISM-C baselines, summarised | [RUNS.md](RUNS.md) § `ISM-C-300M`, "TLDR" |
+| Per-task numbers for every arm, both probes | [results/benchmarks/ISM_COMPARISON.md](results/benchmarks/ISM_COMPARISON.md) |
+| SCOPe-40 retrieval with confidence intervals | `results/benchmarks/scope40_bootstrap_ci*.json` |
+| Raw per-arm CSVs | `results/benchmarks/{v3,v2_150m,ism}/` — see the READMEs there |
+| What was said to reviewers | [rebuttal/FINAL_rebuttal.md](rebuttal/FINAL_rebuttal.md) |
+
+Reproduce a comparison without retraining anything:
+
+```bash
+uv run --no-sync python ism_comparison.py    # -> results/benchmarks/ISM_COMPARISON.md
+uv run --no-sync python build_comparison.py  # -> results/benchmarks/COMPARISON.md
+```
 
 ## Setup
 
