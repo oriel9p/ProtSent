@@ -5,7 +5,7 @@
 
 ## Response to Reviewer HNXd
 
-<!-- character count of the pasted body below: 9619 (limit 10,000) -->
+<!-- character count of the pasted body below: 9688 (limit 10,000) -->
 <!-- BEGIN HNXd -->
 We thank the reviewer for naming which analyses would change the assessment. All five are run.
 
@@ -49,7 +49,7 @@ We agree a conventional learned readout is needed to contextualise the 3-NN prob
 | 3-NN | 11 win / 3 tie / 6 lose, median +0.007 | 10 / 3 / 7, median +0.004 |
 | linear | 4 / 4 / 12, median -0.014 | 2 / 7 / 11, median -0.011 |
 
-The record is the same at 150M, 4 win / 4 tie / 12 lose, so scale does not rescue it. No setting of the tie band turns the linear record into a win. Three of the 23 tasks fall outside the 20 because one-vs-rest AUC is undefined when the test split contains a class absent from training, and this excludes remote homology, our strongest task, from the tally. Reported separately, remote homology gives 3-NN accuracy 0.584 for ESM-2 35M, 0.659 for V1 and 0.667 for V2; linear accuracy 0.687, 0.690 and 0.702; linear macro-F1 0.441, 0.428 and 0.453. V1 sits below the untuned backbone on linear macro-F1, and only V2 improves on both metrics under both probes.
+The pattern repeats at 150M, where V2 is 10 / 3 / 7 under a 3-NN probe and 4 / 4 / 12 under a linear probe, so scale does not rescue the linear record. No setting of the tie band turns the linear record into a win. Three of the 23 tasks fall outside the 20 because one-vs-rest AUC is undefined when the test split contains a class absent from training, and this excludes remote homology, our strongest task, from the tally. Reported separately, remote homology gives 3-NN accuracy 0.584 for ESM-2 35M, 0.659 for V1 and 0.667 for V2; linear accuracy 0.687, 0.690 and 0.702; linear macro-F1 0.441, 0.428 and 0.453. V1 sits below the untuned backbone on linear macro-F1, and only V2 improves on both metrics under both probes.
 
 We did not run a fine-tuning sweep.
 
@@ -67,7 +67,7 @@ We agree that sub-1% differences should not be presented as established improvem
 | V2 - HMMER | -0.012 [-0.037, +0.012] | +0.141 [+0.120, +0.162] | +0.171 [+0.151, +0.191] |
 | V2 - MMseqs2 | +0.029 [+0.004, +0.054] | +0.182 [+0.161, +0.203] | +0.236 [+0.216, +0.255] |
 
-The same test at 150M gives V2 minus ESM-2 150M +0.190 [+0.165, +0.214], +0.167 [+0.148, +0.187] and +0.281 [+0.264, +0.297], so the retrieval result strengthens with scale.
+The same test at 150M gives V2 minus ESM-2 150M +0.190 [+0.165, +0.214], +0.167 [+0.148, +0.187] and +0.281 [+0.264, +0.297], so the retrieval result holds at the larger scale.
 
 We do not claim to beat alignment at top-1: V2 ties phmmer there, and its +0.029 advantage over MMseqs2 clears zero by only 0.004 across three uncorrected comparisons, so we do not rely on it either. V1 minus HMMER at Recall@1 is -0.111 [-0.139, -0.083], an outright loss.
 
