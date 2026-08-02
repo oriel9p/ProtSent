@@ -5,13 +5,13 @@
 
 ## Response to Reviewer HNXd
 
-<!-- character count of the pasted body below: 9355 (limit 10,000) -->
+<!-- character count of the pasted body below: 9619 (limit 10,000) -->
 <!-- BEGIN HNXd -->
 We thank the reviewer for naming which analyses would change the assessment. All five are run.
 
 Under a trained linear probe, ProtSent loses to stock ESM-2 35M, on 11 of 20 comparable tasks (test split, single seed, tie band 0.005 absolute), so we withdraw the general-purpose embedding claim. What survives is a retrieval and clustering result, now measured as asked.
 
-A note on naming, since this rebuttal introduces a second model. **V1** is the 35M model in the submission; **V2** is a 35M model retrained during the rebuttal on corpora decontaminated at 40% identity and 80% coverage, using the configuration our own ablations favour. No 150M model exists on the decontaminated corpora, so we withdraw all 150M results, including the +105% and +19.9% in the abstract. Every number below is on the held-out test split, which is not comparable cell-by-cell with the submitted tables.
+A note on naming, since this rebuttal introduces a second model. **V1** is the submitted model; **V2** is the retrain on corpora decontaminated at 40% identity and 80% coverage, using the configuration our own ablations favour. Both exist at 35M and 150M. The submitted 150M numbers, including the +105% and +19.9% in the abstract, are withdrawn and replaced by measurements on the decontaminated retrain. Every number below is on the held-out test split, which is not comparable cell-by-cell with the submitted tables.
 
 ### 1. Direct retrieval and embedding-space organisation (Q1)
 
@@ -49,7 +49,7 @@ We agree a conventional learned readout is needed to contextualise the 3-NN prob
 | 3-NN | 11 win / 3 tie / 6 lose, median +0.007 | 10 / 3 / 7, median +0.004 |
 | linear | 4 / 4 / 12, median -0.014 | 2 / 7 / 11, median -0.011 |
 
-No setting of the tie band turns the linear record into a win. Three of the 23 tasks fall outside the 20 because one-vs-rest AUC is undefined when the test split contains a class absent from training, and this excludes remote homology, our strongest task, from the tally. Reported separately, remote homology gives 3-NN accuracy 0.584 for ESM-2 35M, 0.659 for V1 and 0.667 for V2; linear accuracy 0.687, 0.690 and 0.702; linear macro-F1 0.441, 0.428 and 0.453. V1 sits below the untuned backbone on linear macro-F1, and only V2 improves on both metrics under both probes.
+The record is the same at 150M, 4 win / 4 tie / 12 lose, so scale does not rescue it. No setting of the tie band turns the linear record into a win. Three of the 23 tasks fall outside the 20 because one-vs-rest AUC is undefined when the test split contains a class absent from training, and this excludes remote homology, our strongest task, from the tally. Reported separately, remote homology gives 3-NN accuracy 0.584 for ESM-2 35M, 0.659 for V1 and 0.667 for V2; linear accuracy 0.687, 0.690 and 0.702; linear macro-F1 0.441, 0.428 and 0.453. V1 sits below the untuned backbone on linear macro-F1, and only V2 improves on both metrics under both probes.
 
 We did not run a fine-tuning sweep.
 
@@ -66,6 +66,8 @@ We agree that sub-1% differences should not be presented as established improvem
 | V2 - ESM-2 35M | +0.185 [+0.162, +0.210] | +0.161 [+0.141, +0.180] | +0.223 [+0.208, +0.238] |
 | V2 - HMMER | -0.012 [-0.037, +0.012] | +0.141 [+0.120, +0.162] | +0.171 [+0.151, +0.191] |
 | V2 - MMseqs2 | +0.029 [+0.004, +0.054] | +0.182 [+0.161, +0.203] | +0.236 [+0.216, +0.255] |
+
+The same test at 150M gives V2 minus ESM-2 150M +0.190 [+0.165, +0.214], +0.167 [+0.148, +0.187] and +0.281 [+0.264, +0.297], so the retrieval result strengthens with scale.
 
 We do not claim to beat alignment at top-1: V2 ties phmmer there, and its +0.029 advantage over MMseqs2 clears zero by only 0.004 across three uncorrected comparisons, so we do not rely on it either. V1 minus HMMER at Recall@1 is -0.111 [-0.139, -0.083], an outright loss.
 
@@ -102,7 +104,7 @@ We thank the reviewer for identifying the two axes that would change the assessm
 
 Structural supervision is indeed the single largest contributor, as the reviewer suspected, and our own Table 4 says so against the paper's own text. Removing AlphaFold DB reduces improved tasks from 16 of 23 to 13 and the mean relative gain from +6.7% to +3.2%, whereas removing Pfam reduces them to 15 and +4.6%. The sentence describing Pfam as "the dominant contrastive signal" is contradicted by the table beneath it. That is our error, and no reviewer caught it.
 
-Two withdrawals should also precede the evidence. Under a trained linear probe, ProtSent loses to stock ESM-2 35M on 12 of 20 comparable tasks for the submitted model and 11 of 20 for the retrained one, so we withdraw the general-purpose framing. And since no 150M model exists on the decontaminated corpora, we withdraw the submitted 150M results as well.
+Two withdrawals should also precede the evidence. Under a trained linear probe, ProtSent loses to stock ESM-2 35M on 12 of 20 comparable tasks for the submitted model and 11 of 20 for the retrained one, so we withdraw the general-purpose framing. The submitted 150M numbers are likewise withdrawn, replaced by measurements on a decontaminated 150M retrain.
 
 On naming: **V1** is the submitted 35M model, and **V2** a 35M model retrained during the rebuttal on corpora decontaminated at 40% identity and 80% coverage, using the configuration our own ablations favour. All rebuttal numbers are on the held-out test split; the submitted tables use the suite's default split, and we do not mix the two.
 
@@ -153,11 +155,11 @@ If this addresses the two axes the reviewer identified, we would appreciate an u
 
 ## Response to Reviewer Yi1G
 
-<!-- character count of the pasted body below: 9997 (limit 10,000) -->
+<!-- character count of the pasted body below: 9977 (limit 10,000) -->
 <!-- BEGIN Yi1G -->
 We thank the reviewer for a detailed review. The leakage objection was correct and we treated it as decisive: all three pretraining corpora were re-filtered, the model retrained from scratch, the benchmarks re-run. Running HMMER, as asked, then cost us a claim: ProtSent-V2 minus phmmer at SCOPe-40 family Recall@1 is -0.012, 95% CI [-0.037, +0.012], a tie rather than a win.
 
-Throughout, **V1** is the submitted 35M model and **V2** the retrain on the filtered corpora. All numbers below are on the held-out test split. We withdraw all 150M results, since no 150M model exists on the decontaminated corpora.
+Throughout, **V1** is the submitted model and **V2** the retrain on the filtered corpora, both at 35M and 150M. All numbers below are on the held-out test split. The submitted 150M numbers are replaced by measurements on the decontaminated retrain.
 
 ### 1. Potential train-test leakage
 
@@ -183,7 +185,7 @@ SCOPe-40 cannot be decontaminated at the corpus level: it has no train/test spli
 | below 0.7 (n=479) | -0.027 [-0.073, +0.017] | +0.127 [+0.090, +0.165] | +0.154 [+0.117, +0.190] |
 | all (n=1,693) | -0.012 [-0.037, +0.012] | +0.141 [+0.120, +0.162] | +0.171 [+0.151, +0.191] |
 
-The conclusion does not move: on the 164 queries furthest from anything we trained on, V2 still ties phmmer at top-1 and leads at depth. The per-query Spearman between maximum identity to the corpus and gain in average precision is -0.116 (p = 1.6e-06), and -0.081 (p = 9.0e-04) after controlling for baseline score — negative, where memorisation would predict positive.
+The conclusion does not move: on the 164 queries furthest from anything we trained on, V2 still ties phmmer at top-1 and leads at depth. The per-query Spearman between maximum identity to the corpus and gain in average precision is -0.116, and -0.081 after controlling for baseline score, both p < 1e-03 — negative, where memorisation would predict positive. Filtering also cost the larger model nothing: the decontaminated 150M leads the submitted unfiltered one by +0.081 [+0.060, +0.102] Recall@1.
 
 What this cannot rule out is fold-level overlap. Supervision comes from Foldseek-cluster and Pfam-family co-membership, so a training pair sharing a query's fold at 15% identity survives any identity filter. Excluding queries whose fold appears among our training clusters would separate the two explanations; we did not run that control, and can during discussion.
 
@@ -197,7 +199,7 @@ The reviewer is right, and this is a real error. The 1,024 reported is an optimi
 
 ### 4-5. Pair-level tasks and k-NN regression
 
-For PPI the two partners are embedded independently and concatenated before the probe. Peptide-HLA is not two-input in our implementation: the dataset supplies one sequence field holding a pipe-joined HLA pseudo-sequence and peptide, so no combination operator is used. The k-NN regressor uses uniform weighting over 3 neighbours with Euclidean distance. In the few-shot code the neighbour count is the smaller of 3 and the training size, so the estimator differs in the smallest cells — one reason Table 5 is re-run.
+For PPI the two partners are embedded independently and concatenated before the probe. Peptide-HLA is not two-input here: the dataset supplies one field holding a pipe-joined HLA pseudo-sequence and peptide. The k-NN regressor uses uniform weighting over 3 neighbours with Euclidean distance. In the few-shot code the neighbour count is the smaller of 3 and the training size, so the estimator differs in the smallest cells — one reason Table 5 is re-run.
 
 ### 6. Ablations and the default design
 
@@ -205,7 +207,7 @@ They do not, and we have acted on it. Removing synthetic hard negatives improves
 
 ### Mapping heterogeneous relations into one space
 
-The cost of the shared space is measurable, and it is the linear-probe record in item 8: compressing family, structural-cluster, interaction and fitness relations into one metric buys neighbourhood structure and loses decodable property information, so the model beats its backbone under a 3-NN probe and loses under a linear probe. The per-source ablations show each relation still moves its own task family, so the space has not collapsed to one signal. ProtSent is reliable for retrieval, clustering and nearest-neighbour transfer over structure and family, and not where one would otherwise fit a supervised model.
+The cost of the shared space is the linear-probe record in item 8: compressing family, structural-cluster, interaction and fitness relations into one metric buys neighbourhood structure and loses decodable property information. The per-source ablations show each relation still moves its own task family, so the space has not collapsed to one signal. ProtSent is reliable for retrieval, clustering and nearest-neighbour transfer over structure and family, and not where one would otherwise fit a supervised model.
 
 ### 7. Baselines
 
