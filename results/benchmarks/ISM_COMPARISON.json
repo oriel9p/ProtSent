@@ -90,6 +90,13 @@
     "delta": -0.11295
    },
    {
+    "task": "Temperature Stability",
+    "metric": "Accuracy",
+    "ismc": 0.8394,
+    "esmc": 0.92573,
+    "delta": -0.08633000000000002
+   },
+   {
     "task": "Variant Effect (GB1)",
     "metric": "Spearman",
     "ismc": 0.71994,
@@ -116,6 +123,13 @@
     "ismc": 0.69475,
     "esmc": 0.7369,
     "delta": -0.04215000000000002
+   },
+   {
+    "task": "Antibiotic Resistance",
+    "metric": "Accuracy",
+    "ismc": 0.94196,
+    "esmc": 0.9628,
+    "delta": -0.02083999999999997
    },
    {
     "task": "Binary Subcellular Localization",
@@ -181,6 +195,13 @@
     "delta": 0.023740000000000094
    },
    {
+    "task": "Remote Homology (Fold)",
+    "metric": "Accuracy",
+    "ismc": 0.40259,
+    "esmc": 0.3545,
+    "delta": 0.04809000000000002
+   },
+   {
     "task": "SCOPe-40 Structural Retrieval",
     "metric": "eligible_Recall@10",
     "ismc": 0.65918,
@@ -239,6 +260,13 @@
     "delta": -0.054769999999999985
    },
    {
+    "task": "Remote Homology (Fold)",
+    "metric": "Accuracy",
+    "ismc": 0.67047,
+    "esmc": 0.69945,
+    "delta": -0.028980000000000006
+   },
+   {
     "task": "AAV Fitness (FLIP)",
     "metric": "Spearman",
     "ismc": 0.58138,
@@ -251,6 +279,13 @@
     "ismc": 0.80818,
     "esmc": 0.83237,
     "delta": -0.024190000000000045
+   },
+   {
+    "task": "Temperature Stability",
+    "metric": "Accuracy",
+    "ismc": 0.93334,
+    "esmc": 0.95618,
+    "delta": -0.022840000000000082
    },
    {
     "task": "Enzyme Catalytic Efficiency",
@@ -272,6 +307,13 @@
     "ismc": 0.50789,
     "esmc": 0.52376,
     "delta": -0.01587000000000005
+   },
+   {
+    "task": "Antibiotic Resistance",
+    "metric": "Accuracy",
+    "ismc": 0.96577,
+    "esmc": 0.9814,
+    "delta": -0.015630000000000033
    },
    {
     "task": "Binary Subcellular Localization",
@@ -361,18 +403,668 @@
  },
  "tally": {
   "knn": {
-   "n": 20,
-   "ismc_wins": 7,
+   "n": 23,
+   "ismc_wins": 8,
    "ties": 1,
-   "ismc_loses": 12,
-   "median_delta": -0.006949999999999901
+   "ismc_loses": 14,
+   "median_delta": -0.008570000000000022
   },
   "linear": {
-   "n": 20,
+   "n": 23,
    "ismc_wins": 7,
    "ties": 3,
-   "ismc_loses": 10,
-   "median_delta": -0.004570000000000074
+   "ismc_loses": 13,
+   "median_delta": -0.012519999999999976
   }
+ },
+ "cross_model": {
+  "knn": [
+   {
+    "task": "AAV Fitness (FLIP)",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.49206,
+     "ISM-C 300M": 0.48349,
+     "ESM-2 150M": 0.43455,
+     "ProtSent-V1 150M": 0.46627,
+     "ProtSent-V2 150M": 0.50307,
+     "ESM-2 35M": 0.46665,
+     "ProtSent-V2 35M": 0.51538,
+     "MMseqs2": 0.4024100601203913
+    }
+   },
+   {
+    "task": "Antibiotic Resistance",
+    "metric": "Accuracy",
+    "values": {
+     "ESM-C 300M": 0.9628,
+     "ISM-C 300M": 0.94196,
+     "ESM-2 150M": 0.96801,
+     "ProtSent-V1 150M": 0.9628,
+     "ProtSent-V2 150M": 0.96577,
+     "ESM-2 35M": 0.96726,
+     "ProtSent-V2 35M": 0.96503,
+     "MMseqs2": 0.9543746762905106
+    }
+   },
+   {
+    "task": "Binary Subcellular Localization",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.88129,
+     "ISM-C 300M": 0.86603,
+     "ESM-2 150M": 0.89642,
+     "ProtSent-V1 150M": 0.90102,
+     "ProtSent-V2 150M": 0.90321,
+     "ESM-2 35M": 0.88096,
+     "ProtSent-V2 35M": 0.88844,
+     "MMseqs2": 0.6833982645178726
+    }
+   },
+   {
+    "task": "Cloning Classification",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.32718,
+     "ISM-C 300M": 0.50708,
+     "ESM-2 150M": 0.3754,
+     "ProtSent-V1 150M": 0.37889,
+     "ProtSent-V2 150M": 0.36273,
+     "ESM-2 35M": 0.39058,
+     "ProtSent-V2 35M": 0.3791,
+     "MMseqs2": 0.17068702696215293
+    }
+   },
+   {
+    "task": "EC Classification",
+    "metric": "F1_Macro",
+    "values": {
+     "ESM-C 300M": 0.64036,
+     "ISM-C 300M": 0.52741,
+     "ESM-2 150M": 0.64656,
+     "ProtSent-V1 150M": 0.60398,
+     "ProtSent-V2 150M": 0.62531,
+     "ESM-2 35M": 0.59837,
+     "ProtSent-V2 35M": 0.59238,
+     "MMseqs2": 0.710252865931774
+    }
+   },
+   {
+    "task": "Enzyme Catalytic Efficiency",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.69574,
+     "ISM-C 300M": 0.69084,
+     "ESM-2 150M": 0.70604,
+     "ProtSent-V1 150M": 0.67769,
+     "ProtSent-V2 150M": 0.69093,
+     "ESM-2 35M": 0.69152,
+     "ProtSent-V2 35M": 0.66875,
+     "MMseqs2": 0.6322069418592415
+    }
+   },
+   {
+    "task": "Fluorescence (TAPE)",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.37057,
+     "ISM-C 300M": 0.54365,
+     "ESM-2 150M": 0.38022,
+     "ProtSent-V1 150M": 0.46187,
+     "ProtSent-V2 150M": 0.38389,
+     "ESM-2 35M": 0.37359,
+     "ProtSent-V2 35M": 0.45683,
+     "MMseqs2": 0.3863257944210319
+    }
+   },
+   {
+    "task": "Material Production",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.72655,
+     "ISM-C 300M": 0.80867,
+     "ESM-2 150M": 0.75822,
+     "ProtSent-V1 150M": 0.76662,
+     "ProtSent-V2 150M": 0.76437,
+     "ESM-2 35M": 0.76836,
+     "ProtSent-V2 35M": 0.76528,
+     "MMseqs2": 0.5796436135390605
+    }
+   },
+   {
+    "task": "Metal Ion Binding",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.7369,
+     "ISM-C 300M": 0.69475,
+     "ESM-2 150M": 0.7973,
+     "ProtSent-V1 150M": 0.81466,
+     "ProtSent-V2 150M": 0.81665,
+     "ESM-2 35M": 0.79569,
+     "ProtSent-V2 35M": 0.8158,
+     "MMseqs2": 0.7238573032491951
+    }
+   },
+   {
+    "task": "Molecular Function (GO)",
+    "metric": "F1_Macro",
+    "values": {
+     "ESM-C 300M": 0.51645,
+     "ISM-C 300M": 0.43779,
+     "ESM-2 150M": 0.51164,
+     "ProtSent-V1 150M": 0.49613,
+     "ProtSent-V2 150M": 0.51481,
+     "ESM-2 35M": 0.45903,
+     "ProtSent-V2 35M": 0.45473,
+     "MMseqs2": 0.584953707648861
+    }
+   },
+   {
+    "task": "Neuropeptide Precursor Prediction (ProFET/NeuroPID)",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.9781,
+     "ISM-C 300M": 0.96732,
+     "ESM-2 150M": 0.97767,
+     "ProtSent-V1 150M": 0.96137,
+     "ProtSent-V2 150M": 0.97133,
+     "ESM-2 35M": 0.95786,
+     "ProtSent-V2 35M": 0.96008,
+     "MMseqs2": 0.9010262725779967
+    }
+   },
+   {
+    "task": "Optimal pH",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.51127,
+     "ISM-C 300M": 0.45254,
+     "ESM-2 150M": 0.56217,
+     "ProtSent-V1 150M": 0.58364,
+     "ProtSent-V2 150M": 0.58919,
+     "ESM-2 35M": 0.58209,
+     "ProtSent-V2 35M": 0.57555,
+     "MMseqs2": 0.5462031014630815
+    }
+   },
+   {
+    "task": "Peptide-HLA Binding",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.72198,
+     "ISM-C 300M": 0.74572,
+     "ESM-2 150M": 0.75652,
+     "ProtSent-V1 150M": 0.77895,
+     "ProtSent-V2 150M": 0.79993,
+     "ESM-2 35M": 0.74963,
+     "ProtSent-V2 35M": 0.80216,
+     "MMseqs2": 0.6374484376366069
+    }
+   },
+   {
+    "task": "Remote Homology (Fold)",
+    "metric": "Accuracy",
+    "values": {
+     "ESM-C 300M": 0.3545,
+     "ISM-C 300M": 0.40259,
+     "ESM-2 150M": 0.51942,
+     "ProtSent-V1 150M": 0.70469,
+     "ProtSent-V2 150M": 0.66122,
+     "ESM-2 35M": 0.58354,
+     "ProtSent-V2 35M": 0.66677,
+     "MMseqs2": 0.6522876960846462
+    }
+   },
+   {
+    "task": "SCOPe-40 Structural Retrieval",
+    "metric": "eligible_Recall@10",
+    "values": {
+     "ESM-C 300M": 0.57944,
+     "ISM-C 300M": 0.65918,
+     "ESM-2 150M": 0.77023,
+     "ProtSent-V1 150M": 0.89427,
+     "ProtSent-V2 150M": 0.9368,
+     "ESM-2 35M": 0.76137,
+     "ProtSent-V2 35M": 0.92203,
+     "MMseqs2": 0.7347903130537508
+    }
+   },
+   {
+    "task": "Signal Peptide Prediction (SignalP/ProteinBERT)",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.97486,
+     "ISM-C 300M": 0.96791,
+     "ESM-2 150M": 0.9804,
+     "ProtSent-V1 150M": 0.97403,
+     "ProtSent-V2 150M": 0.98268,
+     "ESM-2 35M": 0.97804,
+     "ProtSent-V2 35M": 0.98402,
+     "MMseqs2": 0.7961100977232046
+    }
+   },
+   {
+    "task": "Solubility (DeepSol)",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.59439,
+     "ISM-C 300M": 0.68521,
+     "ESM-2 150M": 0.54654,
+     "ProtSent-V1 150M": 0.54848,
+     "ProtSent-V2 150M": 0.52631,
+     "ESM-2 35M": 0.53208,
+     "ProtSent-V2 35M": 0.54264,
+     "MMseqs2": 0.4184977522477522
+    }
+   },
+   {
+    "task": "Stability (Biomap)",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.69349,
+     "ISM-C 300M": 0.57944,
+     "ESM-2 150M": 0.64952,
+     "ProtSent-V1 150M": 0.60969,
+     "ProtSent-V2 150M": 0.62386,
+     "ESM-2 35M": 0.64346,
+     "ProtSent-V2 35M": 0.59615,
+     "MMseqs2": 0.5816822197266279
+    }
+   },
+   {
+    "task": "Subcellular Localisation",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.78624,
+     "ISM-C 300M": 0.77564,
+     "ESM-2 150M": 0.81876,
+     "ProtSent-V1 150M": 0.82647,
+     "ProtSent-V2 150M": 0.8358,
+     "ESM-2 35M": 0.80147,
+     "ProtSent-V2 35M": 0.82943,
+     "MMseqs2": 0.6828278382299967
+    }
+   },
+   {
+    "task": "Temperature Stability",
+    "metric": "Accuracy",
+    "values": {
+     "ESM-C 300M": 0.92573,
+     "ISM-C 300M": 0.8394,
+     "ESM-2 150M": 0.8911,
+     "ProtSent-V1 150M": 0.84799,
+     "ProtSent-V2 150M": 0.86191,
+     "ESM-2 35M": 0.86132,
+     "ProtSent-V2 35M": 0.85139,
+     "MMseqs2": 0.6852530271675003
+    }
+   },
+   {
+    "task": "Thermostability (FLIP)",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.44973,
+     "ISM-C 300M": 0.44469,
+     "ESM-2 150M": 0.43775,
+     "ProtSent-V1 150M": 0.46063,
+     "ProtSent-V2 150M": 0.46228,
+     "ESM-2 35M": 0.44486,
+     "ProtSent-V2 35M": 0.43667,
+     "MMseqs2": 0.4798753815432825
+    }
+   },
+   {
+    "task": "Variant Effect (GB1)",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.7989,
+     "ISM-C 300M": 0.71994,
+     "ESM-2 150M": 0.6607,
+     "ProtSent-V1 150M": 0.79825,
+     "ProtSent-V2 150M": 0.76996,
+     "ESM-2 35M": 0.6582,
+     "ProtSent-V2 35M": 0.78058,
+     "MMseqs2": 0.7166439493464695
+    }
+   },
+   {
+    "task": "beta-lactamase-PEER",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.82386,
+     "ISM-C 300M": 0.8351,
+     "ESM-2 150M": 0.77283,
+     "ProtSent-V1 150M": 0.74232,
+     "ProtSent-V2 150M": 0.76194,
+     "ESM-2 35M": 0.72717,
+     "ProtSent-V2 35M": 0.71525,
+     "MMseqs2": 0.8026020318144645
+    }
+   }
+  ],
+  "linear": [
+   {
+    "task": "AAV Fitness (FLIP)",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.60577,
+     "ISM-C 300M": 0.58138,
+     "ESM-2 150M": 0.58867,
+     "ProtSent-V1 150M": 0.39762,
+     "ProtSent-V2 150M": 0.45088,
+     "ESM-2 35M": 0.56395,
+     "ProtSent-V2 35M": 0.24713,
+     "MMseqs2": 0.4024100601203913
+    }
+   },
+   {
+    "task": "Antibiotic Resistance",
+    "metric": "Accuracy",
+    "values": {
+     "ESM-C 300M": 0.9814,
+     "ISM-C 300M": 0.96577,
+     "ESM-2 150M": 0.9814,
+     "ProtSent-V1 150M": 0.9747,
+     "ProtSent-V2 150M": 0.97247,
+     "ESM-2 35M": 0.97545,
+     "ProtSent-V2 35M": 0.96652,
+     "MMseqs2": 0.9543746762905106
+    }
+   },
+   {
+    "task": "Binary Subcellular Localization",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.95188,
+     "ISM-C 300M": 0.93936,
+     "ESM-2 150M": 0.94991,
+     "ProtSent-V1 150M": 0.93511,
+     "ProtSent-V2 150M": 0.92341,
+     "ESM-2 35M": 0.95724,
+     "ProtSent-V2 35M": 0.90932,
+     "MMseqs2": 0.6833982645178726
+    }
+   },
+   {
+    "task": "Cloning Classification",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.5129,
+     "ISM-C 300M": 0.57356,
+     "ESM-2 150M": 0.50713,
+     "ProtSent-V1 150M": 0.47826,
+     "ProtSent-V2 150M": 0.43453,
+     "ESM-2 35M": 0.47804,
+     "ProtSent-V2 35M": 0.4257,
+     "MMseqs2": 0.17068702696215293
+    }
+   },
+   {
+    "task": "EC Classification",
+    "metric": "F1_Macro",
+    "values": {
+     "ESM-C 300M": 0.64036,
+     "ISM-C 300M": 0.52741,
+     "ESM-2 150M": 0.64656,
+     "ProtSent-V1 150M": 0.60398,
+     "ProtSent-V2 150M": 0.62531,
+     "ESM-2 35M": 0.59837,
+     "ProtSent-V2 35M": 0.59238,
+     "MMseqs2": 0.710252865931774
+    }
+   },
+   {
+    "task": "Enzyme Catalytic Efficiency",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.60726,
+     "ISM-C 300M": 0.58447,
+     "ESM-2 150M": 0.54663,
+     "ProtSent-V1 150M": 0.54785,
+     "ProtSent-V2 150M": 0.54319,
+     "ESM-2 35M": 0.54558,
+     "ProtSent-V2 35M": 0.50016,
+     "MMseqs2": 0.6322069418592415
+    }
+   },
+   {
+    "task": "Fluorescence (TAPE)",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.61549,
+     "ISM-C 300M": 0.65853,
+     "ESM-2 150M": 0.57994,
+     "ProtSent-V1 150M": 0.60789,
+     "ProtSent-V2 150M": 0.59077,
+     "ESM-2 35M": 0.59134,
+     "ProtSent-V2 35M": 0.58826,
+     "MMseqs2": 0.3863257944210319
+    }
+   },
+   {
+    "task": "Material Production",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.84543,
+     "ISM-C 300M": 0.87706,
+     "ESM-2 150M": 0.85284,
+     "ProtSent-V1 150M": 0.84001,
+     "ProtSent-V2 150M": 0.83443,
+     "ESM-2 35M": 0.83987,
+     "ProtSent-V2 35M": 0.82252,
+     "MMseqs2": 0.5796436135390605
+    }
+   },
+   {
+    "task": "Metal Ion Binding",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.78816,
+     "ISM-C 300M": 0.76616,
+     "ESM-2 150M": 0.79203,
+     "ProtSent-V1 150M": 0.78912,
+     "ProtSent-V2 150M": 0.76898,
+     "ESM-2 35M": 0.79029,
+     "ProtSent-V2 35M": 0.74661,
+     "MMseqs2": 0.7238573032491951
+    }
+   },
+   {
+    "task": "Molecular Function (GO)",
+    "metric": "F1_Macro",
+    "values": {
+     "ESM-C 300M": 0.51645,
+     "ISM-C 300M": 0.43779,
+     "ESM-2 150M": 0.51164,
+     "ProtSent-V1 150M": 0.49613,
+     "ProtSent-V2 150M": 0.51481,
+     "ESM-2 35M": 0.45903,
+     "ProtSent-V2 35M": 0.45473,
+     "MMseqs2": 0.584953707648861
+    }
+   },
+   {
+    "task": "Neuropeptide Precursor Prediction (ProFET/NeuroPID)",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.99146,
+     "ISM-C 300M": 0.98366,
+     "ESM-2 150M": 0.98025,
+     "ProtSent-V1 150M": 0.97623,
+     "ProtSent-V2 150M": 0.97139,
+     "ESM-2 35M": 0.97479,
+     "ProtSent-V2 35M": 0.95936,
+     "MMseqs2": 0.9010262725779967
+    }
+   },
+   {
+    "task": "Optimal pH",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.52376,
+     "ISM-C 300M": 0.50789,
+     "ESM-2 150M": 0.53149,
+     "ProtSent-V1 150M": 0.51696,
+     "ProtSent-V2 150M": 0.50342,
+     "ESM-2 35M": 0.48639,
+     "ProtSent-V2 35M": 0.48448,
+     "MMseqs2": 0.5462031014630815
+    }
+   },
+   {
+    "task": "Peptide-HLA Binding",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.86585,
+     "ISM-C 300M": 0.89463,
+     "ESM-2 150M": 0.86299,
+     "ProtSent-V1 150M": 0.83735,
+     "ProtSent-V2 150M": 0.87119,
+     "ESM-2 35M": 0.86278,
+     "ProtSent-V2 35M": 0.85788,
+     "MMseqs2": 0.6374484376366069
+    }
+   },
+   {
+    "task": "Remote Homology (Fold)",
+    "metric": "Accuracy",
+    "values": {
+     "ESM-C 300M": 0.69945,
+     "ISM-C 300M": 0.67047,
+     "ESM-2 150M": 0.75,
+     "ProtSent-V1 150M": 0.74014,
+     "ProtSent-V2 150M": 0.75031,
+     "ESM-2 35M": 0.68681,
+     "ProtSent-V2 35M": 0.7016,
+     "MMseqs2": 0.6522876960846462
+    }
+   },
+   {
+    "task": "SCOPe-40 Structural Retrieval",
+    "metric": "eligible_Recall@10",
+    "values": {
+     "ESM-C 300M": 0.57944,
+     "ISM-C 300M": 0.65918,
+     "ESM-2 150M": 0.77023,
+     "ProtSent-V1 150M": 0.89427,
+     "ProtSent-V2 150M": 0.9368,
+     "ESM-2 35M": 0.76137,
+     "ProtSent-V2 35M": 0.92203,
+     "MMseqs2": 0.7347903130537508
+    }
+   },
+   {
+    "task": "Signal Peptide Prediction (SignalP/ProteinBERT)",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.99419,
+     "ISM-C 300M": 0.99566,
+     "ESM-2 150M": 0.99418,
+     "ProtSent-V1 150M": 0.99413,
+     "ProtSent-V2 150M": 0.9961,
+     "ESM-2 35M": 0.9942,
+     "ProtSent-V2 35M": 0.99567,
+     "MMseqs2": 0.7961100977232046
+    }
+   },
+   {
+    "task": "Solubility (DeepSol)",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.75382,
+     "ISM-C 300M": 0.82218,
+     "ESM-2 150M": 0.72115,
+     "ProtSent-V1 150M": 0.70847,
+     "ProtSent-V2 150M": 0.70756,
+     "ESM-2 35M": 0.69629,
+     "ProtSent-V2 35M": 0.69762,
+     "MMseqs2": 0.4184977522477522
+    }
+   },
+   {
+    "task": "Stability (Biomap)",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.75502,
+     "ISM-C 300M": 0.70025,
+     "ESM-2 150M": 0.70596,
+     "ProtSent-V1 150M": 0.69873,
+     "ProtSent-V2 150M": 0.66255,
+     "ESM-2 35M": 0.43951,
+     "ProtSent-V2 35M": 0.38779,
+     "MMseqs2": 0.5816822197266279
+    }
+   },
+   {
+    "task": "Subcellular Localisation",
+    "metric": "AUC",
+    "values": {
+     "ESM-C 300M": 0.92305,
+     "ISM-C 300M": 0.91848,
+     "ESM-2 150M": 0.92026,
+     "ProtSent-V1 150M": 0.91564,
+     "ProtSent-V2 150M": 0.90785,
+     "ESM-2 35M": 0.9116,
+     "ProtSent-V2 35M": 0.89205,
+     "MMseqs2": 0.6828278382299967
+    }
+   },
+   {
+    "task": "Temperature Stability",
+    "metric": "Accuracy",
+    "values": {
+     "ESM-C 300M": 0.95618,
+     "ISM-C 300M": 0.93334,
+     "ESM-2 150M": 0.9264,
+     "ProtSent-V1 150M": 0.89079,
+     "ProtSent-V2 150M": 0.90972,
+     "ESM-2 35M": 0.89726,
+     "ProtSent-V2 35M": 0.89633,
+     "MMseqs2": 0.6852530271675003
+    }
+   },
+   {
+    "task": "Thermostability (FLIP)",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.5498,
+     "ISM-C 300M": 0.55175,
+     "ESM-2 150M": 0.56053,
+     "ProtSent-V1 150M": 0.55809,
+     "ProtSent-V2 150M": 0.56059,
+     "ESM-2 35M": 0.54126,
+     "ProtSent-V2 35M": 0.55636,
+     "MMseqs2": 0.4798753815432825
+    }
+   },
+   {
+    "task": "Variant Effect (GB1)",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.81651,
+     "ISM-C 300M": 0.8412,
+     "ESM-2 150M": 0.80474,
+     "ProtSent-V1 150M": 0.84484,
+     "ProtSent-V2 150M": 0.82935,
+     "ESM-2 35M": 0.81629,
+     "ProtSent-V2 35M": 0.81256,
+     "MMseqs2": 0.7166439493464695
+    }
+   },
+   {
+    "task": "beta-lactamase-PEER",
+    "metric": "Spearman",
+    "values": {
+     "ESM-C 300M": 0.83237,
+     "ISM-C 300M": 0.80818,
+     "ESM-2 150M": 0.77879,
+     "ProtSent-V1 150M": 0.6807,
+     "ProtSent-V2 150M": 0.64536,
+     "ESM-2 35M": 0.66393,
+     "ProtSent-V2 35M": 0.60858,
+     "MMseqs2": 0.8026020318144645
+    }
+   }
+  ]
  }
 }

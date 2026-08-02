@@ -1,0 +1,2 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,EmbeddingNorm,BenchmarkSeed,Accuracy,F1_Weighted,F1_Macro,BalancedAccuracy,MCC
+/storage/models/ESM2-35M,CATH v4.3 Superfamily Transfer (midnight zone),200,2026-08-02,knn,standard,test,test_split,none,42,0.04,0.03278,0.02319,0.04,0.03929

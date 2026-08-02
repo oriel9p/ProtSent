@@ -78,6 +78,26 @@ SCOPE_METRICS = [
 # sign here -- ISM-C leads by +0.0612 unrestricted and +0.0797 eligible.)
 SCOPE_DELTA_METRIC = "eligible_Recall@10"
 
+# Three multiclass tasks -- Antibiotic Resistance, Remote Homology (Fold),
+# Temperature Stability -- declare AUC as their main metric but the suite leaves
+# that column empty for them, recording Accuracy/F1 instead. Comparing on the
+# declared metric therefore drops them from every tally, silently and uniformly
+# across arms. Remote Homology is the paper's flagship task, so dropping it is
+# not acceptable. Fall back to Accuracy, which is populated, and say so.
+METRIC_FALLBACK = "Accuracy"
+
+
+def _metric_value(row, metric):
+    """Value on `metric`, falling back to Accuracy when the column is empty.
+
+    Returns (value, metric_actually_used) so callers can label the row honestly.
+    """
+    v = _num(row.get(metric))
+    if v is not None:
+        return v, metric
+    v = _num(row.get(METRIC_FALLBACK))
+    return (v, METRIC_FALLBACK) if v is not None else (None, metric)
+
 
 def collect(probe: str) -> dict:
     """tag -> {task name -> row} for every arm that has results for this probe."""
@@ -115,11 +135,43 @@ def distillation_delta(probe: str) -> list:
         metric = SCOPE_DELTA_METRIC if task == SCOPE_TASK else metric_of.get(task)
         if metric is None:
             continue
-        a, b = _num(treated[task].get(metric)), _num(control[task].get(metric))
-        if a is None or b is None:
+        a, used_a = _metric_value(treated[task], metric)
+        b, used_b = _metric_value(control[task], metric)
+        # Both arms must be scored on the SAME metric or the delta is meaningless.
+        if a is None or b is None or used_a != used_b:
             continue
-        out.append({"task": task, "metric": metric, "ismc": a, "esmc": b, "delta": a - b})
+        out.append({"task": task, "metric": used_a, "ismc": a, "esmc": b, "delta": a - b})
     out.sort(key=lambda r: r["delta"])
+    return out
+
+
+def cross_model(probe: str) -> list:
+    """One row per task with every arm side by side, on a shared metric."""
+    arms = collect(probe)
+    metric_of = {
+        r["Task"]: r["main_metric"] for r in load_mmseqs(BENCH / "mmseqs_baseline.json").values()
+    }
+    mmseqs = {r["Task"]: r for r in load_mmseqs(BENCH / "mmseqs_baseline.json").values()}
+    present = [(tag, label) for _, tag, label in ARMS if arms.get(tag)]
+    if not present:
+        return []
+
+    out = []
+    for task in sorted(set.intersection(*[set(arms[t]) for t, _ in present])):
+        metric = SCOPE_DELTA_METRIC if task == SCOPE_TASK else metric_of.get(task)
+        if metric is None:
+            continue
+        vals, used = {}, set()
+        for tag, label in present:
+            v, m = _metric_value(arms[tag][task], metric)
+            vals[label] = v
+            if v is not None:
+                used.add(m)
+        if len(used) != 1:  # arms scored on different metrics are not comparable
+            continue
+        mm_row = mmseqs.get(task)
+        vals["MMseqs2"] = _metric_value(mm_row, metric)[0] if mm_row else None
+        out.append({"task": task, "metric": used.pop(), "values": vals})
     return out
 
 
@@ -185,6 +237,25 @@ def render(report: dict) -> str:
                 f"| {r['task']} | {r['metric']} | {_f(r['esmc'])} | {_f(r['ismc'])} "
                 f"| {r['delta']:+.4f} |"
             )
+
+    labels = [label for _, _, label in ARMS] + ["MMseqs2"]
+    for probe in PROBES:
+        rows = report["cross_model"][probe]
+        if not rows:
+            continue
+        L += [
+            "",
+            f"## Every arm side by side ({probe} probe)",
+            "",
+            "| task | metric | " + " | ".join(labels) + " |",
+            "|---|---|" + "---|" * len(labels),
+        ]
+        for r in rows:
+            L.append(
+                f"| {r['task']} | {r['metric']} | "
+                + " | ".join(_f(r["values"].get(k)) for k in labels)
+                + " |"
+            )
     return "\n".join(L) + "\n"
 
 
@@ -193,6 +264,7 @@ def build() -> dict:
         "scope40": scope_rows(),
         "distillation": {p: distillation_delta(p) for p in PROBES},
         "tally": {p: tally(distillation_delta(p)) for p in PROBES},
+        "cross_model": {p: cross_model(p) for p in PROBES},
     }
 
 

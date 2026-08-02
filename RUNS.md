@@ -239,8 +239,9 @@ Neither is positive, and memorization predicts positive; that is the whole claim
 ## ISM-C-300M — a third-party structure-informed model, benchmarked 2026-08-02
 
 Reviewer jVGf asked us to position ProtSent against structure-informed protein LMs
-(ESM-S, S-PLM, ISM, Magneton). Only ISM has usable public weights; the other three have
-no HF Hub checkpoints. So we measured it instead of describing it.
+(ESM-S, S-PLM, ISM, Magneton). ISM was the one we could load and run inside the discussion window; the other three
+have no checkpoint we could obtain in loadable form. Do not claim they have no public
+weights -- S-PLM and ESM-S distribute outside the HF Hub.
 
 `jozhang97/ismc-300m-2024-12` ships as a bare 1.33 GB `.pth` with no config, tokenizer or
 safetensors, and targets `esm.models.esmc.ESMC` — a package whose latest release declares
@@ -258,19 +259,55 @@ Results in `results/benchmarks/ism/`, joined by `ism_comparison.py` into
 
 ### Structure distillation is a trade, not a free win
 
-| probe | ISM-C beats ESM-C | ties | loses | median delta |
-|---|---:|---:|---:|---:|
-| kNN | 7 | 1 | 12 | -0.0069 |
-| linear | 7 | 3 | 10 | -0.0046 |
+Each model against **its own** backbone, all 23 tasks, tie tolerance 0.005:
 
-It wins on structure- and solubility-flavoured tasks (SCOPe-40 +0.0797 eligible R@10,
-Solubility +0.0908, Fluorescence +0.1731, Cloning +0.1799 under kNN) and loses on
-function and fitness (EC -0.1129, GO -0.0787, Stability -0.1141, Variant Effect -0.0790).
-Both probes agree on the direction. This is the generality–accuracy trade-off jVGf asked
-about, measured on someone else's model.
+| comparison | probe | wins | ties | losses | median delta |
+|---|---|---:|---:|---:|---:|
+| ISM-C 300M vs ESM-C 300M | kNN | 8 | 1 | 14 | -0.0086 |
+| ISM-C 300M vs ESM-C 300M | linear | 7 | 3 | 13 | -0.0125 |
+| ProtSent-V2 150M vs ESM-2 150M | kNN | 11 | 4 | 8 | +0.0037 |
+| ProtSent-V2 150M vs ESM-2 150M | linear | 4 | 5 | 14 | -0.0124 |
+| ProtSent-V2 35M vs ESM-2 35M | kNN | 11 | 4 | 8 | +0.0022 |
+| ProtSent-V2 35M vs ESM-2 35M | linear | 3 | 8 | 12 | -0.0060 |
 
-Three of the 20 compared rows (EC, GO, SCOPe-40) are probe-invariant by construction:
-multilabel and retrieval tasks use a built-in evaluator and ignore `--probe_type`.
+ISM-C wins on structure- and solubility-flavoured tasks (Cloning +0.1799, Fluorescence
++0.1731, Solubility +0.0908, Material Production +0.0821, SCOPe-40 +0.0797 eligible R@10,
+Remote Homology +0.0481 under kNN) and loses on function and fitness (Stability -0.1141,
+EC -0.1129, Temperature Stability -0.0863, Variant Effect -0.0790, GO -0.0787). Both
+probes agree on the direction.
+
+This is the generality–accuracy trade-off jVGf asked about, measured on someone else's
+model — and it is not specific to us. Under kNN ProtSent is net positive where ISM-C is
+net negative; under a linear probe both are net negative with near-identical medians,
+consistent with the linear-probe claim we withdrew.
+
+**Metric caveat, and a trap.** Antibiotic Resistance, Remote Homology (Fold) and
+Temperature Stability have an empty AUC column — one-vs-rest AUC is undefined when the test
+split contains a class absent from training, which is the reason `FINAL_rebuttal.md:52`
+already gives reviewers. The tallies above therefore use `ism_comparison.py`'s Accuracy
+fallback over 23 tasks, which is NOT what our public text reports.
+
+The 20-task version, which reproduces the posted numbers exactly, is:
+
+| comparison | probe | W | T | L | median | sign p |
+|---|---|---:|---:|---:|---:|---:|
+| ISM-C vs ESM-C | kNN | 7 | 1 | 12 | -0.0078 | 0.36 |
+| ISM-C vs ESM-C | linear | 7 | 3 | 10 | -0.0062 | 0.63 |
+| ProtSent-V2 150M vs ESM-2 150M | kNN | 10 | 3 | 7 | +0.0049 | 0.63 |
+| ProtSent-V2 150M vs ESM-2 150M | linear | 4 | 4 | 12 | -0.0130 | 0.08 |
+
+Prefer the 20-task version for anything reviewer-facing. Folding the three tasks in with an
+Accuracy fallback shifts ISM-C's linear median by -0.0063 and ours by +0.0006 — same
+procedure, asymmetric effect — which turns a real gap into "nearly identical" and reads as
+metric shopping. No kNN record is resolved by a sign test either way.
+
+**MMseqs2 inconsistency, unresolved.** The SCOPe-40 table above and `mmseqs_baseline.json`
+give eligible R@10 0.7348 / MAP 0.4041. `FINAL_rebuttal.md:34` (posted) and the 150M table
+earlier in this file give 0.7401 / 0.4098. Same method, same flags, two numbers. Reconcile
+before either appears in another public table.
+
+Three of the 23 rows (EC, GO, SCOPe-40) are probe-invariant by construction: multilabel
+and retrieval tasks use a built-in evaluator and ignore `--probe_type`.
 
 ### SCOPe-40, eligible queries only
 

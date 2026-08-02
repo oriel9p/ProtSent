@@ -1,0 +1,2 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,EmbeddingNorm,BenchmarkSeed,Error
+/storage/models/ESM2-35M,CATH v4.3 Superfamily Transfer (midnight zone),Full,2026-08-02,knn,standard,test,task_exception,none,42,'\x00\x00'
