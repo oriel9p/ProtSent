@@ -192,3 +192,97 @@ def test_patch_unknown_residue_tokens_maps_missing_letters_and_pickles():
 
     patch_unknown_residue_tokens(tok)  # idempotent
     assert tok.convert("J") == x_id
+
+
+# ---------------------------------------------------------------------------
+# force_sdpa_backend
+# ---------------------------------------------------------------------------
+
+
+class _StrictBackend:
+    """Stand-in for a Synthyra runtime that accepts only some backend names."""
+
+    def __init__(self, accepted):
+        self._accepted = accepted
+        self.value = None
+
+    def set(self, name):
+        if name not in self._accepted:
+            raise ValueError(f"Unsupported attention implementation '{name}'")
+        self.value = name
+
+
+class _FakeAttn:
+    def __init__(self):
+        self.flex_attention = object()
+
+
+class _FakeBlock:
+    def __init__(self):
+        self.attn = _FakeAttn()
+
+
+class _FakeTransformer:
+    """Mimics ESM++: attn_backend is a validating property, blocks hang off it."""
+
+    def __init__(self, accepted):
+        object.__setattr__(self, "_gate", _StrictBackend(accepted))
+        object.__setattr__(self, "blocks", [_FakeBlock(), _FakeBlock()])
+
+    @property
+    def attn_backend(self):
+        return self._gate.value
+
+    @attn_backend.setter
+    def attn_backend(self, name):
+        self._gate.set(name)
+
+
+class _FakeESMpp:
+    def __init__(self, accepted):
+        self.transformer = _FakeTransformer(accepted)
+
+
+def test_force_sdpa_backend_falls_back_when_runtime_rejects_default(monkeypatch):
+    """The 2026-07 Synthyra bundle dropped 'kernels_flash', our default.
+
+    Assigning it blind raised ValueError and killed every ESM-C load. The setter
+    must walk the same candidate ladder the FastPLM branch already used.
+    """
+    from model_utils import force_sdpa_backend
+
+    monkeypatch.delenv("PROTSENT_ESMPLUSPLUS_ATTN_BACKEND", raising=False)
+    model = _FakeESMpp(accepted={"eager", "sdpa", "flash_attention_2"})
+    force_sdpa_backend(model)
+    assert model.transformer.attn_backend == "flash_attention_2"
+
+
+def test_force_sdpa_backend_prefers_the_requested_name(monkeypatch):
+    from model_utils import force_sdpa_backend
+
+    monkeypatch.setenv("PROTSENT_ESMPLUSPLUS_ATTN_BACKEND", "sdpa")
+    model = _FakeESMpp(accepted={"sdpa", "flash_attention_2", "kernels_flash"})
+    force_sdpa_backend(model)
+    assert model.transformer.attn_backend == "sdpa"
+    # flex_attention is only cleared for sdpa, where it would otherwise be used.
+    assert all(b.attn.flex_attention is None for b in model.transformer.blocks)
+
+
+def test_force_sdpa_backend_keeps_flex_attention_for_non_sdpa(monkeypatch):
+    from model_utils import force_sdpa_backend
+
+    monkeypatch.setenv("PROTSENT_ESMPLUSPLUS_ATTN_BACKEND", "flash_attention_2")
+    model = _FakeESMpp(accepted={"sdpa", "flash_attention_2"})
+    force_sdpa_backend(model)
+    assert model.transformer.attn_backend == "flash_attention_2"
+    assert all(b.attn.flex_attention is not None for b in model.transformer.blocks)
+
+
+def test_force_sdpa_backend_survives_a_runtime_accepting_nothing(monkeypatch):
+    """Never raise out of a best-effort tuning call; leave the model default."""
+    from model_utils import force_sdpa_backend
+
+    monkeypatch.delenv("PROTSENT_ESMPLUSPLUS_ATTN_BACKEND", raising=False)
+    model = _FakeESMpp(accepted=set())
+    force_sdpa_backend(model)
+    assert model.transformer.attn_backend is None

@@ -469,29 +469,41 @@ def patch_unknown_residue_tokens(tokenizer):
     )
 
 
+def _attn_backend_candidates(backend: str) -> tuple[str, ...]:
+    """Preferred name first, then equivalents, then sdpa as the universal floor.
+
+    The two model families spell flash differently ("flash_attention_2" for
+    HuggingFace's attention interface, "kernels_flash" for ESM++), and Synthyra
+    has changed which names its runtime accepts between releases — the bundle
+    shipped with ESMplusplus_small in 2026-07 dropped "kernels_flash" entirely
+    and resolves only ('eager', 'sdpa', 'flex_attention', 'flash_attention_2',
+    'flash_attention_3'). One env var has to survive all of that.
+    """
+    return {
+        "kernels_flash": ("kernels_flash", "flash_attention_2", "sdpa"),
+        "flash_attention_2": ("flash_attention_2", "kernels_flash", "sdpa"),
+        "flex": ("flex", "flex_attention", "sdpa"),
+    }.get(backend, (backend, "sdpa"))
+
+
 def force_sdpa_backend(model):
     """Set the ESMplusplus / Synthyra attention backend.
 
-    Defaults to ``kernels_flash`` for ESM-C on B300/Hopper-class GPUs. Set
-    ``PROTSENT_ESMPLUSPLUS_ATTN_BACKEND=sdpa`` to fall back without editing code.
-    Safe to call on any model — no-op when transformer.attn_backend is absent.
+    Defaults to ``kernels_flash`` for ESM-C on B300/Hopper-class GPUs, falling
+    back through equivalents to ``sdpa`` when a runtime does not accept it. Set
+    ``PROTSENT_ESMPLUSPLUS_ATTN_BACKEND=sdpa`` to pin one without editing code.
+    Safe to call on any model — no-op when attn_backend is absent.
     """
     backend = (
         os.environ.get("PROTSENT_ESMPLUSPLUS_ATTN_BACKEND", "kernels_flash").strip()
         or "kernels_flash"
     )
+    candidates = _attn_backend_candidates(backend)
     transformer = getattr(model, "transformer", None)
+
     if transformer is None:
-        # FastPLM ESM2 exposes attn_backend directly on the model, but routes it to
-        # HuggingFace's attention interface, which spells flash differently than
-        # ESM++ does ("flash_attention_2", not "kernels_flash"). Try the requested
-        # name first, then equivalents, so one env var works across both families.
+        # FastPLM ESM2 exposes attn_backend directly on the model.
         if hasattr(model, "attn_backend"):
-            candidates = {
-                "kernels_flash": ("kernels_flash", "flash_attention_2", "sdpa"),
-                "flash_attention_2": ("flash_attention_2", "kernels_flash", "sdpa"),
-                "flex": ("flex", "flex_attention", "sdpa"),
-            }.get(backend, (backend, "sdpa"))
             for candidate in candidates:
                 try:
                     model.attn_backend = candidate
@@ -508,18 +520,41 @@ def force_sdpa_backend(model):
                 candidates,
             )
         return
+
+    # The ESM++ transformer's attn_backend setter resolves the string to an
+    # AttentionBackend enum and propagates it to every block's attention. Do NOT
+    # also assign the raw string per block: block.attn._attn compares against the
+    # enum, so a leaked string raises "Unsupported resolved backend: <str>".
+    #
+    # It also raises on any name its runtime does not know, which is why this
+    # walks the same candidate ladder as the FastPLM branch rather than assigning
+    # once. Assigning blind made every ESM-C load die under the current Synthyra
+    # bundle with "Unsupported attention implementation 'kernels_flash'".
+    resolved = None
     if hasattr(transformer, "attn_backend"):
-        # The ESM++ transformer's attn_backend setter resolves the string to an
-        # AttentionBackend enum and propagates it to every block's attention. Do NOT
-        # also assign the raw string per block: block.attn._attn compares against the
-        # enum, so a leaked string raises "Unsupported resolved backend: <str>".
-        transformer.attn_backend = backend
+        for candidate in candidates:
+            try:
+                transformer.attn_backend = candidate
+            except (ValueError, AssertionError, KeyError, NotImplementedError):
+                continue
+            resolved = candidate
+            break
+        if resolved is None:
+            logger.warning(
+                "   ESM++ accepted none of %s; leaving model default", candidates
+            )
+            return
+        if resolved != backend:
+            logger.info(
+                "   ESM++ does not accept '%s'; using '%s'", backend, resolved
+            )
+
     for block in getattr(transformer, "blocks", []):
         attn = getattr(block, "attn", None)
-        if attn is not None and backend == "sdpa" and hasattr(attn, "flex_attention"):
+        if attn is not None and resolved == "sdpa" and hasattr(attn, "flex_attention"):
             attn.flex_attention = None
-    flex_note = " (flex_attention disabled)" if backend == "sdpa" else ""
-    logger.info("   Forced ESM++ attention backend: %s%s", backend, flex_note)
+    flex_note = " (flex_attention disabled)" if resolved == "sdpa" else ""
+    logger.info("   Forced ESM++ attention backend: %s%s", resolved, flex_note)
 
 
 # =============================================================================
