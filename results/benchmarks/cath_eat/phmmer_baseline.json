@@ -1,0 +1,18 @@
+{
+  "Model": "HMMER phmmer (alignment baseline)",
+  "Task": "CATH v4.3 Superfamily Transfer (midnight zone)",
+  "task_key": "cath_eat",
+  "main_metric": "Accuracy",
+  "problem_type": "multiclass",
+  "eval_split": "test",
+  "n_train": 69605,
+  "n_test": 150,
+  "hmmer_flags": "phmmer -E 10.0 --max-hits 300, rank by bitscore desc",
+  "max_samples": null,
+  "search_seconds": 2.6,
+  "Accuracy": 0.38,
+  "F1_macro": 0.28531746031746036,
+  "hit_coverage": 0.74,
+  "AUC": 0.7116778523489933,
+  "AUC_n_classes": 150
+}

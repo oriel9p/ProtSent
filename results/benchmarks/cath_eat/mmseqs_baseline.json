@@ -1,0 +1,16 @@
+{
+  "Model": "MMseqs2 (alignment baseline)",
+  "Task": "CATH v4.3 Superfamily Transfer (midnight zone)",
+  "task_key": "cath_eat",
+  "main_metric": "Accuracy",
+  "problem_type": "multiclass",
+  "eval_split": "test",
+  "n_train": 69605,
+  "n_test": 150,
+  "mmseqs_flags": "-s 7.5 -e 10 --max-seqs 300 --alignment-mode 3 --format-output query,target,fident,alnlen,evalue,bits",
+  "Accuracy": 0.3466666666666667,
+  "F1_macro": 0.23719652667021088,
+  "hit_coverage": 0.8333333333333334,
+  "AUC": 0.6961521252796421,
+  "AUC_n_classes": 150
+}

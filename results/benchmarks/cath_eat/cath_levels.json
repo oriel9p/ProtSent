@@ -1,0 +1,274 @@
+{
+  "esm2_35m": {
+    "model": "/storage/models/ESM2-35M",
+    "dim": 480,
+    "levels": {
+      "cath_c": {
+        "accuracy": 0.7853881278538812,
+        "ci95": 0.05363915228832321,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_a": {
+        "accuracy": 0.54337899543379,
+        "ci95": 0.06509884052509732,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_t": {
+        "accuracy": 0.4238095238095238,
+        "ci95": 0.06675366101098486,
+        "n_answerable": 210,
+        "n_answerable_strict": 208,
+        "n_total": 219
+      },
+      "cath_h": {
+        "accuracy": 0.4066666666666667,
+        "ci95": 0.07821797585889716,
+        "n_answerable": 150,
+        "n_answerable_strict": 150,
+        "n_total": 219
+      }
+    }
+  },
+  "protsent_v1_35m": {
+    "model": "oriel9p/protsent-esm2-35M",
+    "dim": 480,
+    "levels": {
+      "cath_c": {
+        "accuracy": 0.817351598173516,
+        "ci95": 0.051307910724652635,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_a": {
+        "accuracy": 0.6438356164383562,
+        "ci95": 0.06356492739738442,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_t": {
+        "accuracy": 0.45714285714285713,
+        "ci95": 0.0672215359589057,
+        "n_answerable": 210,
+        "n_answerable_strict": 208,
+        "n_total": 219
+      },
+      "cath_h": {
+        "accuracy": 0.5066666666666667,
+        "ci95": 0.07979762193117233,
+        "n_answerable": 150,
+        "n_answerable_strict": 150,
+        "n_total": 219
+      }
+    }
+  },
+  "protsent_v2_35m": {
+    "model": "/home/ddofer/ProtSent/models/protsent_esm2_35m_v3/final",
+    "dim": 480,
+    "levels": {
+      "cath_c": {
+        "accuracy": 0.821917808219178,
+        "ci95": 0.049827251913914655,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_a": {
+        "accuracy": 0.6438356164383562,
+        "ci95": 0.06652320972394116,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_t": {
+        "accuracy": 0.5333333333333333,
+        "ci95": 0.06829766926936547,
+        "n_answerable": 210,
+        "n_answerable_strict": 208,
+        "n_total": 219
+      },
+      "cath_h": {
+        "accuracy": 0.5666666666666667,
+        "ci95": 0.08006079248662805,
+        "n_answerable": 150,
+        "n_answerable_strict": 150,
+        "n_total": 219
+      }
+    }
+  },
+  "esm2_150m": {
+    "model": "Synthyra/ESM2-150M",
+    "dim": 640,
+    "levels": {
+      "cath_c": {
+        "accuracy": 0.7397260273972602,
+        "ci95": 0.05956131215102739,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_a": {
+        "accuracy": 0.5296803652968036,
+        "ci95": 0.06618967015303087,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_t": {
+        "accuracy": 0.4095238095238095,
+        "ci95": 0.06519712929519982,
+        "n_answerable": 210,
+        "n_answerable_strict": 208,
+        "n_total": 219
+      },
+      "cath_h": {
+        "accuracy": 0.43333333333333335,
+        "ci95": 0.08171669602191235,
+        "n_answerable": 150,
+        "n_answerable_strict": 150,
+        "n_total": 219
+      }
+    }
+  },
+  "protsent_v1_150m": {
+    "model": "oriel9p/protsent-esm2-150M",
+    "dim": 640,
+    "levels": {
+      "cath_c": {
+        "accuracy": 0.8356164383561644,
+        "ci95": 0.04894370325352411,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_a": {
+        "accuracy": 0.680365296803653,
+        "ci95": 0.06291333999388457,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_t": {
+        "accuracy": 0.5619047619047619,
+        "ci95": 0.06672580552122086,
+        "n_answerable": 210,
+        "n_answerable_strict": 208,
+        "n_total": 219
+      },
+      "cath_h": {
+        "accuracy": 0.58,
+        "ci95": 0.07976565486550455,
+        "n_answerable": 150,
+        "n_answerable_strict": 150,
+        "n_total": 219
+      }
+    }
+  },
+  "protsent_v2_150m": {
+    "model": "/home/ddofer/ProtSent/models/protsent_esm2_150m_v2/final",
+    "dim": 640,
+    "levels": {
+      "cath_c": {
+        "accuracy": 0.8401826484018264,
+        "ci95": 0.04814272358354767,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_a": {
+        "accuracy": 0.6986301369863014,
+        "ci95": 0.06286301560081466,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_t": {
+        "accuracy": 0.5714285714285714,
+        "ci95": 0.06802018083628565,
+        "n_answerable": 210,
+        "n_answerable_strict": 208,
+        "n_total": 219
+      },
+      "cath_h": {
+        "accuracy": 0.6266666666666667,
+        "ci95": 0.077522538705869,
+        "n_answerable": 150,
+        "n_answerable_strict": 150,
+        "n_total": 219
+      }
+    }
+  },
+  "esmc_300m": {
+    "model": "Synthyra/ESMplusplus_small",
+    "dim": 960,
+    "levels": {
+      "cath_c": {
+        "accuracy": 0.6666666666666666,
+        "ci95": 0.06143510749418015,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_a": {
+        "accuracy": 0.3607305936073059,
+        "ci95": 0.0636625376243737,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_t": {
+        "accuracy": 0.21904761904761905,
+        "ci95": 0.05498329935218599,
+        "n_answerable": 210,
+        "n_answerable_strict": 208,
+        "n_total": 219
+      },
+      "cath_h": {
+        "accuracy": 0.18666666666666668,
+        "ci95": 0.06345540818314789,
+        "n_answerable": 150,
+        "n_answerable_strict": 150,
+        "n_total": 219
+      }
+    }
+  },
+  "ismc_300m": {
+    "model": "/storage/models/ISM-C-300M",
+    "dim": 960,
+    "levels": {
+      "cath_c": {
+        "accuracy": 0.8082191780821918,
+        "ci95": 0.05317340622216072,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_a": {
+        "accuracy": 0.4794520547945205,
+        "ci95": 0.06579039761611112,
+        "n_answerable": 219,
+        "n_answerable_strict": 219,
+        "n_total": 219
+      },
+      "cath_t": {
+        "accuracy": 0.29523809523809524,
+        "ci95": 0.060777126614903476,
+        "n_answerable": 210,
+        "n_answerable_strict": 208,
+        "n_total": 219
+      },
+      "cath_h": {
+        "accuracy": 0.25333333333333335,
+        "ci95": 0.071698956289038,
+        "n_answerable": 150,
+        "n_answerable_strict": 150,
+        "n_total": 219
+      }
+    }
+  }
+}

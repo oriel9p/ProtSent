@@ -75,6 +75,13 @@ ARMS=(
   "esm2_150m|Synthyra/ESM2-150M"
   "protsent_v1_150m|oriel9p/protsent-esm2-150M"
   "protsent_v2_150m|/home/ddofer/ProtSent/models/protsent_esm2_150m_v2/final"
+  # Not ProtSent arms: ESM-C-300M and its structure-distilled variant ISM-C-300M,
+  # already benchmarked together elsewhere in this repo. They are here because a
+  # structure-distilled model is the natural upper reference on a structure task,
+  # and because they place our 35M/150M numbers on a scale axis. ESM-C's
+  # EsmSequenceTokenizer handles the lookup69k NUL byte natively (checked).
+  "esmc_300m|Synthyra/ESMplusplus_small"
+  "ismc_300m|/storage/models/ISM-C-300M"
 )
 
 # A completed arm = the task has at least one row with an empty Error column.
@@ -123,8 +130,9 @@ import sys, pandas as pd
 d = pd.read_csv(sys.argv[1])
 d = d[d.get("Error", pd.Series([float("nan")] * len(d))).isna()]
 if len(d):
+    # Samples is "Full" when no --max_samples cap was applied, so never int() it.
     r = d.iloc[-1]
-    print(f"    H-level accuracy = {r['Accuracy']:.4f}  (n={int(r['Samples'])})")
+    print(f"    H-level accuracy = {r['Accuracy']:.4f}  (samples={r['Samples']})")
 EOF
   else
     echo "    FAILED: $status -- see $csv"

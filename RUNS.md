@@ -370,6 +370,39 @@ ProtSent}. `load_model_for_training` already builds a SentenceTransformer over
 `/storage/models/ISM-C-300M` (Transformer + Pooling, dim 960, 332,997,184 trainable), so
 that needs no code — only GPU time: 23.9M pairs at batch 1024 on one GPU is ~23,300 steps.
 
+## CATH v4.3 midnight-zone (ProtTucker / EAT)
+
+Full writeup, results and controls: `results/benchmarks/cath_eat/CATH_COMPARISON.md`.
+Per-level table: `results/benchmarks/cath_eat/CATH_LEVELS.md`. Reproduce with
+`run_benchmarks_cath.sh` (H-level, all 8 arms), `ProtBench/cath_levels.py` (full
+C/A/T/H), `run_benchmarks_cath_controls.sh` (L2-normalization, ESM2 scaling, k-mer
+floor controls). Benchmark and dataset live in the sibling `~/ProtBench` repo
+(task `cath_eat`, dataset `GrimSqueaker/cath43-eat`), not this one.
+
+| Model | H (test219→lookup69k) | vs. own frozen base |
+|---|---:|---:|
+| ESM2-35M (frozen) | 40.7 | — |
+| ProtSent-V1-35M | 50.7 | +10.0 |
+| ProtSent-V2-35M | 56.7 | +16.0 |
+| ESM2-150M (frozen) | 43.3 | — |
+| ProtSent-V1-150M | 58.0 | +14.7 |
+| ProtSent-V2-150M | 62.7 | +19.4 |
+| ESM-C-300M (frozen) | 18.7 | — |
+| ISM-C-300M | 25.3 | +6.6 |
+| MMseqs2 baseline | 34.7 | (paper: 35) |
+| phmmer baseline | 38.0 | (not comparable to paper's profile-HMMER 77) |
+
+MMseqs2 reproducing the paper's published 35 at 34.7 is the pipeline-fidelity check —
+same splits, same labels, same 150-query H-level denominator, independent
+implementation. Two controls rule out the obvious objections: L2-normalizing vanilla's
+embeddings (giving it ProtSent's cosine-friendly geometry for free) closes only
+1.3–2.7 of the 16–19 point gap, and ESM2 itself is flat with scale on this task
+(35M→650M: 40.7→43.3→42.7), so the gain is not something more parameters would buy.
+
+**Open, not measured:** decontamination (`protsent-data-dc40`) was run against the
+`remote_homology`/fold-prediction and PPI test sets, not against CATH test219. CATH-specific
+leakage into the AFDB/Pfam/STRING training corpus has not been checked.
+
 ## Not overwriting things
 
 - Each run has its own `RUN_NAME`, so its output is `models/$RUN_NAME` and its
