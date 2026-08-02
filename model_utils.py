@@ -198,6 +198,18 @@ def apply_esm_rotary_autograd_patch() -> None:
 # =============================================================================
 
 
+def _is_half_dtype(dtype) -> bool:
+    """True for bf16/fp16, the only dtypes the flash kernels accept.
+
+    Accepts a torch.dtype or the string form from_pretrained also takes. "auto"
+    resolves from the checkpoint at load time and cannot be known here, so it is
+    treated as not-half: sdpa is correct for every dtype, flash is not.
+    """
+    if isinstance(dtype, str):
+        return dtype in ("bfloat16", "float16", "half")
+    return dtype in (torch.bfloat16, torch.float16)
+
+
 def from_pretrained_with_flash(model_cls, model_name: str, **extra_kwargs):
     """Load a model with flash attention if available, falling back to default.
 
@@ -218,8 +230,14 @@ def from_pretrained_with_flash(model_cls, model_name: str, **extra_kwargs):
         # ESM++/ESM-C uses its own transformer.attn_backend switch; avoid passing
         # HuggingFace's attention implementation flag into the remote code path.
         pass
-    elif HAS_FLASH_ATTN:
+    elif HAS_FLASH_ATTN and _is_half_dtype(kwargs.get("dtype")):
         kwargs["attn_implementation"] = "flash_attention_2"
+    elif HAS_FLASH_ATTN:
+        # Synthyra's current runtime rejects fp32 inside the kernel rather than at
+        # load time: "'flash_attention_2' supports only manifest-declared dtype(s)
+        # bfloat16; received float32". Requesting flash for an fp32 load therefore
+        # produces a model that loads fine and dies on the first forward pass.
+        kwargs["attn_implementation"] = "sdpa"
     else:
         # Simplest stable solution for avoiding custom eager-mode logic leaks
         kwargs["attn_implementation"] = "sdpa"
@@ -469,6 +487,27 @@ def patch_unknown_residue_tokens(tokenizer):
     )
 
 
+_FLASH_BACKENDS = ("kernels_flash", "flash_attention_2", "flash_attention_3")
+
+
+def _first_param_dtype(model):
+    """Dtype of the model's first parameter, or None if that cannot be determined.
+
+    This function is documented as safe to call on any object, so a model with no
+    parameters(), no parameters at all, or one that raises while enumerating them
+    yields None and leaves the backend choice unconstrained.
+    """
+    params = getattr(model, "parameters", None)
+    if not callable(params):
+        return None
+    try:
+        for p in params():
+            return p.dtype
+    except Exception:
+        return None
+    return None
+
+
 def _attn_backend_candidates(backend: str) -> tuple[str, ...]:
     """Preferred name first, then equivalents, then sdpa as the universal floor.
 
@@ -499,6 +538,26 @@ def force_sdpa_backend(model):
         or "kernels_flash"
     )
     candidates = _attn_backend_candidates(backend)
+
+    # Synthyra's runtime accepts a flash backend at assignment time and only
+    # rejects it in the forward pass, with
+    #     'flash_attention_2' supports only manifest-declared dtype(s)
+    #     bfloat16; received float32
+    # so a model resident in fp32 gets a backend it cannot actually run. Drop
+    # the flash candidates up front rather than letting the failure surface an
+    # inference later. Production loads bf16 and is unaffected; fp32 is what the
+    # test suite and any plain-CPU load use.
+    dtype = _first_param_dtype(model)
+    if dtype is not None and dtype not in (torch.bfloat16, torch.float16):
+        usable = tuple(c for c in candidates if c not in _FLASH_BACKENDS) or ("sdpa",)
+        if usable != candidates:
+            logger.info(
+                "   Model is %s; flash backends require bf16/fp16, trying %s",
+                dtype,
+                usable,
+            )
+        candidates = usable
+
     transformer = getattr(model, "transformer", None)
 
     if transformer is None:

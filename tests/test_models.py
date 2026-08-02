@@ -239,8 +239,16 @@ class _FakeTransformer:
 
 
 class _FakeESMpp:
-    def __init__(self, accepted):
+    def __init__(self, accepted, dtype=None):
         self.transformer = _FakeTransformer(accepted)
+        self._dtype = dtype
+
+    def parameters(self):
+        """Only the dtype is read, so one scalar of the right type is enough."""
+        import torch
+
+        if self._dtype is not None:
+            yield torch.zeros(1, dtype=self._dtype)
 
 
 def test_force_sdpa_backend_falls_back_when_runtime_rejects_default(monkeypatch):
@@ -286,3 +294,48 @@ def test_force_sdpa_backend_survives_a_runtime_accepting_nothing(monkeypatch):
     model = _FakeESMpp(accepted=set())
     force_sdpa_backend(model)
     assert model.transformer.attn_backend is None
+
+
+def test_force_sdpa_backend_skips_flash_for_fp32_models(monkeypatch):
+    """Synthyra accepts a flash backend on assignment, then rejects fp32 at forward.
+
+        'flash_attention_2' supports only manifest-declared dtype(s) bfloat16;
+        received float32
+
+    So an fp32-resident model must never be handed one -- the failure would
+    otherwise surface an inference later, far from the cause.
+    """
+    import torch
+
+    from model_utils import force_sdpa_backend
+
+    monkeypatch.delenv("PROTSENT_ESMPLUSPLUS_ATTN_BACKEND", raising=False)
+    model = _FakeESMpp(
+        accepted={"sdpa", "flash_attention_2", "kernels_flash"}, dtype=torch.float32
+    )
+    force_sdpa_backend(model)
+    assert model.transformer.attn_backend == "sdpa"
+
+
+def test_force_sdpa_backend_keeps_flash_for_bf16_models(monkeypatch):
+    import torch
+
+    from model_utils import force_sdpa_backend
+
+    monkeypatch.delenv("PROTSENT_ESMPLUSPLUS_ATTN_BACKEND", raising=False)
+    model = _FakeESMpp(accepted={"sdpa", "flash_attention_2"}, dtype=torch.bfloat16)
+    force_sdpa_backend(model)
+    assert model.transformer.attn_backend == "flash_attention_2"
+
+
+def test_force_sdpa_backend_tolerates_a_model_without_parameters():
+    """Documented as safe on any object: no parameters() must not raise."""
+    from model_utils import force_sdpa_backend
+
+    class _NoParams:
+        def __init__(self):
+            self.transformer = _FakeTransformer({"sdpa"})
+
+    model = _NoParams()
+    force_sdpa_backend(model)
+    assert model.transformer.attn_backend == "sdpa"
