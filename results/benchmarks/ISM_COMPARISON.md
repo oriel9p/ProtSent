@@ -91,6 +91,62 @@ ISM-C beats vanilla ESM-C on **7** tasks, ties on **3**, loses on **13** of 23 (
 | Solubility (DeepSol) | AUC | 0.754 | 0.822 | +0.068 |
 | SCOPe-40 Structural Retrieval | eligible_Recall@10 | 0.579 | 0.659 | +0.080 |
 
+## ProtSent-V2 150M against the ESM-C arms (knn probe)
+
+Against ESM-C: 12W/2T/6L, median +0.013. Against ISM-C: 13W/2T/5L, median +0.037. Both columns cross
+model family and scale, so these are levels, not a controlled comparison.
+
+| task | metric | ProtSent-V2 150M | ESM-C | ISM-C | vs ESM-C | vs ISM-C |
+|---|---|---|---|---|---|---|
+| SCOPe-40 Structural Retrieval | eligible_Recall@10 | 0.937 | 0.579 | 0.659 | +0.357 | +0.278 |
+| Optimal pH | Spearman | 0.589 | 0.511 | 0.453 | +0.078 | +0.137 |
+| Metal Ion Binding | AUC | 0.817 | 0.737 | 0.695 | +0.080 | +0.122 |
+| EC Classification | F1_Macro | 0.625 | 0.640 | 0.527 | -0.015 | +0.098 |
+| Molecular Function (GO) | F1_Macro | 0.515 | 0.516 | 0.438 | -0.002 | +0.077 |
+| Subcellular Localisation | AUC | 0.836 | 0.786 | 0.776 | +0.050 | +0.060 |
+| Peptide-HLA Binding | AUC | 0.800 | 0.722 | 0.746 | +0.078 | +0.054 |
+| Variant Effect (GB1) | Spearman | 0.770 | 0.799 | 0.720 | -0.029 | +0.050 |
+| Stability (Biomap) | Spearman | 0.624 | 0.693 | 0.579 | -0.070 | +0.044 |
+| Binary Subcellular Localization | AUC | 0.903 | 0.881 | 0.866 | +0.022 | +0.037 |
+| AAV Fitness (FLIP) | Spearman | 0.503 | 0.492 | 0.483 | +0.011 | +0.020 |
+| Thermostability (FLIP) | Spearman | 0.462 | 0.450 | 0.445 | +0.013 | +0.018 |
+| Signal Peptide Prediction (SignalP/ProteinBERT) | AUC | 0.983 | 0.975 | 0.968 | +0.008 | +0.015 |
+| Neuropeptide Precursor Prediction (ProFET/NeuroPID) | AUC | 0.971 | 0.978 | 0.967 | -0.007 | +0.004 |
+| Enzyme Catalytic Efficiency | Spearman | 0.691 | 0.696 | 0.691 | -0.005 | +0.000 |
+| Material Production | AUC | 0.764 | 0.727 | 0.809 | +0.038 | -0.044 |
+| beta-lactamase-PEER | Spearman | 0.762 | 0.824 | 0.835 | -0.062 | -0.073 |
+| Cloning Classification | Spearman | 0.363 | 0.327 | 0.507 | +0.036 | -0.144 |
+| Solubility (DeepSol) | AUC | 0.526 | 0.594 | 0.685 | -0.068 | -0.159 |
+| Fluorescence (TAPE) | Spearman | 0.384 | 0.371 | 0.544 | +0.013 | -0.160 |
+
+## ProtSent-V2 150M against the ESM-C arms (linear probe)
+
+Against ESM-C: 4W/2T/14L, median -0.019. Against ISM-C: 4W/3T/13L, median -0.012. Both columns cross
+model family and scale, so these are levels, not a controlled comparison.
+
+| task | metric | ProtSent-V2 150M | ESM-C | ISM-C | vs ESM-C | vs ISM-C |
+|---|---|---|---|---|---|---|
+| SCOPe-40 Structural Retrieval | eligible_Recall@10 | 0.937 | 0.579 | 0.659 | +0.357 | +0.278 |
+| EC Classification | F1_Macro | 0.625 | 0.640 | 0.527 | -0.015 | +0.098 |
+| Molecular Function (GO) | F1_Macro | 0.515 | 0.516 | 0.438 | -0.002 | +0.077 |
+| Thermostability (FLIP) | Spearman | 0.561 | 0.550 | 0.552 | +0.011 | +0.009 |
+| Metal Ion Binding | AUC | 0.769 | 0.788 | 0.766 | -0.019 | +0.003 |
+| Signal Peptide Prediction (SignalP/ProteinBERT) | AUC | 0.996 | 0.994 | 0.996 | +0.002 | +0.000 |
+| Optimal pH | Spearman | 0.503 | 0.524 | 0.508 | -0.020 | -0.004 |
+| Subcellular Localisation | AUC | 0.908 | 0.923 | 0.918 | -0.015 | -0.011 |
+| Variant Effect (GB1) | Spearman | 0.829 | 0.817 | 0.841 | +0.013 | -0.012 |
+| Neuropeptide Precursor Prediction (ProFET/NeuroPID) | AUC | 0.971 | 0.991 | 0.984 | -0.020 | -0.012 |
+| Binary Subcellular Localization | AUC | 0.923 | 0.952 | 0.939 | -0.028 | -0.016 |
+| Peptide-HLA Binding | AUC | 0.871 | 0.866 | 0.895 | +0.005 | -0.023 |
+| Stability (Biomap) | Spearman | 0.663 | 0.755 | 0.700 | -0.092 | -0.038 |
+| Enzyme Catalytic Efficiency | Spearman | 0.543 | 0.607 | 0.584 | -0.064 | -0.041 |
+| Material Production | AUC | 0.834 | 0.845 | 0.877 | -0.011 | -0.043 |
+| Fluorescence (TAPE) | Spearman | 0.591 | 0.615 | 0.659 | -0.025 | -0.068 |
+| Solubility (DeepSol) | AUC | 0.708 | 0.754 | 0.822 | -0.046 | -0.115 |
+| AAV Fitness (FLIP) | Spearman | 0.451 | 0.606 | 0.581 | -0.155 | -0.131 |
+| Cloning Classification | Spearman | 0.435 | 0.513 | 0.574 | -0.078 | -0.139 |
+| beta-lactamase-PEER | Spearman | 0.645 | 0.832 | 0.808 | -0.187 | -0.163 |
+
 ## Every arm side by side (knn probe)
 
 | task | metric | ESM-C 300M | ISM-C 300M | ESM-2 150M | ProtSent-V1 150M | ProtSent-V2 150M | ESM-2 35M | ProtSent-V2 35M | MMseqs2 |

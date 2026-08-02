@@ -259,47 +259,84 @@ Results in `results/benchmarks/ism/`, joined by `ism_comparison.py` into
 
 ### Structure distillation is a trade, not a free win
 
-Each model against **its own** backbone, all 23 tasks, tie tolerance 0.005:
+### The resolved result: SCOPe-40 retrieval, with intervals
 
-| comparison | probe | wins | ties | losses | median delta |
-|---|---|---:|---:|---:|---:|
-| ISM-C 300M vs ESM-C 300M | kNN | 8 | 1 | 14 | -0.0086 |
-| ISM-C 300M vs ESM-C 300M | linear | 7 | 3 | 13 | -0.0125 |
-| ProtSent-V2 150M vs ESM-2 150M | kNN | 11 | 4 | 8 | +0.0037 |
-| ProtSent-V2 150M vs ESM-2 150M | linear | 4 | 5 | 14 | -0.0124 |
-| ProtSent-V2 35M vs ESM-2 35M | kNN | 11 | 4 | 8 | +0.0022 |
-| ProtSent-V2 35M vs ESM-2 35M | linear | 3 | 8 | 12 | -0.0060 |
+Quote these. Paired bootstrap over the 1,693 eligible queries, 10,000 resamples
+(`scope40_bootstrap_ci_ism.json`). Every interval excludes zero:
 
-ISM-C wins on structure- and solubility-flavoured tasks (Cloning +0.1799, Fluorescence
-+0.1731, Solubility +0.0908, Material Production +0.0821, SCOPe-40 +0.0797 eligible R@10,
-Remote Homology +0.0481 under kNN) and loses on function and fitness (Stability -0.1141,
-EC -0.1129, Temperature Stability -0.0863, Variant Effect -0.0790, GO -0.0787). Both
-probes agree on the direction.
+| comparison | dR@1 | dR@10 | dMAP |
+|---|---|---|---|
+| ISM-C - ESM-C | +0.060 [+0.034, +0.085] | +0.078 [+0.053, +0.103] | +0.053 [+0.038, +0.067] |
+| ProtSent-V2 150M - ISM-C | +0.311 [+0.285, +0.338] | +0.281 [+0.258, +0.304] | +0.431 [+0.412, +0.449] |
+| ProtSent-V2 150M - ESM-C | +0.371 [+0.343, +0.400] | +0.359 [+0.336, +0.383] | +0.484 [+0.466, +0.501] |
 
-This is the generality–accuracy trade-off jVGf asked about, measured on someone else's
-model — and it is not specific to us. Under kNN ProtSent is net positive where ISM-C is
-net negative; under a linear probe both are net negative with near-identical medians,
-consistent with the linear-probe claim we withdrew.
+The first row independently reproduces the direction ISM's own paper claims, on a benchmark
+they never ran. That is stronger evidence the weight conversion is faithful than the strict
+load is: `strict=True` checks names and shapes, not semantics.
+
+### TLDR: ProtSent-V2 150M head to head against the ESM-C arms
+
+Our best model minus each ESM-C arm, 20 tasks, tie tolerance 0.005. Full per-task table in
+`ISM_COMPARISON.md`. Both columns cross model family and scale, so this is a comparison of
+levels, not a controlled experiment.
+
+| probe | vs ESM-C 300M | vs ISM-C 300M |
+|---|---|---|
+| kNN | 12W / 2T / 6L, median +0.012 (p=0.24) | 13W / 2T / 5L, median +0.028 (p=0.10) |
+| linear | 4W / 2T / 14L, median -0.020 (p=0.03) | 4W / 3T / 13L, median -0.014 (p=0.05) |
+
+Same shape as everywhere else in this project: we lead under nearest-neighbour retrieval
+and lose under a trained probe, and only the linear-probe losses are significant. The
+retrieval margin is the outlier and it is enormous — SCOPe-40 eligible R@10 +0.357 against
+ESM-C and +0.278 against ISM-C, both with intervals excluding zero (above).
+
+Largest kNN gaps against ISM-C: SCOPe-40 +0.278, Optimal pH +0.137, Metal Ion Binding
++0.122, EC +0.098, GO +0.077. Largest kNN losses: Fluorescence -0.160, Solubility -0.159,
+Cloning -0.144, beta-lactamase -0.073, Material Production -0.044.
+
+### The trade-off: descriptive only, nothing resolved
+
+Each model against **its own** backbone, the 20 tasks with a defined main metric, tie
+tolerance 0.005. Twenty and not 23 deliberately — see the caveat below.
+
+| comparison | probe | W | T | L | median | sign p |
+|---|---|---:|---:|---:|---:|---:|
+| ISM-C 300M vs ESM-C 300M | kNN | 7 | 1 | 12 | -0.0078 | 0.36 |
+| ISM-C 300M vs ESM-C 300M | linear | 7 | 3 | 10 | -0.0062 | 0.63 |
+| ProtSent-V2 150M vs ESM-2 150M | kNN | 10 | 3 | 7 | +0.0049 | 0.63 |
+| ProtSent-V2 150M vs ESM-2 150M | linear | 4 | 4 | 12 | -0.0130 | 0.08 |
+| ProtSent-V2 35M vs ESM-2 35M | kNN | 10 | 3 | 7 | +0.0041 | 0.63 |
+| ProtSent-V2 35M vs ESM-2 35M | linear | 2 | 7 | 11 | -0.0107 | 0.02 |
+
+These reproduce our posted numbers exactly (`FINAL_rebuttal.md:50`: V2-150M kNN 10/3/7
+median +0.004, linear 4/4/12 median -0.014).
+
+**No kNN record is resolved.** Fisher exact on the contrast that matters — ISM-C 7W/12L
+against ProtSent-150M 10W/7L — gives p = 0.22. The only rows that resolve are our own
+linear-probe losses, which we already conceded. `FINAL_rebuttal.md:72` promises "we draw no
+inferential claim from the aggregate", so **do not write "ours is the milder trade"** or any
+comparative adjective over these tallies. The supportable sentence is: under kNN ProtSent is
+net positive where ISM-C is net negative; under a linear probe both are net negative.
+
+ISM-C wins on structure- and solubility-flavoured tasks (Cloning +0.180, Fluorescence
++0.173, Solubility +0.091, Material Production +0.082, SCOPe-40 +0.080 eligible R@10,
+Remote Homology +0.048 under kNN) and loses on function and fitness (Stability -0.114,
+EC -0.113, Temperature Stability -0.086, Variant Effect -0.079, GO -0.079). Both probes
+agree on the direction.
 
 **Metric caveat, and a trap.** Antibiotic Resistance, Remote Homology (Fold) and
 Temperature Stability have an empty AUC column — one-vs-rest AUC is undefined when the test
 split contains a class absent from training, which is the reason `FINAL_rebuttal.md:52`
-already gives reviewers. The tallies above therefore use `ism_comparison.py`'s Accuracy
-fallback over 23 tasks, which is NOT what our public text reports.
+already gives reviewers. `ism_comparison.py` can fall back to Accuracy and score all 23,
+giving ISM-C 8/1/14 (-0.0086) and 7/3/13 (-0.0125), ProtSent-150M 11/4/8 (+0.0037) and
+4/5/14 (-0.0124).
 
-The 20-task version, which reproduces the posted numbers exactly, is:
-
-| comparison | probe | W | T | L | median | sign p |
-|---|---|---:|---:|---:|---:|---:|
-| ISM-C vs ESM-C | kNN | 7 | 1 | 12 | -0.0078 | 0.36 |
-| ISM-C vs ESM-C | linear | 7 | 3 | 10 | -0.0062 | 0.63 |
-| ProtSent-V2 150M vs ESM-2 150M | kNN | 10 | 3 | 7 | +0.0049 | 0.63 |
-| ProtSent-V2 150M vs ESM-2 150M | linear | 4 | 4 | 12 | -0.0130 | 0.08 |
-
-Prefer the 20-task version for anything reviewer-facing. Folding the three tasks in with an
-Accuracy fallback shifts ISM-C's linear median by -0.0063 and ours by +0.0006 — same
-procedure, asymmetric effect — which turns a real gap into "nearly identical" and reads as
-metric shopping. No kNN record is resolved by a sign test either way.
+**Do not use that 23-task version as the headline.** The fallback shifts ISM-C's linear
+median by -0.0063 and ours by +0.0006 — same procedure, asymmetric effect — turning a real
+gap (ISM-C's linear trade is half ours on the declared metrics) into "nearly identical". It
+also contradicts what our public text already commits to. Report the 20, and give the three
+separately, where the interesting number is visible instead of averaged away: remote
+homology moves +0.142 under contrastive post-training against +0.048 under distillation.
 
 **MMseqs2 was scored twice; use the later one.** `mmseqs_baseline.json` (2026-07-29) gives
 eligible R@10 0.7348 / MAP 0.4041; `bootstrap_ci.py`'s own hit-table scoring (2026-07-31)

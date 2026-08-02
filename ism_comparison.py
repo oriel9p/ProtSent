@@ -199,6 +199,48 @@ def cross_model(probe: str) -> list:
     return out
 
 
+HEAD_TO_HEAD = "protsent_v2_150m"
+# The three AUC-undefined tasks are excluded here for the same reason as in the
+# trade-off table: FINAL_rebuttal.md:52 already tells reviewers they are out.
+_AUC_UNDEFINED = {
+    "Antibiotic Resistance",
+    "Remote Homology (Fold)",
+    "Temperature Stability",
+}
+
+
+def head_to_head(probe: str) -> list:
+    """ProtSent-V2-150M minus ESM-C and minus ISM-C, per task.
+
+    A direct read of how our best model sits against the new baselines. Both
+    columns cross model family and scale, so this is a comparison of levels, not
+    a controlled experiment -- see the module docstring.
+    """
+    arms = collect(probe)
+    metric_of = {
+        r["Task"]: r["main_metric"] for r in load_mmseqs(BENCH / "mmseqs_baseline.json").values()
+    }
+    ours = arms.get(HEAD_TO_HEAD, {})
+    out = []
+    for task in sorted(set(ours) & set(arms.get(CONTROL, {})) & set(arms.get(TREATMENT, {}))):
+        if task in _AUC_UNDEFINED:
+            continue
+        metric = SCOPE_DELTA_METRIC if task == SCOPE_TASK else metric_of.get(task)
+        if metric is None:
+            continue
+        v, m0 = _metric_value(ours[task], metric)
+        e, m1 = _metric_value(arms[CONTROL][task], metric)
+        i, m2 = _metric_value(arms[TREATMENT][task], metric)
+        if None in (v, e, i) or not (m0 == m1 == m2):
+            continue
+        out.append(
+            {"task": task, "metric": m0, "ours": v, "esmc": e, "ismc": i,
+             "d_esmc": v - e, "d_ismc": v - i}
+        )
+    out.sort(key=lambda r: -r["d_ismc"])
+    return out
+
+
 def tally(deltas: list) -> dict:
     d = [r["delta"] for r in deltas]
     return {
@@ -262,6 +304,34 @@ def render(report: dict) -> str:
                 f"| {r['delta']:+.3f} |"
             )
 
+    for probe in PROBES:
+        rows = report["head_to_head"][probe]
+        if not rows:
+            continue
+        d_e = [r["d_esmc"] for r in rows]
+        d_i = [r["d_ismc"] for r in rows]
+
+        def rec(d):
+            w = sum(x > TIE_TOL for x in d)
+            lo = sum(x < -TIE_TOL for x in d)
+            return f"{w}W/{len(d) - w - lo}T/{lo}L, median {sorted(d)[len(d) // 2]:+.3f}"
+
+        L += [
+            "",
+            f"## ProtSent-V2 150M against the ESM-C arms ({probe} probe)",
+            "",
+            f"Against ESM-C: {rec(d_e)}. Against ISM-C: {rec(d_i)}. Both columns cross",
+            "model family and scale, so these are levels, not a controlled comparison.",
+            "",
+            "| task | metric | ProtSent-V2 150M | ESM-C | ISM-C | vs ESM-C | vs ISM-C |",
+            "|---|---|---|---|---|---|---|",
+        ]
+        for r in rows:
+            L.append(
+                f"| {r['task']} | {r['metric']} | {_f(r['ours'])} | {_f(r['esmc'])} "
+                f"| {_f(r['ismc'])} | {r['d_esmc']:+.3f} | {r['d_ismc']:+.3f} |"
+            )
+
     labels = [label for _, _, label in ARMS] + ["MMseqs2"]
     for probe in PROBES:
         rows = report["cross_model"][probe]
@@ -289,6 +359,7 @@ def build() -> dict:
         "distillation": {p: distillation_delta(p) for p in PROBES},
         "tally": {p: tally(distillation_delta(p)) for p in PROBES},
         "cross_model": {p: cross_model(p) for p in PROBES},
+        "head_to_head": {p: head_to_head(p) for p in PROBES},
     }
 
 

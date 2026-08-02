@@ -1066,5 +1066,371 @@
     }
    }
   ]
+ },
+ "head_to_head": {
+  "knn": [
+   {
+    "task": "SCOPe-40 Structural Retrieval",
+    "metric": "eligible_Recall@10",
+    "ours": 0.9368,
+    "esmc": 0.57944,
+    "ismc": 0.65918,
+    "d_esmc": 0.35736,
+    "d_ismc": 0.27762
+   },
+   {
+    "task": "Optimal pH",
+    "metric": "Spearman",
+    "ours": 0.58919,
+    "esmc": 0.51127,
+    "ismc": 0.45254,
+    "d_esmc": 0.07791999999999999,
+    "d_ismc": 0.13665
+   },
+   {
+    "task": "Metal Ion Binding",
+    "metric": "AUC",
+    "ours": 0.81665,
+    "esmc": 0.7369,
+    "ismc": 0.69475,
+    "d_esmc": 0.07974999999999999,
+    "d_ismc": 0.12190000000000001
+   },
+   {
+    "task": "EC Classification",
+    "metric": "F1_Macro",
+    "ours": 0.62531,
+    "esmc": 0.64036,
+    "ismc": 0.52741,
+    "d_esmc": -0.015050000000000008,
+    "d_ismc": 0.09789999999999999
+   },
+   {
+    "task": "Molecular Function (GO)",
+    "metric": "F1_Macro",
+    "ours": 0.51481,
+    "esmc": 0.51645,
+    "ismc": 0.43779,
+    "d_esmc": -0.0016399999999999748,
+    "d_ismc": 0.07701999999999998
+   },
+   {
+    "task": "Subcellular Localisation",
+    "metric": "AUC",
+    "ours": 0.8358,
+    "esmc": 0.78624,
+    "ismc": 0.77564,
+    "d_esmc": 0.04955999999999994,
+    "d_ismc": 0.06015999999999999
+   },
+   {
+    "task": "Peptide-HLA Binding",
+    "metric": "AUC",
+    "ours": 0.79993,
+    "esmc": 0.72198,
+    "ismc": 0.74572,
+    "d_esmc": 0.07795000000000007,
+    "d_ismc": 0.05420999999999998
+   },
+   {
+    "task": "Variant Effect (GB1)",
+    "metric": "Spearman",
+    "ours": 0.76996,
+    "esmc": 0.7989,
+    "ismc": 0.71994,
+    "d_esmc": -0.028940000000000077,
+    "d_ismc": 0.05001999999999995
+   },
+   {
+    "task": "Stability (Biomap)",
+    "metric": "Spearman",
+    "ours": 0.62386,
+    "esmc": 0.69349,
+    "ismc": 0.57944,
+    "d_esmc": -0.06963000000000008,
+    "d_ismc": 0.044420000000000015
+   },
+   {
+    "task": "Binary Subcellular Localization",
+    "metric": "AUC",
+    "ours": 0.90321,
+    "esmc": 0.88129,
+    "ismc": 0.86603,
+    "d_esmc": 0.02191999999999994,
+    "d_ismc": 0.03717999999999999
+   },
+   {
+    "task": "AAV Fitness (FLIP)",
+    "metric": "Spearman",
+    "ours": 0.50307,
+    "esmc": 0.49206,
+    "ismc": 0.48349,
+    "d_esmc": 0.01101000000000002,
+    "d_ismc": 0.019580000000000042
+   },
+   {
+    "task": "Thermostability (FLIP)",
+    "metric": "Spearman",
+    "ours": 0.46228,
+    "esmc": 0.44973,
+    "ismc": 0.44469,
+    "d_esmc": 0.012550000000000006,
+    "d_ismc": 0.01759000000000005
+   },
+   {
+    "task": "Signal Peptide Prediction (SignalP/ProteinBERT)",
+    "metric": "AUC",
+    "ours": 0.98268,
+    "esmc": 0.97486,
+    "ismc": 0.96791,
+    "d_esmc": 0.00782000000000005,
+    "d_ismc": 0.01476999999999995
+   },
+   {
+    "task": "Neuropeptide Precursor Prediction (ProFET/NeuroPID)",
+    "metric": "AUC",
+    "ours": 0.97133,
+    "esmc": 0.9781,
+    "ismc": 0.96732,
+    "d_esmc": -0.006769999999999943,
+    "d_ismc": 0.004010000000000069
+   },
+   {
+    "task": "Enzyme Catalytic Efficiency",
+    "metric": "Spearman",
+    "ours": 0.69093,
+    "esmc": 0.69574,
+    "ismc": 0.69084,
+    "d_esmc": -0.004809999999999981,
+    "d_ismc": 9.00000000000345e-05
+   },
+   {
+    "task": "Material Production",
+    "metric": "AUC",
+    "ours": 0.76437,
+    "esmc": 0.72655,
+    "ismc": 0.80867,
+    "d_esmc": 0.037819999999999965,
+    "d_ismc": -0.044300000000000006
+   },
+   {
+    "task": "beta-lactamase-PEER",
+    "metric": "Spearman",
+    "ours": 0.76194,
+    "esmc": 0.82386,
+    "ismc": 0.8351,
+    "d_esmc": -0.061920000000000086,
+    "d_ismc": -0.07316
+   },
+   {
+    "task": "Cloning Classification",
+    "metric": "Spearman",
+    "ours": 0.36273,
+    "esmc": 0.32718,
+    "ismc": 0.50708,
+    "d_esmc": 0.03554999999999997,
+    "d_ismc": -0.14434999999999998
+   },
+   {
+    "task": "Solubility (DeepSol)",
+    "metric": "AUC",
+    "ours": 0.52631,
+    "esmc": 0.59439,
+    "ismc": 0.68521,
+    "d_esmc": -0.06808000000000003,
+    "d_ismc": -0.15890000000000004
+   },
+   {
+    "task": "Fluorescence (TAPE)",
+    "metric": "Spearman",
+    "ours": 0.38389,
+    "esmc": 0.37057,
+    "ismc": 0.54365,
+    "d_esmc": 0.013319999999999999,
+    "d_ismc": -0.15975999999999996
+   }
+  ],
+  "linear": [
+   {
+    "task": "SCOPe-40 Structural Retrieval",
+    "metric": "eligible_Recall@10",
+    "ours": 0.9368,
+    "esmc": 0.57944,
+    "ismc": 0.65918,
+    "d_esmc": 0.35736,
+    "d_ismc": 0.27762
+   },
+   {
+    "task": "EC Classification",
+    "metric": "F1_Macro",
+    "ours": 0.62531,
+    "esmc": 0.64036,
+    "ismc": 0.52741,
+    "d_esmc": -0.015050000000000008,
+    "d_ismc": 0.09789999999999999
+   },
+   {
+    "task": "Molecular Function (GO)",
+    "metric": "F1_Macro",
+    "ours": 0.51481,
+    "esmc": 0.51645,
+    "ismc": 0.43779,
+    "d_esmc": -0.0016399999999999748,
+    "d_ismc": 0.07701999999999998
+   },
+   {
+    "task": "Thermostability (FLIP)",
+    "metric": "Spearman",
+    "ours": 0.56059,
+    "esmc": 0.5498,
+    "ismc": 0.55175,
+    "d_esmc": 0.010790000000000077,
+    "d_ismc": 0.00884000000000007
+   },
+   {
+    "task": "Metal Ion Binding",
+    "metric": "AUC",
+    "ours": 0.76898,
+    "esmc": 0.78816,
+    "ismc": 0.76616,
+    "d_esmc": -0.019179999999999975,
+    "d_ismc": 0.0028200000000000447
+   },
+   {
+    "task": "Signal Peptide Prediction (SignalP/ProteinBERT)",
+    "metric": "AUC",
+    "ours": 0.9961,
+    "esmc": 0.99419,
+    "ismc": 0.99566,
+    "d_esmc": 0.0019099999999999673,
+    "d_ismc": 0.00043999999999999595
+   },
+   {
+    "task": "Optimal pH",
+    "metric": "Spearman",
+    "ours": 0.50342,
+    "esmc": 0.52376,
+    "ismc": 0.50789,
+    "d_esmc": -0.020340000000000025,
+    "d_ismc": -0.004469999999999974
+   },
+   {
+    "task": "Subcellular Localisation",
+    "metric": "AUC",
+    "ours": 0.90785,
+    "esmc": 0.92305,
+    "ismc": 0.91848,
+    "d_esmc": -0.015199999999999991,
+    "d_ismc": -0.010629999999999917
+   },
+   {
+    "task": "Variant Effect (GB1)",
+    "metric": "Spearman",
+    "ours": 0.82935,
+    "esmc": 0.81651,
+    "ismc": 0.8412,
+    "d_esmc": 0.012840000000000074,
+    "d_ismc": -0.011849999999999916
+   },
+   {
+    "task": "Neuropeptide Precursor Prediction (ProFET/NeuroPID)",
+    "metric": "AUC",
+    "ours": 0.97139,
+    "esmc": 0.99146,
+    "ismc": 0.98366,
+    "d_esmc": -0.020070000000000032,
+    "d_ismc": -0.012270000000000003
+   },
+   {
+    "task": "Binary Subcellular Localization",
+    "metric": "AUC",
+    "ours": 0.92341,
+    "esmc": 0.95188,
+    "ismc": 0.93936,
+    "d_esmc": -0.028469999999999995,
+    "d_ismc": -0.01595000000000002
+   },
+   {
+    "task": "Peptide-HLA Binding",
+    "metric": "AUC",
+    "ours": 0.87119,
+    "esmc": 0.86585,
+    "ismc": 0.89463,
+    "d_esmc": 0.005340000000000011,
+    "d_ismc": -0.023440000000000016
+   },
+   {
+    "task": "Stability (Biomap)",
+    "metric": "Spearman",
+    "ours": 0.66255,
+    "esmc": 0.75502,
+    "ismc": 0.70025,
+    "d_esmc": -0.09247000000000005,
+    "d_ismc": -0.03770000000000007
+   },
+   {
+    "task": "Enzyme Catalytic Efficiency",
+    "metric": "Spearman",
+    "ours": 0.54319,
+    "esmc": 0.60726,
+    "ismc": 0.58447,
+    "d_esmc": -0.06407000000000007,
+    "d_ismc": -0.041280000000000094
+   },
+   {
+    "task": "Material Production",
+    "metric": "AUC",
+    "ours": 0.83443,
+    "esmc": 0.84543,
+    "ismc": 0.87706,
+    "d_esmc": -0.01100000000000001,
+    "d_ismc": -0.042629999999999946
+   },
+   {
+    "task": "Fluorescence (TAPE)",
+    "metric": "Spearman",
+    "ours": 0.59077,
+    "esmc": 0.61549,
+    "ismc": 0.65853,
+    "d_esmc": -0.024719999999999964,
+    "d_ismc": -0.06775999999999993
+   },
+   {
+    "task": "Solubility (DeepSol)",
+    "metric": "AUC",
+    "ours": 0.70756,
+    "esmc": 0.75382,
+    "ismc": 0.82218,
+    "d_esmc": -0.04626000000000008,
+    "d_ismc": -0.11462000000000006
+   },
+   {
+    "task": "AAV Fitness (FLIP)",
+    "metric": "Spearman",
+    "ours": 0.45088,
+    "esmc": 0.60577,
+    "ismc": 0.58138,
+    "d_esmc": -0.15489000000000003,
+    "d_ismc": -0.1305
+   },
+   {
+    "task": "Cloning Classification",
+    "metric": "Spearman",
+    "ours": 0.43453,
+    "esmc": 0.5129,
+    "ismc": 0.57356,
+    "d_esmc": -0.07837,
+    "d_ismc": -0.13902999999999993
+   },
+   {
+    "task": "beta-lactamase-PEER",
+    "metric": "Spearman",
+    "ours": 0.64536,
+    "esmc": 0.83237,
+    "ismc": 0.80818,
+    "d_esmc": -0.18701,
+    "d_ismc": -0.16281999999999996
+   }
+  ]
  }
 }
