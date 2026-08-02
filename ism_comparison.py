@@ -11,9 +11,12 @@ This builds two tables from already-computed results, running nothing:
      the distillation and nothing else, so this is the only pairing that
      licenses a claim about ISM specifically.
 
-  2. Where both sit relative to our arms and the alignment baselines. These are
-     NOT scale-matched -- ISM-C is 300M against our 150M and 35M -- so they are
-     reported as context, not as a controlled comparison.
+  2. Where both sit relative to our arms and the alignment baselines. These
+     differ in BOTH family and scale -- ESM-C 300M against ESM-2 at 150M and
+     35M -- so they are context, not a controlled comparison. No claim of the
+     form "contrastive training beats structure distillation" follows from them
+     alone: raw mean-pooled ESM-C is simply weak at retrieval, below even ESM-2
+     35M. Separating the two needs ProtSent post-training on an ESM-C backbone.
 
 Deliberately not folded into build_comparison.py: that script is hard-wired to
 the 35M directory tree, a fixed three-arm EMBED_ARMS, and named
@@ -67,6 +70,13 @@ SCOPE_METRICS = [
     ("eligible_Recall@10", "R@10"),
     ("eligible_MAP", "MAP"),
 ]
+# SCOPe-40's declared main_metric is the UNRESTRICTED Recall@10, which counts the
+# 514 queries with no same-family protein in the gallery as failures. Reporting
+# that in the per-task delta table while the retrieval table above reports the
+# eligible-only figure puts two different numbers under one task name with no
+# label saying why. Use the eligible metric in both. (It does not change the
+# sign here -- ISM-C leads by +0.0612 unrestricted and +0.0797 eligible.)
+SCOPE_DELTA_METRIC = "eligible_Recall@10"
 
 
 def collect(probe: str) -> dict:
@@ -102,7 +112,7 @@ def distillation_delta(probe: str) -> list:
     out = []
     control, treated = arms.get(CONTROL, {}), arms.get(TREATMENT, {})
     for task in sorted(set(control) & set(treated)):
-        metric = metric_of.get(task)
+        metric = SCOPE_DELTA_METRIC if task == SCOPE_TASK else metric_of.get(task)
         if metric is None:
             continue
         a, b = _num(treated[task].get(metric)), _num(control[task].get(metric))
@@ -133,8 +143,17 @@ def render(report: dict) -> str:
     L += [
         "ISM-C-300M is a structure-distilled ESM-C-300M. `Synthyra/ESMplusplus_small`",
         "is vanilla ESM-C-300M: same architecture, parameter count, tokenizer and",
-        "code path. That pairing isolates the distillation. The 150M and 35M rows are",
-        "context at a different scale, not a controlled comparison.",
+        "code path, so that pairing isolates the distillation and nothing else.",
+        "",
+        "The ProtSent and ESM-2 rows differ from the ESM-C rows in BOTH family and",
+        "scale. They are context, not a controlled comparison, and no claim of the",
+        'form "contrastive training beats structure distillation" follows from them',
+        "alone -- raw mean-pooled ESM-C is simply weak at retrieval, below even",
+        "ESM-2 35M. Separating the two needs ProtSent post-training on ESM-C.",
+        "",
+        "Three of the 20 rows below (EC, GO, SCOPe-40) are probe-invariant by",
+        "construction: multilabel and retrieval tasks use a built-in evaluator and",
+        "ignore the --probe_type flag, so their knn and linear numbers are identical.",
         "",
         "## SCOPe-40 structural retrieval",
         "",
@@ -184,6 +203,11 @@ def _selfcheck() -> None:
     assert _f(None) == "--" and _f(0.5) == "0.5000"
     # A missing arm must yield an empty comparison, not a crash or a silent zero.
     assert distillation_delta("nonexistent-probe") == []
+    # SCOPe-40 must be compared on the eligible metric in BOTH tables, or one task
+    # name carries two different numbers with nothing saying which is which.
+    scope = [r for r in distillation_delta("knn") if r["task"] == SCOPE_TASK]
+    if scope:
+        assert scope[0]["metric"] == SCOPE_DELTA_METRIC, scope[0]
     print("selfcheck ok")
 
 

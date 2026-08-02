@@ -236,6 +236,64 @@ MAP -0.083 p=6.1e-4). **After controlling for baseline headroom it collapses to 
 stayed significantly negative. Say "no relationship at 150M, slightly negative at 35M".
 Neither is positive, and memorization predicts positive; that is the whole claim.
 
+## ISM-C-300M — a third-party structure-informed model, benchmarked 2026-08-02
+
+Reviewer jVGf asked us to position ProtSent against structure-informed protein LMs
+(ESM-S, S-PLM, ISM, Magneton). Only ISM has usable public weights; the other three have
+no HF Hub checkpoints. So we measured it instead of describing it.
+
+`jozhang97/ismc-300m-2024-12` ships as a bare 1.33 GB `.pth` with no config, tokenizer or
+safetensors, and targets `esm.models.esmc.ESMC` — a package whose latest release declares
+`requires_python <3.13` against our 3.14 venv. `convert_ismc_to_hf.py` loads it into
+`Synthyra/ESMplusplus_small`, a name-for-name HF port of upstream ESM-C at exactly that
+size, producing `/storage/models/ISM-C-300M`. All 308 tensors load with `strict=True` and
+no key remapping. Three gates, all passed: strict load; weights differ from vanilla
+(308/308); forward pass finite and at cosine 0.353–0.762 to vanilla.
+
+`Synthyra/ESMplusplus_small` **is** vanilla ESM-C-300M, so it is the matched control —
+same architecture, parameter count, tokenizer and code path. Run
+`run_benchmarks_ism.sh` (2 arms x 2 probes, 23 tasks, `-e test`, GPU 2, 3 h 05 m).
+Results in `results/benchmarks/ism/`, joined by `ism_comparison.py` into
+`ISM_COMPARISON.md`. All four arm/probe directories: 23/23 clean, zero error rows.
+
+### Structure distillation is a trade, not a free win
+
+| probe | ISM-C beats ESM-C | ties | loses | median delta |
+|---|---:|---:|---:|---:|
+| kNN | 7 | 1 | 12 | -0.0069 |
+| linear | 7 | 3 | 10 | -0.0046 |
+
+It wins on structure- and solubility-flavoured tasks (SCOPe-40 +0.0797 eligible R@10,
+Solubility +0.0908, Fluorescence +0.1731, Cloning +0.1799 under kNN) and loses on
+function and fitness (EC -0.1129, GO -0.0787, Stability -0.1141, Variant Effect -0.0790).
+Both probes agree on the direction. This is the generality–accuracy trade-off jVGf asked
+about, measured on someone else's model.
+
+Three of the 20 compared rows (EC, GO, SCOPe-40) are probe-invariant by construction:
+multilabel and retrieval tasks use a built-in evaluator and ignore `--probe_type`.
+
+### SCOPe-40, eligible queries only
+
+| method | R@1 | R@10 | MAP |
+|---|---:|---:|---:|
+| ESM-C 300M | 0.3709 | 0.5794 | 0.2212 |
+| ISM-C 300M | 0.4300 | 0.6592 | 0.2733 |
+| ESM-2 35M | 0.4991 | 0.7614 | 0.4210 |
+| ESM-2 150M | 0.5535 | 0.7702 | 0.4236 |
+| MMseqs2 (-s 7.5) | 0.6556 | 0.7348 | 0.4041 |
+| ProtSent-V2 35M | 0.6852 | 0.9220 | 0.6459 |
+| ProtSent-V2 150M | 0.7431 | 0.9368 | 0.7046 |
+| HMMER (phmmer, filters off) | 0.7525 | 0.8978 | 0.6067 |
+
+**Do not read the ProtSent rows as beating ISM in a controlled sense.** They differ in
+both family and scale, and raw mean-pooled ESM-C is simply weak at retrieval — below even
+ESM-2 35M. Nothing here separates "contrastive post-training beats structure
+distillation" from "ESM-2 beats ESM-C at this task". The experiment that would is
+ProtSent post-training on an ESM-C backbone, giving a 2x2 of {ESM-C, ISM-C} x {raw,
+ProtSent}. `load_model_for_training` already builds a SentenceTransformer over
+`/storage/models/ISM-C-300M` (Transformer + Pooling, dim 960, 332,997,184 trainable), so
+that needs no code — only GPU time: 23.9M pairs at batch 1024 on one GPU is ~23,300 steps.
+
 ## Not overwriting things
 
 - Each run has its own `RUN_NAME`, so its output is `models/$RUN_NAME` and its
