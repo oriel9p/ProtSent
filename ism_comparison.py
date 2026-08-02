@@ -104,12 +104,32 @@ def collect(probe: str) -> dict:
     return {tag: load_arm(BENCH / sub, tag, probe) for sub, tag, _ in ARMS}
 
 
+def _mmseqs_scope_later(metric: str = "hit10"):
+    """MMseqs2's SCOPe-40 figure from the later of the two scorings, or None."""
+    p = BENCH / "scope40_bootstrap_ci_150m.json"
+    if not p.exists():
+        return None
+    m = json.loads(p.read_text()).get("marginal", {}).get("MMseqs2")
+    return _num(m[metric]["mean"]) if m and metric in m else None
+
+
 def scope_rows() -> list:
     """SCOPe-40 retrieval, all methods. Retrieval ignores the probe flag."""
     rows = []
-    mm = load_mmseqs(BENCH / "mmseqs_baseline.json").get("scope40_retrieval")
-    if mm:
-        rows.append(("MMseqs2 (-s 7.5)", [_num(mm.get(k)) for k, _ in SCOPE_METRICS]))
+    # MMseqs2 on SCOPe-40 was scored twice, by two implementations that disagree:
+    # mmseqs_baseline.json (2026-07-29) gives eligible 0.6556/0.7348/0.7354/0.4041,
+    # bootstrap_ci.py's own hit-table scoring (2026-07-31) gives
+    # 0.6556/0.7401/0.7566/0.4098. hit30 differs by 0.021, so this is a genuine
+    # rescoring, not rounding. Use the LATER one -- it is also the row already
+    # published in FINAL_rebuttal.md, so quoting the other would put two numbers
+    # for one method in front of the same reviewer.
+    mm_ci = BENCH / "scope40_bootstrap_ci_150m.json"
+    if mm_ci.exists():
+        m = json.loads(mm_ci.read_text())["marginal"].get("MMseqs2")
+        if m:
+            rows.append(
+                ("MMseqs2 (-s 7.5)", [_num(m[k]["mean"]) for k in ("hit1", "hit10", "ap")])
+            )
     hp = BENCH / "hmmer_maxsens.json"
     if hp.exists():
         e = json.loads(hp.read_text())["eligible"]
@@ -171,6 +191,10 @@ def cross_model(probe: str) -> list:
             continue
         mm_row = mmseqs.get(task)
         vals["MMseqs2"] = _metric_value(mm_row, metric)[0] if mm_row else None
+        if task == SCOPE_TASK:
+            # Same two-implementation disagreement as in scope_rows(); take the
+            # later scoring here too, or one table says 0.740 and the other 0.735.
+            vals["MMseqs2"] = _mmseqs_scope_later() or vals["MMseqs2"]
         out.append({"task": task, "metric": used.pop(), "values": vals})
     return out
 
@@ -186,7 +210,7 @@ def tally(deltas: list) -> dict:
     }
 
 
-def _f(v, nd=4):
+def _f(v, nd=3):
     return "--" if v is None else f"{v:.{nd}f}"
 
 
@@ -235,7 +259,7 @@ def render(report: dict) -> str:
         for r in deltas:
             L.append(
                 f"| {r['task']} | {r['metric']} | {_f(r['esmc'])} | {_f(r['ismc'])} "
-                f"| {r['delta']:+.4f} |"
+                f"| {r['delta']:+.3f} |"
             )
 
     labels = [label for _, _, label in ARMS] + ["MMseqs2"]
@@ -272,7 +296,7 @@ def _selfcheck() -> None:
     assert tally([])["n"] == 0
     t = tally([{"delta": 0.02}, {"delta": -0.02}, {"delta": 0.0}, {"delta": 0.004}])
     assert (t["ismc_wins"], t["ties"], t["ismc_loses"]) == (1, 2, 1), t
-    assert _f(None) == "--" and _f(0.5) == "0.5000"
+    assert _f(None) == "--" and _f(0.5) == "0.500"
     # A missing arm must yield an empty comparison, not a crash or a silent zero.
     assert distillation_delta("nonexistent-probe") == []
     # SCOPe-40 must be compared on the eligible metric in BOTH tables, or one task
