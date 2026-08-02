@@ -5,7 +5,7 @@
 
 ## Response to Reviewer HNXd
 
-<!-- character count of the pasted body below: 9688 (limit 10,000) -->
+<!-- character count of the pasted body below: 9924 (limit 10,000) -->
 <!-- BEGIN HNXd -->
 We thank the reviewer for naming which analyses would change the assessment. All five are run.
 
@@ -49,7 +49,7 @@ We agree a conventional learned readout is needed to contextualise the 3-NN prob
 | 3-NN | 11 win / 3 tie / 6 lose, median +0.007 | 10 / 3 / 7, median +0.004 |
 | linear | 4 / 4 / 12, median -0.014 | 2 / 7 / 11, median -0.011 |
 
-The pattern repeats at 150M, where V2 is 10 / 3 / 7 under a 3-NN probe and 4 / 4 / 12 under a linear probe, so scale does not rescue the linear record. No setting of the tie band turns the linear record into a win. Three of the 23 tasks fall outside the 20 because one-vs-rest AUC is undefined when the test split contains a class absent from training, and this excludes remote homology, our strongest task, from the tally. Reported separately, remote homology gives 3-NN accuracy 0.584 for ESM-2 35M, 0.659 for V1 and 0.667 for V2; linear accuracy 0.687, 0.690 and 0.702; linear macro-F1 0.441, 0.428 and 0.453. V1 sits below the untuned backbone on linear macro-F1, and only V2 improves on both metrics under both probes.
+The pattern repeats at 150M, where V2 is 10 / 3 / 7 under a 3-NN probe and 4 / 4 / 12 under a linear probe, so scale does not rescue the linear record. No setting of the tie band turns the linear record into a win. Three of the 23 tasks fall outside the 20 because one-vs-rest AUC is undefined when the test split contains a class absent from training, and this excludes remote homology, our strongest task, from the tally. Reported separately, remote homology gives 3-NN accuracy 0.584 for ESM-2 35M, 0.659 for V1 and 0.667 for V2; linear accuracy 0.687, 0.690 and 0.702; linear macro-F1 0.441, 0.428 and 0.453. V1 sits below the untuned backbone on linear macro-F1, and only V2 improves on both metrics under both probes. The abstract's +105% at 150M, restated on decontaminated data as absolute scores, is 3-NN accuracy 0.519 for ESM-2 150M against 0.661 for V2, with linear macro-F1 0.516 against 0.494: a large neighbourhood gain, not a decodability one.
 
 We did not run a fine-tuning sweep.
 
@@ -98,7 +98,7 @@ That is a narrower paper than the one we submitted, and a better-supported one. 
 
 ## Response to Reviewer jVGf
 
-<!-- character count of the pasted body below: 9811 (limit 10,000) -->
+<!-- character count of the pasted body below: 9524 (limit 10,000) -->
 <!-- BEGIN jVGf -->
 We thank the reviewer for identifying the two axes that would change the assessment. We address both, and we begin with a correction that goes against us.
 
@@ -114,7 +114,7 @@ We agree that this is the important missing piece, and we have now measured it r
 
 Alignment beats every 35M arm we scored on 3 of the 20 comparable tasks under a 3-NN probe and 6 under a linear probe. On enzyme-class prediction, F1-macro is 0.723 for HMMER against 0.598 for ESM-2 35M, 0.562 for V1 and 0.592 for V2. On GO molecular function it is 0.605 against 0.459, 0.443 and 0.455. On beta-lactamase fitness, Spearman is 0.803 for MMseqs2 against 0.727, 0.768 and 0.715. Where annotation transfers by homology, alignment is better, and on the two annotation-transfer tasks the gap exceeds 0.12.
 
-The other end of the trade-off is coverage, and we consider it the sharper half of the answer. Alignment returns nothing at all for a substantial share of queries, and that share grows precisely where the task is hard. HMMER returns no hit for 47.6% of the remote-homology test set and 31.3% of the SCOPe-40 gallery. On the RhlA enzyme-mutation task, whose sequences are 6-residue mutation-site strings, hit coverage is 0.004 for HMMER and 0.000 for MMseqs2, so both tools fail completely. On DeepSol solubility, MMseqs2 scores an AUC of 0.418, below chance. An embedding always returns a ranked list, so its metric is never a property of a fallback. We should add, however, that the three alignment wins above occur at coverage 0.945, 0.901 and 1.000, so they are genuine wins and not coverage artefacts.
+The other end of the trade-off is coverage. Where a query has no alignable relative, alignment returns nothing and the score becomes a property of the fallback. On the RhlA enzyme-mutation task, whose sequences are 6-residue mutation-site strings, hit coverage is 0.004 for HMMER and 0.000 for MMseqs2, so both tools fail outright. On DeepSol solubility, MMseqs2 scores an AUC of 0.418, below chance. An embedding always returns a ranked list. We should add, however, that the three alignment wins above occur at coverage 0.945, 0.901 and 1.000, so they are genuine wins and not coverage artefacts.
 
 On SCOPe-40 family retrieval (2,207-domain gallery, leave-one-out, self excluded, no-hit as failure, over the 1,693 queries with a non-self same-family neighbour), the full table appears in our response to Reviewer Yi1G, item 7. Against phmmer, the stronger of the two tools, ProtSent-V2 gives R@1 0.685 against 0.697, R@10 0.922 against 0.781, and MAP 0.646 against 0.475.
 
@@ -130,7 +130,7 @@ Partly it does not, and the AlphaFold DB ablation above quantifies how much. We 
 
 What we can offer against that gap is the non-structural half of the supervision on its own. Each source leaves a distinct fingerprint on a distinct task family (submitted model, default split, single run, mean relative change over 23 tasks): without Pfam the model still improves 15 of 23 tasks at +4.6%; removing STRING moves PPI from +5.3% to -0.5% while overall quality holds at 17 of 23 and +5.9%; and removing the DMS objective reduces fluorescence from +15.6% to +10.4%. In absolute decontaminated numbers, GB1 variant-effect Spearman under a 3-NN probe on the test split, averaged over 5 seeds, is 0.658 for ESM-2 35M, 0.711 for V1 and 0.781 for V2, at a standard deviation of 0.000. Fitness ordering and physical interaction are relations that no structure teacher supplies, so a pure structure-distillation model has neither a PPI dial nor a fitness dial.
 
-The limit on that argument is that those ablation percentages are single-run relative changes on the default split, the same convention we withdraw for small cells elsewhere. They support the direction of source-specific effects and nothing finer, and they cannot demonstrate that the sources do not interfere with one another.
+The limit on that argument is that those ablation percentages are single-run relative changes on the default split, the same convention we withdraw for small cells elsewhere; they support the direction of source-specific effects and nothing finer.
 
 ### 3. Positioning against ESM-S, S-PLM, ISM, Magneton and ProTrek (W1)
 
