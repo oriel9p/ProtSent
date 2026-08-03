@@ -165,7 +165,18 @@ def scope_retrieval(X, labels):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="results/benchmarks/probe_gap_analysis.json")
+    ap.add_argument(
+        "--models",
+        nargs="+",
+        metavar="NAME=PATH",
+        help="Override the built-in arms, same NAME=PATH form embedding_geometry.py takes. "
+        "Use it to score one new checkpoint without re-encoding the other three.",
+    )
     args = ap.parse_args()
+
+    arms = ARMS
+    if args.models:
+        arms = dict(pair.split("=", 1) for pair in args.models)
 
     from datasets import load_dataset
 
@@ -183,7 +194,7 @@ def main():
     )
 
     res = {}
-    for name, path in ARMS.items():
+    for name, path in arms.items():
         print(f"\n=== {name} ===", flush=True)
         model = load(path)
         S = encode(model, scope_seqs)

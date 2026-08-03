@@ -234,7 +234,7 @@ from model_utils import (
     get_torch_compile_settings,
     uses_hf_esm_rotary_embeddings,
 )
-from gor_loss import LossWithGOR
+from gor_loss import LossWithGOR, SubsampledLoss
 from static_guide import DEFAULT_STATIC_GUIDE_DIR, load_static_guide_model
 
 logging.basicConfig(
@@ -780,6 +780,41 @@ def _attach_backbone(word_embedding_model, hf_model, tokenizer) -> None:
 
 
 def load_model_for_training(
+    model_name: str,
+    max_seq_length: int = 512,
+    device: Optional[str] = None,
+    pooling_mode: str = "mean",
+    pooling_activation: str = "tanh",
+) -> SentenceTransformer:
+    """Load a model for training and enforce ``max_seq_length``.
+
+    The enforcement is not redundant. Every branch below hands
+    ``max_seq_length`` to ``models.Transformer``, but the custom-code backbones
+    then replace that module's tokenizer with their own, and FastPLM's ships
+    ``model_max_length`` = 1e24. sentence-transformers reads the truncation
+    limit off the tokenizer, so the requested value was silently discarded and
+    batches were padded to the longest sequence present — measured at 1,561
+    tokens on a 512-pair batch, which is what turns a 6 GiB contrastive step
+    into a 150 GiB one. Set it once here, after the model is fully assembled,
+    so no branch can drop it.
+    """
+    model = _load_model_for_training(
+        model_name,
+        max_seq_length=max_seq_length,
+        device=device,
+        pooling_mode=pooling_mode,
+        pooling_activation=pooling_activation,
+    )
+    # Only ever tightens. A backbone whose tokenizer declares a shorter limit than
+    # the caller asked for keeps its own, because raising it past the position
+    # budget is how you get silent garbage rather than a clear error.
+    if max_seq_length and 0 < max_seq_length < model.max_seq_length:
+        model.max_seq_length = max_seq_length
+    logger.info("   ✂️  max_seq_length enforced at %s", model.max_seq_length)
+    return model
+
+
+def _load_model_for_training(
     model_name: str,
     max_seq_length: int = 512,
     device: Optional[str] = None,
@@ -2454,12 +2489,25 @@ def run_training(args):
         dims = sorted([d for d in dims_set if d <= native_dim])
 
         logger.info(f"🪆 Applying MatryoshkaLoss with dimensions: {dims}")
+
+        def _wrap(inner: nn.Module) -> nn.Module:
+            # Matryoshka must sit *inside* the GOR wrapper, never outside it.
+            # MatryoshkaLoss dispatches on the loss it is given: for a Cached*
+            # loss it decorates calculate_loss and the backbone runs once, but
+            # for anything else it decorates SentenceTransformer.forward with an
+            # index-keyed cache. GOR's own forward pass then desynchronises that
+            # index and CachedMNRL's backward hook dies with "inconsistent
+            # tensor size, expected tensor [122880] and src [16384]".
+            if isinstance(inner, LossWithGOR):
+                inner.base_loss = losses.MatryoshkaLoss(
+                    model, inner.base_loss, matryoshka_dims=dims
+                )
+                return inner
+            return losses.MatryoshkaLoss(model, inner, matryoshka_dims=dims)
+
         if isinstance(loss_obj, dict):
-            return {
-                k: losses.MatryoshkaLoss(model, v, matryoshka_dims=dims)
-                for k, v in loss_obj.items()
-            }
-        return losses.MatryoshkaLoss(model, loss_obj, matryoshka_dims=dims)
+            return {k: _wrap(v) for k, v in loss_obj.items()}
+        return _wrap(loss_obj)
 
     gor_weight = float(getattr(args, "gor_weight", 0.0) or 0.0)
     if gor_weight < 0:
@@ -2926,17 +2974,26 @@ def run_training(args):
                 dms_ds = _load_dms_dataset(args.dms_file, max_rows=args.dms_max_rows)
                 local_train_ds["dms_cosent"] = dms_ds
                 try:
-                    local_loss_dict["dms_cosent"] = losses.CoSENTLoss(
+                    cosent_loss: nn.Module = losses.CoSENTLoss(
                         model,
                         scale=mnrl_scale,
                         gather_across_devices=_gather_across_devices,
                     )
                 except TypeError:
-                    local_loss_dict["dms_cosent"] = losses.CoSENTLoss(model, scale=mnrl_scale)
+                    cosent_loss = losses.CoSENTLoss(model, scale=mnrl_scale)
+                # CoSENT has no gradient cache: it embeds and backpropagates the
+                # whole batch at once, and DMS sequences are the longest in the
+                # corpus (median 448 residues against a 512-token truncation). At
+                # the batch sizes CachedMNRL is run at, that alone exhausts a
+                # 267 GiB B300. Cap it at the mini-batch that the contrastive path
+                # is already tuned to fit in one grad-enabled forward.
+                cosent_cap = max(1, args.mnrl_mini_batch_size)
+                local_loss_dict["dms_cosent"] = SubsampledLoss(cosent_loss, cosent_cap)
                 logger.info(
-                    "📦 dms_cosent: %d pairs (CoSENTLoss, target_bs=%d, scale=%.1f)",
+                    "📦 dms_cosent: %d pairs (CoSENTLoss, target_bs=%d, cap=%d, scale=%.1f)",
                     len(dms_ds),
                     args.dms_batch_size,
+                    cosent_cap,
                     mnrl_scale,
                 )
             elif args.dms_file:

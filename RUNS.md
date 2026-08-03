@@ -12,6 +12,7 @@ which checkpoint produced it.
 | ProtSent-V1-150M | ESM-2 150M | **unfiltered** (as submitted) | `oriel9p/protsent-esm2-150M` (Hub) | `results/benchmarks/v2_150m/protsent_v1_150m_*` | published, submitted paper |
 | **ProtSent-V2-150M** | Synthyra FastPLM ESM-2 150M | **decontaminated** dc40 | `models/protsent_esm2_150m_v2/final` | `results/benchmarks/v2_150m/protsent_v2_150m_*` | **done 2026-07-30 23:0x**, k=5, 3,890 steps |
 | ProtSent-V2-150M (near-trough) | same run, checkpoint 3250 | same | `models/protsent_esm2_150m_v2_snapshots/checkpoint-3250` | `results/benchmarks/v2_150m/protsent_v2_150m_ckpt3250_*` | control for the peak-LR final checkpoint |
+| **ProtSent-V2.5-35M** | continues ProtSent-V2-35M | **decontaminated** dc40 + DMS | `models/protsent_esm2_35m_v2p5/final` | `results/benchmarks/v3/protsent_v2p5_*` | started 2026-08-03 18:38, 14,924 steps |
 
 The internal `v3` in the 35M paths is an inherited `RUN_NAME`; the paper name for
 that model is **ProtSent-V2-35M**. The 150M directory is named for the paper
@@ -402,6 +403,148 @@ embeddings (giving it ProtSent's cosine-friendly geometry for free) closes only
 **Open, not measured:** decontamination (`protsent-data-dc40`) was run against the
 `remote_homology`/fold-prediction and PPI test sets, not against CATH test219. CATH-specific
 leakage into the AFDB/Pfam/STRING training corpus has not been checked.
+
+## ProtSent-V2.5-35M — a continuation pass on V2-35M
+
+`train_esm2_35m_v2p5.sh`. Started 2026-08-03 18:38 on one B300 (GPU 5), 14,924
+steps, measured 2.0–2.6 s/it, so ~8–11 h. **Results not yet measured.**
+
+Not a plain "more of the same" epoch. Four things change at once, so V2.5 minus
+V2 is not attributable to any single one:
+
+| setting | V2-35M | V2.5-35M | why |
+|---|---|---|---|
+| init | `/storage/models/ESM2-35M` | `models/protsent_v2p5_init` | V2's own final weights |
+| GOR | off | **0.1** | anisotropy; see the whitening result in `probe_gap_analysis.py` |
+| DMS CoSENT | absent | **1.0M rows**, ~6.5% of steps | auxiliary fitness target |
+| k (pairs/cluster) | 8 | **5** | fresh draw, and a smaller budget |
+| seeds (shuffle/global) | 40 / 41 | **13 / 7** | different sample of the same corpora |
+| LR | 2e-4, 3 cosine cycles | **5e-5, one half-cosine** | ends annealed, not at peak |
+| effective max_seq_length | **unbounded** (bug) | **512** | see the section below |
+| batch / mini-batch | 1024 / 256 | 1024 / 256 | unchanged |
+| GPUs | 7 | 1 | availability |
+
+Corpus actually built (from the run log):
+
+| dataset | rows | note |
+|---|---:|---|
+| `pfam_sorted` | 284,683 | whole, k=5 |
+| `afdb_sorted` | 7,000,000 | **truncated** from 8,612,331 by the per-file cap |
+| `stringdb_train_15M` | 7,000,000 | *sampled* under the cap, seed 13 |
+| `dms_cosent` | 1,000,000 | prefix of 2,175,734; the file is pre-interleaved |
+| total | 15,284,683 | ~44% of V2's 34.8M-pair epoch |
+
+**How much of this pass is actually new: about 28% of rows.** Worth stating because
+"one more epoch" implies more than it delivers here. V2 drew k=8 members per cluster
+and V2.5 draws k=5, both uniform and independent, so for a pair V2.5 draws from a
+cluster of size n, P(V2 also sampled both) = S8(S8-1) / (n(n-1)) — exactly 1 when
+n <= 8, since V2 took the whole cluster. Weighted by each cluster's k=5 pair count:
+
+| dataset | rows | new to V2 | new rows |
+|---|---:|---:|---:|
+| `afdb_sorted` | 7,000,000 | 46.2% | ~3,234,000 |
+| `stringdb_train_15M` | 7,000,000 | 0% — V2 consumed all 15M | 0 |
+| `dms_cosent` | 1,000,000 | 100% | 1,000,000 |
+| `pfam_sorted` | 284,683 | not measured | <=284,683 |
+| total | 15,284,683 | | ~4.2-4.5M (~28%) |
+
+AFDB is 1,818,848 clusters over 126,301,607 sequences, extremely skewed: 97.3% of
+sequences sit in the 27.2% of clusters with more than 8 members, the largest holding
+362,703. Those giant clusters contribute almost no overlap, but clusters just above
+8 still overlap heavily (n=9 gives 56/72 = 78%), which is why the total lands at
+46.2% rather than near 100%. The scan reproduces both V2's logged k=8 count of
+18,987,468 and the 126,301,607 corpus row count above, which is the check that it is
+reading the file the same way the pipeline does.
+
+**The AFDB truncation is uniform, not the failure the pipeline warns about.**
+`--max_map_rows` splits evenly across the three `--files`, so the 21M budget is a
+7.0M cap per corpus, and AFDB exceeds it at k=5. A clustered corpus is truncated
+at the first N pairs of a group-sorted file, which in general keeps only the
+lowest-sorted clusters — but here the covered prefix averages
+7,000,000 / 1,478,201 = 4.7355 pairs per cluster against 8,612,331 / 1,818,848 =
+4.7350 for the file as a whole. Identical to four decimals, so the 81.3% of
+clusters that were visited are effectively a random 81.3%. Independently
+measured by scanning `group_id` directly; the 8,612,331 total reproduces the
+figure the 150M k=5 run logged, which is the check that the scan is right.
+
+Two code fixes were required before any of this ran; both are in the loss path
+and both changed measured memory by more than an order of magnitude.
+
+- `gor_loss.py` sliced batches by first dimension, which matches nothing under
+  `DataCollatorWithFlattening`, so GOR embedded the **whole** batch with grad.
+  It now slices with sentence-transformers' own `_create_minibatch` and caps at
+  128 samples. GOR must also wrap `MatryoshkaLoss` from the outside: inside, it
+  desynchronises `ForwardDecorator`'s index-keyed cache and CachedMNRL's
+  backward hook dies with `inconsistent tensor size, expected tensor [122880]
+  and src [16384]`.
+- `CoSENTLoss` has no gradient cache and DMS sequences are the longest corpus
+  (median 448 residues), so it, not the contrastive loss, set peak memory. It is
+  now wrapped in `SubsampledLoss` at `--mnrl_mini_batch_size` rows. Without that
+  cap, DMS forces the *global* `per_device_train_batch_size` down — one batch
+  size covers every dataset in a multi-task dict — and the contrastive batch
+  cannot stay at 1024.
+
+Measured throughput, one B300, batch 1024, mini-batch 256, GOR + DMS +
+Matryoshka: **2.0–2.6 s/it, 110 GiB peak of 267**. V2's 8.08 s/it for the same
+1024 rows is not a fair comparison — it was padding to 1,561 tokens.
+
+## Embedding geometry across the 35M line (measured 2026-08-03)
+
+`probe_gap_analysis.py --models NAME=PATH ...` (the flag is new; the built-in
+`ARMS` are unchanged). SCOPe-40 spectrum plus remote-homology accuracy under three
+readouts. Raw JSON in `results/benchmarks/probe_gap_v2_baseline.json` and
+`probe_gap_v2p5_ckpt2000.json`.
+
+| model | mean random-pair cosine | participation ratio | eff. rank | RH 3-NN raw | whitened | linear |
+|---|---:|---:|---:|---:|---:|---:|
+| ESM-2 35M | 0.848 | 7.9 | 32.5 | 0.5832 | 0.6800 | 0.6902 |
+| ProtSent-V1-35M | 0.294 | 31.0 | 61.0 | 0.6572 | 0.6766 | 0.6905 |
+| ProtSent-V2-35M | 0.152 | 52.5 | 97.4 | 0.6813 | 0.7010 | 0.7007 |
+
+**V1 -> V2 is a large, previously unmeasured geometry change**: mean pairwise cosine
+0.294 -> 0.152 and participation ratio 31 -> 52.5 of 480 dimensions. V2 is much closer
+to isotropic than the published model, which is consistent with its better retrieval.
+
+**The anisotropy channel is close to exhausted at V2, which bounds what GOR can buy.**
+Whitening — an invertible linear map fitted without labels — is worth +0.097 remote-homology
+3-NN accuracy to vanilla ESM-2, +0.019 to V1 and only +0.020 to V2. For V2 the whitened
+k-NN (0.7010) already equals the linear probe (0.7007). Since a linear probe absorbs any
+invertible linear map for free, **GOR cannot help a linear probe by de-correlating a fixed
+representation**; if it helps at all it must be by changing what the encoder learns during
+training. Keep those two mechanisms separate when reading V2.5.
+
+## `--max_seq_length` was never applied during training (found 2026-08-03)
+
+**Every training run in this file — V1, V2-35M and V2-150M — trained on untruncated
+sequences, despite passing `--max_seq_length 512`.** Fixed in
+`load_model_for_training`, which now sets the limit after the model is assembled.
+
+The flag reached `models.Transformer(...)`, but the custom-code branches
+(`fastplm_esm2`, `esmplusplus`, `amplify`, `dplm2`, `profluent_e1`) then swap that
+module's tokenizer for the backbone's own, and FastPLM's declares
+`model_max_length` = 1e24. sentence-transformers reads the truncation limit off the
+tokenizer, so the requested 512 was discarded and every batch was padded to the
+longest sequence in it. Measured directly: a 512-pair batch arrived as
+`(512, 1561)`, and `model.tokenize(["A" * 3000])` returned 3,002 tokens.
+
+Consequences worth stating plainly:
+
+- The trained models are **not** wrong, but the recorded configuration was. AFDB and
+  STRING have ~29% of sequences longer than 512 residues (medians 276 and 334), so
+  those runs saw materially longer inputs than the paper's stated 512.
+- **Evaluation is unaffected.** `protein_benchmark_suite.py:1246` assigns
+  `model_obj.max_seq_length` explicitly, at `DEFAULT_EMBED_MAX_LENGTH = 1024`. So
+  every benchmark number in this file was measured with truncation at 1024 — the
+  bug is training-side only, and there was a train/eval length mismatch throughout.
+- It is why memory looked fine before and did not for V2.5: CachedMNRL bounds peak
+  memory by mini-batch and so absorbed the extra length silently (6 GiB per step),
+  while GOR and CoSENT embed with grad and hit 150 GiB on the same batch.
+
+ProtSent-V2.5-35M trains at a genuine 512. That is the documented configuration and
+it is memory-safe, but it is *not* what V2-35M did, so the continuation is not a
+pure "more of the same" pass. Training at 1024 instead would match the evaluation
+cap; it was not attempted because attention cost is quadratic in length and the
+512 configuration already peaks at 110 GiB of a 267 GiB card.
 
 ## Not overwriting things
 
