@@ -805,13 +805,25 @@ def load_model_for_training(
         pooling_mode=pooling_mode,
         pooling_activation=pooling_activation,
     )
-    # Only ever tightens. A backbone whose tokenizer declares a shorter limit than
-    # the caller asked for keeps its own, because raising it past the position
-    # budget is how you get silent garbage rather than a clear error.
+    _enforce_max_seq_length(model, max_seq_length)
+    return model
+
+
+def _enforce_max_seq_length(model: SentenceTransformer, max_seq_length: int) -> None:
+    """Apply a truncation limit to an assembled SentenceTransformer.
+
+    Every path that builds a model for *training* must call this, not just the
+    fresh-load path: resuming from a checkpoint rebuilds the model with a bare
+    ``SentenceTransformer(dir)``, which reads the limit off the checkpoint's own
+    tokenizer and so reintroduces the bug for the resumed half of a run.
+
+    Only ever tightens. A backbone whose tokenizer declares a shorter limit than
+    the caller asked for keeps its own, because raising it past the position
+    budget is how you get silent garbage rather than a clear error.
+    """
     if max_seq_length and 0 < max_seq_length < model.max_seq_length:
         model.max_seq_length = max_seq_length
     logger.info("   ✂️  max_seq_length enforced at %s", model.max_seq_length)
-    return model
 
 
 def _load_model_for_training(
@@ -2258,6 +2270,10 @@ def run_training(args):
         logger.info("⏳ Loading model from checkpoint...")
         model = SentenceTransformer(resume_from_checkpoint, trust_remote_code=True)
         logger.info("✅ Model loaded from checkpoint")
+        # Checkpoints carry the backbone's own tokenizer, and FastPLM's declares
+        # model_max_length = 1e24, so without this a resumed run trains untruncated
+        # while the first half of the same run did not.
+        _enforce_max_seq_length(model, args.max_seq_length)
         # Ensure rotary caches are trainable (ESM2 inference mode fix)
         _ensure_trainable_rotary_caches(model)
     else:

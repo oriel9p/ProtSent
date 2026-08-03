@@ -34,8 +34,23 @@ if ! compgen -G "$FINAL"/*.safetensors >/dev/null; then
     exit 1
   fi
   echo "$(date) no final model; resuming once from $ckpt"
-  # The saved optimizer carries the MaskedLM head's parameters, which the model
-  # rebuilt from a checkpoint directory does not have, so resume dies on a
+  # Trap 1: checkpoints are written with tokenizer_class "FastEsmTokenizer" and no
+  # AutoTokenizer entry in auto_map, so SentenceTransformer(dir) dies with
+  # "Unrecognized processing class" before training starts. Rewrite that ONE field.
+  # Deliberately not make_checkpoint_loadable.py, which also rewrites config.json to
+  # plain ESM: leaving config.json alone keeps the model on FastPLM's auto_map and
+  # its attention backend, so the resumed half runs the same code as the first half.
+  uv run --no-sync python -c '
+import json, sys, pathlib
+p = pathlib.Path(sys.argv[1]) / "tokenizer_config.json"
+cfg = json.loads(p.read_text())
+if cfg.get("tokenizer_class") != "EsmTokenizer":
+    cfg["tokenizer_class"] = "EsmTokenizer"
+    p.write_text(json.dumps(cfg, indent=2))
+    print("rewrote tokenizer_class in", p)
+' "$ckpt" || { echo "ERROR: tokenizer rewrite failed on $ckpt" >&2; exit 1; }
+  # Trap 2: the saved optimizer carries the MaskedLM head's parameters, which the
+  # model rebuilt from a checkpoint directory does not have, so resume dies on a
   # parameter-group size mismatch ~8 minutes in without this.
   uv run --no-sync python fix_resume_optimizer.py "$ckpt" || {
     echo "ERROR: fix_resume_optimizer.py failed on $ckpt" >&2; exit 1; }
