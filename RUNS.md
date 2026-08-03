@@ -488,6 +488,29 @@ Measured throughput, one B300, batch 1024, mini-batch 256, GOR + DMS +
 Matryoshka: **2.0–2.6 s/it, 110 GiB peak of 267**. V2's 8.08 s/it for the same
 1024 rows is not a fair comparison — it was padding to 1,561 tokens.
 
+## Cross-device gather deadlocks with a CoSENT target (reproduced 2026-08-03)
+
+`train_v2.sh` says it keeps DMS out of the joint interleave to avoid a
+"CoSENT/gather deadlock under DDP". That is real, and it now has a test:
+
+    CUDA_VISIBLE_DEVICES=6,2 GATHER=1 BATCH_SIZE=256 MINI_BATCH=128 \
+      MAX_MAP_ROWS=60000 DMS_MAX_ROWS=40000 MAX_STEPS=15 \
+      bash train_esm2_35m_v2p5.sh
+
+hangs. The log reaches `DDP (world_size=2): enabling gather_across_devices` and
+then no step ever completes: both ranks spin at ~91% CPU with no GPU allocation,
+and a 20-minute timeout kills it (exit 124) at step 0 of 15. `GATHER` is a new
+toggle on that script and defaults to 0; anything multi-GPU with `--dms_file`
+should be smoke-tested this way before being trusted.
+
+**What this rules out.** On N GPUs there is no way to lower the per-device batch
+and recover the lost in-batch negatives through a gather. The parallelism that
+works is the one V2 already used: gather off, per-device batch 1024, so each rank
+carries its own 1024 negatives and the effective batch is N x 1024. That trades
+optimizer steps for GPUs — 15.28M rows gives 3,731 steps on 4 GPUs against 14,924
+on one — which is in the same range as V2's own 4,850 and so is a known-good
+regime, but it is not the same run.
+
 ## Embedding geometry across the 35M line (measured 2026-08-03)
 
 `probe_gap_analysis.py --models NAME=PATH ...` (the flag is new; the built-in

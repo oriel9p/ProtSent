@@ -14,9 +14,10 @@
 #   * Global Orthogonal Regularization on the contrastive losses
 #     (--gor_weight), against the anisotropy that made whitening help the
 #     linear probe so much.
-#   * A different draw of the data: k drops 8 -> 3, which changes the
+#   * A different draw of the data: k drops 8 -> 5, which changes the
 #     Dataset.from_generator fingerprint and so re-samples every cluster, and
-#     the shuffle//global seeds move off 40/41.
+#     the shuffle/global seeds move off 40/41. About 28% of the resulting rows
+#     are pairs V2 never saw; see RUNS.md for the arithmetic.
 #
 # Sized for ONE B300 in under 16 h. Measured end to end on a free B300:
 #
@@ -118,8 +119,16 @@ export OPENBLAS_NUM_THREADS=32
 NUM_PROCESSES=$(awk -F, '{print NF}' <<<"$CUDA_VISIBLE_DEVICES")
 
 MATRYOSHKA="${MATRYOSHKA:-1}"
+# Cross-device contrastive gather. OFF by default, as in V2: under CachedMNRL peak
+# memory is set by the mini-batch, so a single rank already carries the paper's 1024
+# in-batch negatives without paying the allgather. Only relevant multi-GPU, where
+# turning it ON is the only way to keep 1024 negatives while lowering the per-device
+# batch. train_v2.sh records a CoSENT/gather deadlock under DDP, and V2.5 has a DMS
+# CoSENT target, so smoke-test any multi-GPU run with GATHER=1 before committing.
+GATHER="${GATHER:-0}"
 EXTRA_ARGS=()
 [[ "$MAX_STEPS" -gt 0 ]] && EXTRA_ARGS+=(--max_steps "$MAX_STEPS")
+[[ "$GATHER" != "1" ]] && EXTRA_ARGS+=(--no_gather_across_devices)
 if [[ "$MATRYOSHKA" == "1" ]]; then
   EXTRA_ARGS+=(--matryoshka --matryoshka_dims 64 128 256)
 else
@@ -162,7 +171,6 @@ uv run --no-sync accelerate launch --num_processes "$NUM_PROCESSES" --mixed_prec
   --dataloader_num_workers "$WORKERS" \
   --save_steps "$SAVE_STEPS" --save_total_limit "$SAVE_TOTAL_LIMIT" \
   --no-compile \
-  --no_gather_across_devices \
   "${EXTRA_ARGS[@]}" \
   --no_resume \
   --run_name "$RUN_NAME"
