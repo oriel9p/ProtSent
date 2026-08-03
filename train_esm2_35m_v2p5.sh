@@ -126,7 +126,16 @@ MATRYOSHKA="${MATRYOSHKA:-1}"
 # batch. train_v2.sh records a CoSENT/gather deadlock under DDP, and V2.5 has a DMS
 # CoSENT target, so smoke-test any multi-GPU run with GATHER=1 before committing.
 GATHER="${GATHER:-0}"
+# RESUME=1 continues from the newest checkpoint in models/$RUN_NAME instead of
+# starting over. The recovery path when MAX_MINUTES stops a run mid-schedule.
+# Safe ONLY at the same GPU count and the same data knobs: the step count is
+# derived from world size and the corpus size, so changing either re-derives a
+# different schedule and desynchronises it from global_step (RUNS.md). The saved
+# optimizer also carries the backbone's LM-head parameters, which the rebuilt
+# model does not have, so run fix_resume_optimizer.py on the checkpoint first.
+RESUME="${RESUME:-0}"
 EXTRA_ARGS=()
+[[ "$RESUME" == "1" ]] || EXTRA_ARGS+=(--no_resume)
 [[ "$MAX_STEPS" -gt 0 ]] && EXTRA_ARGS+=(--max_steps "$MAX_STEPS")
 [[ "$GATHER" != "1" ]] && EXTRA_ARGS+=(--no_gather_across_devices)
 if [[ "$MATRYOSHKA" == "1" ]]; then
@@ -172,5 +181,4 @@ uv run --no-sync accelerate launch --num_processes "$NUM_PROCESSES" --mixed_prec
   --save_steps "$SAVE_STEPS" --save_total_limit "$SAVE_TOTAL_LIMIT" \
   --no-compile \
   "${EXTRA_ARGS[@]}" \
-  --no_resume \
   --run_name "$RUN_NAME"
