@@ -1624,6 +1624,9 @@ def _best_family_col_for_file(file_path: str) -> str:
     )
 
 
+MNRL_DIRECTIONS_DEFAULT = ("query_to_doc", "doc_to_query")
+
+
 def _mnrl_directions(args) -> tuple:
     """Which InfoNCE interaction terms MNRL scores.
 
@@ -1634,8 +1637,11 @@ def _mnrl_directions(args) -> tuple:
     proteins, and neither column is privileged. The reverse term costs no extra
     forward pass, the embeddings are already computed. V1/V2/V2.5 all trained
     one-directional.
+
+    The fallback matches the argparse default rather than the library's, so a
+    caller that builds args programmatically gets the same loss as the CLI.
     """
-    return tuple(getattr(args, "mnrl_directions", None) or ("query_to_doc",))
+    return tuple(getattr(args, "mnrl_directions", None) or MNRL_DIRECTIONS_DEFAULT)
 
 
 def _resolve_primary_loss(args) -> str:
@@ -1665,10 +1671,18 @@ def _resolve_batch_sampler(
         # multi-dataset run silently trained without NO_DUPLICATES even though the
         # primary loss was CachedMNRL, which the ST docs explicitly pair with it.
         # ProtSent-V2 and V2.5 both trained that way.
-        effective = primary_loss if loss_mode == "multi" and primary_loss else loss_mode
-        if effective in {"mnrl", "cached_mnrl", "cached_gist", "gist"}:
+        #
+        # Only the MNRL/GIST family escalates. A multi-task run with a triplet
+        # primary keeps its historical None: GroupByLabelBatchSampler raises
+        # ValueError when a dataset has no label column, and a multi-task dict
+        # mixes labelled and unlabelled datasets, so escalating there would turn
+        # a working configuration into a crash at sampler construction.
+        pair_losses = {"mnrl", "cached_mnrl", "cached_gist", "gist"}
+        if loss_mode == "multi":
+            return BatchSamplers.NO_DUPLICATES if primary_loss in pair_losses else None
+        if loss_mode in pair_losses:
             return BatchSamplers.NO_DUPLICATES
-        if effective == "triplet":
+        if loss_mode == "triplet":
             return BatchSamplers.GROUP_BY_LABEL
         return None
 
@@ -3618,7 +3632,7 @@ if __name__ == "__main__":
     train_cmd.add_argument(
         "--mnrl_directions",
         nargs="+",
-        default=["query_to_doc", "doc_to_query"],
+        default=list(MNRL_DIRECTIONS_DEFAULT),
         choices=["query_to_doc", "query_to_query", "doc_to_query", "doc_to_doc"],
         help="InfoNCE interaction terms for (Cached)MNRL. Default is symmetric, which "
         "suits this data: both columns of a pair are proteins drawn the same way. "
