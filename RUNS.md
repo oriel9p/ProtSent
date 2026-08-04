@@ -12,7 +12,8 @@ which checkpoint produced it.
 | ProtSent-V1-150M | ESM-2 150M | **unfiltered** (as submitted) | `oriel9p/protsent-esm2-150M` (Hub) | `results/benchmarks/v2_150m/protsent_v1_150m_*` | published, submitted paper |
 | **ProtSent-V2-150M** | Synthyra FastPLM ESM-2 150M | **decontaminated** dc40 | `models/protsent_esm2_150m_v2/final` | `results/benchmarks/v2_150m/protsent_v2_150m_*` | **done 2026-07-30 23:0x**, k=5, 3,890 steps |
 | ProtSent-V2-150M (near-trough) | same run, checkpoint 3250 | same | `models/protsent_esm2_150m_v2_snapshots/checkpoint-3250` | `results/benchmarks/v2_150m/protsent_v2_150m_ckpt3250_*` | control for the peak-LR final checkpoint |
-| **ProtSent-V2.5-35M** | continues ProtSent-V2-35M | **decontaminated** dc40 + DMS | `models/protsent_esm2_35m_v2p5/final` | `results/benchmarks/v3/protsent_v2p5_*` | started 2026-08-03 18:38, 14,924 steps |
+| **ProtSent-V2.5-35M** | continues ProtSent-V2-35M | **decontaminated** dc40 + DMS | `models/protsent_esm2_35m_v2p5/final` | `results/benchmarks/v3/protsent_v2p5_*` | **done 2026-08-04 06:27**, 14,924 steps, GOR 0.1 |
+| ProtSent-V2.5-35M (noGOR) | same config, `--gor_weight 0` | same | `models/protsent_esm2_35m_v2p5_nogor/final` | `results/benchmarks/v3/protsent_v2p5_nogor_*` | ablation, done 2026-08-04 12:36 |
 
 The internal `v3` in the 35M paths is an inherited `RUN_NAME`; the paper name for
 that model is **ProtSent-V2-35M**. The 150M directory is named for the paper
@@ -487,6 +488,100 @@ and both changed measured memory by more than an order of magnitude.
 Measured throughput, one B300, batch 1024, mini-batch 256, GOR + DMS +
 Matryoshka: **2.0–2.6 s/it, 110 GiB peak of 267**. V2's 8.08 s/it for the same
 1024 rows is not a fair comparison — it was padding to 1,561 tokens.
+
+### V2.5 results, and the GOR ablation (2026-08-04)
+
+Trained 2026-08-03 18:38 to 2026-08-04 06:27, 14,924 steps, one B300. The GOR-off
+ablation (`protsent_v2p5_nogor`, `--gor_weight 0`, everything else identical)
+finished 2026-08-04 12:36. Both arms benchmarked 23/23 under both probes.
+
+SCOPe-40 retrieval, eligible queries (n=1,693 of 2,207):
+
+| model | R@1 | R@10 | R@30 | MAP |
+|---|---:|---:|---:|---:|
+| ESM-2 35M | 0.4991 | 0.7614 | 0.8340 | 0.4210 |
+| ProtSent-V1-35M | 0.5854 | 0.8511 | 0.9256 | 0.5509 |
+| ProtSent-V2-35M | 0.6852 | 0.9220 | 0.9634 | 0.6459 |
+| ProtSent-V2.5-35M noGOR | 0.6923 | 0.9250 | 0.9663 | 0.6528 |
+| ProtSent-V2.5-35M | 0.6899 | 0.9244 | 0.9681 | 0.6521 |
+
+Paired bootstrap, 10,000 resamples, V2.5 − V2: R@1 +0.0077 [−0.0041, +0.0201],
+R@10 +0.0018 [−0.0053, +0.0089], R@30 +0.0047 [+0.0000, +0.0100], **MAP +0.0078
+[+0.0032, +0.0125]**. MAP is the only metric that excludes zero.
+`results/benchmarks/scope40_bootstrap_ci_v2p5.json`.
+
+Win/tie/loss on the 20 tasks with a defined one-vs-rest AUC, ties at |δ| < 0.005:
+
+| comparison | k-NN | linear |
+|---|---|---|
+| V2.5 vs ESM-2 35M | 9W/7T/4L, +0.0046 | 4W/4T/12L, −0.0103 |
+| V2.5 vs V2 | 7W/8T/5L, +0.0010 | 7W/8T/5L, +0.0013 |
+
+Indistinguishable from V2 on the suite; the k-NN median flips sign (+0.0010 to
+−0.0005) depending on whether the tally is over 20 or 22 tasks, which is what a
+noise-level statistic looks like. The linear-probe deficit against vanilla ESM-2
+is unchanged. The per-task linear gains are concentrated on DMS-derived tasks
+(Stability +0.0946, AAV Fitness +0.0732, Fluorescence +0.0149, Variant Effect
++0.0128, beta-lactamase +0.0110), consistent with re-adding the CoSENT target
+rather than with GOR.
+
+**GOR contributed nothing measurable, at a real cost.** Ablation vs the GOR arm:
+
+| | GOR off | GOR 0.1 |
+|---|---:|---:|
+| SCOPe-40 eligible R@1 / MAP | 0.6923 / 0.6528 | 0.6899 / 0.6521 |
+| k-NN vs V2 (20 tasks) | 8W/7T/4L, +0.0028 | 7W/8T/5L, +0.0010 |
+| k-NN GOR vs noGOR | — | 2W/15T/2L, +0.0004 |
+| mean random-pair cosine | 0.121 | 0.113 |
+| step time (A/B, `time_gor_ab.sh`) | 2.385 s/it | 2.665 s/it (+11.7%) |
+
+15 ties of 19 between the two arms. The whole SCOPe-40 gain reproduces with GOR
+off. And most of the isotropy change was the extra training pass, not GOR: V2
+0.152 → noGOR 0.121 → GOR 0.113, so GOR accounts for about a fifth of it.
+`results/benchmarks/probe_gap_v2p5_nogor.json`.
+
+**Why 35M was the wrong testbed.** The geometry section above shows whitening
+buys V2-35M only +0.0197 and lands its k-NN exactly on its linear probe
+(−0.0003). No geometry-only intervention has room left there. At 150M the same
+measurement leaves +0.0154 on the table after whitening and the whitening gain is
++0.0555, so the channel is open at that scale. GOR was run at `gor_weight=0.1`
+with `max_samples=128` and both terms at 1.0 — an arbitrary weight, a tenth of
+the 1.0 the GOR paper uses. The null result is for that configuration at 35M.
+
+## Loss-configuration audit (2026-08-04)
+
+Three settings were wrong or unexamined in every run to date, found by reading
+the CachedMNRL docs against what the pipeline passes. Fixed on
+`fix/train-max-seq-length-and-gor`; V1, V2 and V2.5 all trained without them.
+
+- **`batch_sampler` was silently `none`.** `_resolve_batch_sampler` mapped `auto`
+  to `NO_DUPLICATES` only for `loss_mode in {mnrl, cached_mnrl, cached_gist,
+  gist}`. Multi-task runs pass `loss_mode="multi"`, which fell through to `None`,
+  so no multi-dataset run ever used the sampler the CachedMNRL docs pair with the
+  loss. It now dispatches on the resolved primary loss. Measured cost at smoke
+  scale is +0.6-1.0 s/it, but that smoke has 20k rows per corpus against a 256
+  batch and so rejects constantly; the cost at 7M rows and batch 1024 is not
+  measured.
+- **`directions` was one-directional.** ST defaults to `("query_to_doc",)` for
+  asymmetric retrieval. Every corpus here is symmetric — two cluster members, two
+  interacting proteins — so the default is now
+  `("query_to_doc", "doc_to_query")`. It costs nothing: the embeddings are
+  already computed, it only adds terms to the softmax. Confirmed at smoke scale.
+- **GOR knobs were unreachable.** `max_samples` was a wrapper default of 128,
+  never plumbed to the CLI, chosen while GOR was still OOMing at 150 GiB and
+  never revisited. `mean_weight`, `second_moment_weight` and `aggregation` were
+  frozen at the ST defaults, so the EmbeddingGemma recipe (mean term off) was not
+  expressible. All four are now flags.
+
+`mini_batch_num_tokens` — token-count-packed mini-batches, which suits
+variable-length protein data under flash-attention with input flattening — is
+documented upstream but **is not in sentence-transformers 5.6.1**, which is the
+latest release on PyPI as of 2026-08-04. Nothing to enable yet.
+
+`--max_seq_length` now sets the limit in both directions, clamped to the
+backbone's `max_position_embeddings` (1026 for ESM-2) rather than to the
+tokenizer, which is the thing that lies. Tighten-only was wrong once checkpoints
+started carrying a 512 tokenizer: resuming one at 1024 silently stayed at 512.
 
 ## Cross-device gather deadlocks with a CoSENT target (reproduced 2026-08-03)
 
