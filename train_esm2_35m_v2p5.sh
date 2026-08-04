@@ -11,48 +11,24 @@
 #
 # Three deltas from the V2 run, all requested:
 #   * DMS CoSENT as an auxiliary target (--dms_file).
-#   * Global Orthogonal Regularization on the contrastive losses
-#     (--gor_weight), against the anisotropy that made whitening help the
-#     linear probe so much.
+#   * Global Orthogonal Regularization on the contrastive losses (--gor_weight).
 #   * A different draw of the data: k drops 8 -> 5, which changes the
 #     Dataset.from_generator fingerprint and so re-samples every cluster, and
 #     the shuffle/global seeds move off 40/41. About 28% of the resulting rows
-#     are pairs V2 never saw; see RUNS.md for the arithmetic.
+#     are pairs V2 never saw.
 #
-# Sized for ONE B300 in under 16 h. Measured end to end on a free B300:
-#
-#   | config                                  | samples/s | peak GiB |
-#   |-----------------------------------------|-----------|----------|
-#   | bs 512, mini 128, GOR + DMS + Matryoshka |     145.5 |        - |
-#   | bs 512, mini 256, GOR + DMS + Matryoshka |     146.8 |    121.6 |
-#   | bs 1024, mini 256, same                  |     234.0 |    109.7 |
-#
-# Two things had to be fixed before any of that was true, both recorded here so
-# the numbers above are not mistaken for something the old code could reach:
-#
-#   * --max_seq_length was never applied. Every model branch passes it to
-#     models.Transformer, but the FastPLM tokenizer that then replaces it
-#     declares model_max_length = 1e24, and sentence-transformers reads
-#     truncation off the tokenizer. Batches were padded to the longest sequence
-#     present -- 1,561 tokens on a 512-pair batch was measured -- which is what
-#     made the GOR step cost 150 GiB. load_model_for_training now enforces the
-#     limit after assembly. NOTE: V2 and V2-150M trained under the same bug, so
-#     they saw untruncated sequences despite the flag.
-#   * GOR sliced batches by first dimension, which silently matches nothing
-#     under DataCollatorWithFlattening and embedded the whole batch with grad.
-#     It now slices with sentence-transformers' own minibatch helpers.
+# Sized for ONE B300 in under 16 h; ~15M rows is roughly 43% of a V2 epoch.
+# Measured throughput and the GOR ablation are in RUNS.md — the short version is
+# that GOR cost +11.7% per step and bought no task metric at this scale.
 #
 # CoSENT has no gradient cache and is capped at MINI_BATCH rows per batch
 # (SubsampledLoss); sentence-transformers uses one per_device_train_batch_size
 # for every dataset in a multi-task dict, so that cap is what lets the
 # contrastive batch stay at V2's 1024 while a DMS target rides along.
 #
-# A full epoch is not on the table at this budget: V2 was 34.8M pairs over
-# 7 GPUs for 10 h 53 m, i.e. ~76 GPU-hours. This pass is ~15M rows, roughly 43%
-# of an epoch, sized from the step time measured in the real run: 2.62 s/it at
-# bs 1024, so ~14,700 steps is ~10.7 h and the 900-minute stop is slack, not the
-# plan. Note V2's own step time is not the reference here — it was 8.08 s/it for
-# the same 1024 rows, because it was padding to 1,561 tokens.
+# Defaults changed after this run trained: --batch_sampler now resolves to
+# NO_DUPLICATES for multi-task runs and --mnrl_directions is symmetric. Set
+# BATCH_SAMPLER=none MNRL_DIRECTIONS=query_to_doc to reproduce V2.5 exactly.
 set -euo pipefail
 cd ~/ProtSent
 
@@ -135,6 +111,10 @@ GATHER="${GATHER:-0}"
 # model does not have, so run fix_resume_optimizer.py on the checkpoint first.
 RESUME="${RESUME:-0}"
 EXTRA_ARGS=()
+# Escape hatches for the two defaults that changed after V2.5 trained, so the
+# original configuration stays reproducible from this same script.
+[[ -n "${BATCH_SAMPLER:-}" ]] && EXTRA_ARGS+=(--batch_sampler "$BATCH_SAMPLER")
+[[ -n "${MNRL_DIRECTIONS:-}" ]] && EXTRA_ARGS+=(--mnrl_directions $MNRL_DIRECTIONS)
 [[ "$RESUME" == "1" ]] || EXTRA_ARGS+=(--no_resume)
 [[ "$MAX_STEPS" -gt 0 ]] && EXTRA_ARGS+=(--max_steps "$MAX_STEPS")
 [[ "$GATHER" != "1" ]] && EXTRA_ARGS+=(--no_gather_across_devices)

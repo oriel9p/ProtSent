@@ -53,9 +53,12 @@ class LossWithGOR(nn.Module):
         self,
         model,
         base_loss: nn.Module,
-        gor_weight: float = 0.1,
-        mini_batch_size: int = 32,
-        max_samples: int = 128,
+        gor_weight: float = 1.0,
+        mini_batch_size: int = 48,
+        max_samples: int = 192,
+        mean_weight: float = 1.0,
+        second_moment_weight: float = 1.0,
+        aggregation: str = "mean",
     ):
         super().__init__()
         if gor_weight < 0:
@@ -77,7 +80,12 @@ class LossWithGOR(nn.Module):
                     "sentence-transformers>=5.3.0"
                 ) from exc
 
-            self.gor = GlobalOrthogonalRegularizationLoss(model)
+            self.gor = GlobalOrthogonalRegularizationLoss(
+                model,
+                mean_weight=mean_weight,
+                second_moment_weight=second_moment_weight,
+                aggregation=aggregation,
+            )
 
             # Replace GlobalOrthogonalRegularizationLoss.forward, which embeds the
             # whole batch at once with grad enabled. GOR is a moment-matching

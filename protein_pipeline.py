@@ -817,13 +817,41 @@ def _enforce_max_seq_length(model: SentenceTransformer, max_seq_length: int) -> 
     ``SentenceTransformer(dir)``, which reads the limit off the checkpoint's own
     tokenizer and so reintroduces the bug for the resumed half of a run.
 
-    Only ever tightens. A backbone whose tokenizer declares a shorter limit than
-    the caller asked for keeps its own, because raising it past the position
-    budget is how you get silent garbage rather than a clear error.
+    Sets the requested value in both directions, clamped to what the backbone can
+    actually encode. Tighten-only was wrong: a checkpoint saved after this fix
+    carries a 512 tokenizer, so resuming it at --max_seq_length 1024 would have
+    silently stayed at 512. The clamp reads the position budget off the model
+    config rather than the tokenizer, because the tokenizer is exactly the thing
+    that lies here (FastPLM declares model_max_length = 1e24).
     """
-    if max_seq_length and 0 < max_seq_length < model.max_seq_length:
-        model.max_seq_length = max_seq_length
+    if not max_seq_length or max_seq_length <= 0:
+        logger.info("   ✂️  max_seq_length left at %s", model.max_seq_length)
+        return
+
+    budget = _backbone_position_budget(model)
+    target = min(max_seq_length, budget) if budget else max_seq_length
+    if budget and max_seq_length > budget:
+        logger.warning(
+            "   ⚠️  --max_seq_length %s exceeds the backbone's %s position budget; using %s",
+            max_seq_length,
+            budget,
+            target,
+        )
+    model.max_seq_length = target
     logger.info("   ✂️  max_seq_length enforced at %s", model.max_seq_length)
+
+
+def _backbone_position_budget(model: SentenceTransformer) -> Optional[int]:
+    """Longest input the backbone can encode, in the units ST counts (incl. specials).
+
+    ``None`` when the config does not say, in which case the caller's value is
+    trusted as-is — the pre-existing behaviour for backbones we have not measured.
+    """
+    try:
+        budget = model[0].auto_model.config.max_position_embeddings
+    except (AttributeError, IndexError, KeyError, TypeError):
+        return None
+    return int(budget) if budget and int(budget) > 0 else None
 
 
 def _load_model_for_training(
@@ -1596,9 +1624,32 @@ def _best_family_col_for_file(file_path: str) -> str:
     )
 
 
+def _mnrl_directions(args) -> tuple:
+    """Which InfoNCE interaction terms MNRL scores.
+
+    Default is symmetric. sentence-transformers defaults to ``("query_to_doc",)``
+    because its canonical task is asymmetric — a short query against a long
+    document. Every contrastive corpus here is symmetric instead: Pfam and AFDB
+    pairs are two members of one cluster, STRING pairs are two interacting
+    proteins, and neither column is privileged. The reverse term costs no extra
+    forward pass, the embeddings are already computed. V1/V2/V2.5 all trained
+    one-directional.
+    """
+    return tuple(getattr(args, "mnrl_directions", None) or ("query_to_doc",))
+
+
+def _resolve_primary_loss(args) -> str:
+    """The contrastive loss ``--loss_mode multi`` will actually build."""
+    configured = getattr(args, "multi_primary_loss", "auto")
+    if configured == "auto":
+        return getattr(args, "multi_mnrl_loss", "mnrl")
+    return configured
+
+
 def _resolve_batch_sampler(
     batch_sampler: str,
     loss_mode: str,
+    primary_loss: str = "",
 ) -> Optional[object]:
     if batch_sampler == "none":
         return None
@@ -1609,9 +1660,15 @@ def _resolve_batch_sampler(
         return None
 
     if batch_sampler == "auto":
-        if loss_mode in {"mnrl", "cached_mnrl", "cached_gist", "gist"}:
+        # "multi" is a container, not a loss: dispatch on the contrastive loss it
+        # actually builds. Without this it fell through to None, so every
+        # multi-dataset run silently trained without NO_DUPLICATES even though the
+        # primary loss was CachedMNRL, which the ST docs explicitly pair with it.
+        # ProtSent-V2 and V2.5 both trained that way.
+        effective = primary_loss if loss_mode == "multi" and primary_loss else loss_mode
+        if effective in {"mnrl", "cached_mnrl", "cached_gist", "gist"}:
             return BatchSamplers.NO_DUPLICATES
-        if loss_mode == "triplet":
+        if effective == "triplet":
             return BatchSamplers.GROUP_BY_LABEL
         return None
 
@@ -2192,7 +2249,9 @@ def run_training(args):
             "Use PFAM hierarchy data, or re-enable --triplet_use_group_id."
         )
 
-    batch_sampler = _resolve_batch_sampler(args.batch_sampler, loss_mode)
+    batch_sampler = _resolve_batch_sampler(
+        args.batch_sampler, loss_mode, _resolve_primary_loss(args)
+    )
     if (
         BatchSamplers is not None
         and batch_sampler == BatchSamplers.GROUP_BY_LABEL
@@ -2540,6 +2599,10 @@ def run_training(args):
             loss_obj,
             gor_weight=gor_weight,
             mini_batch_size=mini_batch_size,
+            max_samples=getattr(args, "gor_max_samples", 192),
+            mean_weight=getattr(args, "gor_mean_weight", 1.0),
+            second_moment_weight=getattr(args, "gor_second_moment_weight", 1.0),
+            aggregation=getattr(args, "gor_aggregation", "mean"),
         )
 
     # ── Build datasets & loss, then train ────────────────────────────────
@@ -2664,6 +2727,7 @@ def run_training(args):
                 similarity_fct=similarity_fct,
                 mini_batch_size=args.mnrl_mini_batch_size,
                 gather_across_devices=_gather_across_devices,
+                directions=_mnrl_directions(args),
             )
         else:
             loss = losses.MultipleNegativesRankingLoss(
@@ -2671,6 +2735,7 @@ def run_training(args):
                 scale=mnrl_scale,
                 similarity_fct=similarity_fct,
                 gather_across_devices=_gather_across_devices,
+                directions=_mnrl_directions(args),
             )
 
         loss = _apply_gor(loss)
@@ -2791,11 +2856,7 @@ def run_training(args):
                 return max(1, args.max_map_rows // max(1, len(files)))
             return 0
 
-        configured_primary = getattr(args, "multi_primary_loss", "auto")
-        legacy_mnrl = getattr(args, "multi_mnrl_loss", "mnrl")
-        primary_loss = (
-            legacy_mnrl if configured_primary == "auto" else configured_primary
-        )
+        primary_loss = _resolve_primary_loss(args)
         allowed_primary = {"mnrl", "cached_mnrl", "triplet", "gist", "cached_gist"}
         if primary_loss not in allowed_primary:
             raise ValueError(
@@ -2806,7 +2867,7 @@ def run_training(args):
         logger.info(
             "🎛️ Multi-task primary loss resolved: %s (legacy multi_mnrl_loss=%s)",
             primary_loss,
-            legacy_mnrl,
+            getattr(args, "multi_mnrl_loss", "mnrl"),
         )
 
         # Similarity function for MNRL variants.
@@ -2843,6 +2904,7 @@ def run_training(args):
                         similarity_fct=similarity_fct,
                         mini_batch_size=args.mnrl_mini_batch_size,
                         gather_across_devices=_gather_across_devices,
+                        directions=_mnrl_directions(args),
                     )
                 )
             if primary_loss == "mnrl":
@@ -2852,6 +2914,7 @@ def run_training(args):
                         scale=mnrl_scale,
                         similarity_fct=similarity_fct,
                         gather_across_devices=_gather_across_devices,
+                        directions=_mnrl_directions(args),
                     )
                 )
             if primary_loss == "cached_gist":
@@ -3476,7 +3539,7 @@ if __name__ == "__main__":
     train_cmd.add_argument(
         "--mnrl_mini_batch_size",
         type=int,
-        default=256,
+        default=192,
         help="Mini-batch size for CachedMultipleNegativesRankingLoss / CachedGISTEmbedLoss. "
         "Ignored by non-cached MNRL/GIST except as a legacy DMS fallback in helper tests.",
     )
@@ -3553,11 +3616,49 @@ if __name__ == "__main__":
         "as pushing them apart can hurt performance.",
     )
     train_cmd.add_argument(
+        "--mnrl_directions",
+        nargs="+",
+        default=["query_to_doc", "doc_to_query"],
+        choices=["query_to_doc", "query_to_query", "doc_to_query", "doc_to_doc"],
+        help="InfoNCE interaction terms for (Cached)MNRL. Default is symmetric, which "
+        "suits this data: both columns of a pair are proteins drawn the same way. "
+        "Pass just query_to_doc to reproduce V1/V2/V2.5.",
+    )
+    train_cmd.add_argument(
         "--gor_weight",
         type=float,
         default=0.0,
-        help="Optional GlobalOrthogonalRegularizationLoss weight for contrastive losses "
-        "(requires sentence-transformers>=5.3.0). Use 0 to disable; start with 0.1.",
+        help="Outer multiplier on GlobalOrthogonalRegularizationLoss for contrastive "
+        "losses (requires sentence-transformers>=5.3.0). 0 disables. The GOR paper "
+        "(1708.06320) uses 1.0; V2.5 ran 0.1 and moved geometry but no task metric.",
+    )
+    train_cmd.add_argument(
+        "--gor_max_samples",
+        type=int,
+        default=192,
+        help="Rows per column GOR estimates from. The second-moment term is a tail "
+        "statistic and converges slowly, so this trades accuracy for an extra "
+        "grad-enabled forward pass. 0 uses the whole batch.",
+    )
+    train_cmd.add_argument(
+        "--gor_mean_weight",
+        type=float,
+        default=1.0,
+        help="Weight on GOR's mean term. EmbeddingGemma (2509.20354) sets this to 0, "
+        "keeping only the second moment.",
+    )
+    train_cmd.add_argument(
+        "--gor_second_moment_weight",
+        type=float,
+        default=1.0,
+        help="Weight on GOR's second-moment term.",
+    )
+    train_cmd.add_argument(
+        "--gor_aggregation",
+        choices=["mean", "sum"],
+        default="mean",
+        help="How GOR combines its per-column losses. For a 2-column dataset sum is "
+        "exactly 2x mean, so this only rescales --gor_weight.",
     )
     train_cmd.add_argument("--max_files", type=int, default=0)
     train_cmd.add_argument("--max_pairs_per_cluster", type=int, default=30)

@@ -30,12 +30,14 @@ class _FakeModel:
         return {"sentence_embedding": features["input_ids"].float()}
 
 
-def _install_fake_gor(monkeypatch: pytest.MonkeyPatch, seen: list):
+def _install_fake_gor(monkeypatch: pytest.MonkeyPatch, seen: list, built: list = None):
     from sentence_transformers.sentence_transformer import losses as st_losses
 
     class _FakeGOR(nn.Module):
-        def __init__(self, model):
+        def __init__(self, model, **term_weights):
             super().__init__()
+            if built is not None:
+                built.append(term_weights)
 
         def forward(self, sentence_features, labels=None):  # replaced by the wrapper
             raise AssertionError("patched_forward should have replaced this")
@@ -63,6 +65,28 @@ def test_loss_with_gor_adds_weighted_regularizer(
 
     # 3.0 + 0.25 * (1.5 + 0.5)
     assert loss(_features(8), None).item() == pytest.approx(3.5)
+
+
+def test_gor_term_weights_reach_the_regularizer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EmbeddingGemma drops the mean term entirely, so these must be reachable
+    rather than frozen at the sentence-transformers defaults."""
+    seen: list = []
+    built: list = []
+    _install_fake_gor(monkeypatch, seen, built)
+
+    LossWithGOR(
+        _FakeModel(),
+        _ConstantLoss(0.0),
+        gor_weight=1.0,
+        mean_weight=0.0,
+        second_moment_weight=1.0,
+        aggregation="sum",
+    )
+    assert built == [
+        {"mean_weight": 0.0, "second_moment_weight": 1.0, "aggregation": "sum"}
+    ]
 
 
 def test_gor_subsamples_the_batch(monkeypatch: pytest.MonkeyPatch) -> None:
