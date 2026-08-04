@@ -52,6 +52,11 @@ uv run --no-sync accelerate launch --num_processes 4 --mixed_precision bf16 \
           /storage/users/ddofer/data/afdb_sorted.parquet \
           /storage/users/ddofer/data/stringdb_train.parquet \
   --loss_mode multi --multi_primary_loss "$PRIMARY_LOSS" \
+  `# pinned: the defaults changed after this run finished. --batch_sampler auto now
+   # resolves to NO_DUPLICATES for multi-task runs and --mnrl_directions defaults to
+   # symmetric, so without these two the script no longer reproduces the run RUNS.md
+   # attributes to it.` \
+  --batch_sampler none --mnrl_directions query_to_doc \
   --gor_weight 0.0 \
   --matryoshka --matryoshka_dims 64 128 512 \
   --max_seq_length "$MAX_SEQ_LENGTH" --max_pairs_per_cluster 500 --no-compile \

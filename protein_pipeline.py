@@ -817,41 +817,20 @@ def _enforce_max_seq_length(model: SentenceTransformer, max_seq_length: int) -> 
     ``SentenceTransformer(dir)``, which reads the limit off the checkpoint's own
     tokenizer and so reintroduces the bug for the resumed half of a run.
 
-    Sets the requested value in both directions, clamped to what the backbone can
-    actually encode. Tighten-only was wrong: a checkpoint saved after this fix
-    carries a 512 tokenizer, so resuming it at --max_seq_length 1024 would have
-    silently stayed at 512. The clamp reads the position budget off the model
-    config rather than the tokenizer, because the tokenizer is exactly the thing
-    that lies here (FastPLM declares model_max_length = 1e24).
-    """
-    if not max_seq_length or max_seq_length <= 0:
-        logger.info("   ✂️  max_seq_length left at %s", model.max_seq_length)
-        return
+    Sets the requested value in both directions. Tighten-only was wrong: a
+    checkpoint saved after this fix carries a 512 tokenizer, so resuming it at
+    --max_seq_length 1024 would have silently stayed at 512.
 
-    budget = _backbone_position_budget(model)
-    target = min(max_seq_length, budget) if budget else max_seq_length
-    if budget and max_seq_length > budget:
-        logger.warning(
-            "   ⚠️  --max_seq_length %s exceeds the backbone's %s position budget; using %s",
-            max_seq_length,
-            budget,
-            target,
-        )
-    model.max_seq_length = target
+    Deliberately unclamped. The obvious guard — clamp to the backbone's
+    ``max_position_embeddings`` — is worthless for the models trained here: ESM-2
+    is rotary, so its declared 1026 bounds nothing, while ESM++/ESM-C omit the
+    field entirely and AMPLIFY spells it ``max_length``. A guard that only fires
+    where the number is meaningless is worse than none. ST's own
+    ``Transformer.max_seq_length`` already applies what bound it can.
+    """
+    if max_seq_length > 0:
+        model.max_seq_length = max_seq_length
     logger.info("   ✂️  max_seq_length enforced at %s", model.max_seq_length)
-
-
-def _backbone_position_budget(model: SentenceTransformer) -> Optional[int]:
-    """Longest input the backbone can encode, in the units ST counts (incl. specials).
-
-    ``None`` when the config does not say, in which case the caller's value is
-    trusted as-is — the pre-existing behaviour for backbones we have not measured.
-    """
-    try:
-        budget = model[0].auto_model.config.max_position_embeddings
-    except (AttributeError, IndexError, KeyError, TypeError):
-        return None
-    return int(budget) if budget and int(budget) > 0 else None
 
 
 def _load_model_for_training(
@@ -1652,11 +1631,13 @@ def _resolve_primary_loss(args) -> str:
     return configured
 
 
-def _resolve_batch_sampler(
-    batch_sampler: str,
-    loss_mode: str,
-    primary_loss: str = "",
-) -> Optional[object]:
+def _resolve_batch_sampler(batch_sampler: str, loss_mode: str) -> Optional[object]:
+    """Map a resolved loss to its sampler. Takes ``effective_loss``, never "multi".
+
+    The ST docs pair NO_DUPLICATES with (Cached)MNRL; V1, V2 and V2.5 all trained
+    without it, because this used to be handed the raw mode and "multi" matched
+    nothing here.
+    """
     if batch_sampler == "none":
         return None
     if BatchSamplers is None:
@@ -1666,21 +1647,7 @@ def _resolve_batch_sampler(
         return None
 
     if batch_sampler == "auto":
-        # "multi" is a container, not a loss: dispatch on the contrastive loss it
-        # actually builds. Without this it fell through to None, so every
-        # multi-dataset run silently trained without NO_DUPLICATES even though the
-        # primary loss was CachedMNRL, which the ST docs explicitly pair with it.
-        # ProtSent-V2 and V2.5 both trained that way.
-        #
-        # Only the MNRL/GIST family escalates. A multi-task run with a triplet
-        # primary keeps its historical None: GroupByLabelBatchSampler raises
-        # ValueError when a dataset has no label column, and a multi-task dict
-        # mixes labelled and unlabelled datasets, so escalating there would turn
-        # a working configuration into a crash at sampler construction.
-        pair_losses = {"mnrl", "cached_mnrl", "cached_gist", "gist"}
-        if loss_mode == "multi":
-            return BatchSamplers.NO_DUPLICATES if primary_loss in pair_losses else None
-        if loss_mode in pair_losses:
+        if loss_mode in {"mnrl", "cached_mnrl", "cached_gist", "gist"}:
             return BatchSamplers.NO_DUPLICATES
         if loss_mode == "triplet":
             return BatchSamplers.GROUP_BY_LABEL
@@ -2229,6 +2196,14 @@ def run_training(args):
     if loss_mode == "auto":
         loss_mode = "triplet" if (hierarchical or any_hierarchy) else "cached_mnrl"
 
+    # "multi" is a container, not a loss. Expand it here, once, next to the "auto"
+    # expansion above: every downstream test of the form `loss_mode in {...}` wants
+    # the contrastive loss that actually gets built, and each one that read the raw
+    # mode was silently dead for multi-task runs — the batch sampler resolved to
+    # None, and the cached-loss split logging plus its DDP warning never fired.
+    effective_loss = _resolve_primary_loss(args) if loss_mode == "multi" else loss_mode
+    mnrl_directions = _mnrl_directions(args)
+
     effective_rows = total_rows
     if args.max_map_rows > 0:
         effective_rows = min(total_rows, args.max_map_rows)
@@ -2263,9 +2238,16 @@ def run_training(args):
             "Use PFAM hierarchy data, or re-enable --triplet_use_group_id."
         )
 
-    batch_sampler = _resolve_batch_sampler(
-        args.batch_sampler, loss_mode, _resolve_primary_loss(args)
-    )
+    # A triplet primary under multi-task keeps the historical None:
+    # GroupByLabelBatchSampler raises when a dataset has no label column, and a
+    # multi-task dict mixes labelled and unlabelled datasets.
+    sampler_loss = "" if loss_mode == "multi" and effective_loss == "triplet" else effective_loss
+    batch_sampler = _resolve_batch_sampler(args.batch_sampler, sampler_loss)
+    if getattr(args, "length_bucketed_batches", False) and args.batch_sampler == "auto":
+        # Explicit bucketing beats an auto-resolved sampler: they set the same
+        # training_kwargs key, and the compatibility check below would otherwise
+        # turn every bucketed multi-task run into a hard error.
+        batch_sampler = None
     if (
         BatchSamplers is not None
         and batch_sampler == BatchSamplers.GROUP_BY_LABEL
@@ -2291,7 +2273,7 @@ def run_training(args):
             args.length_bucket_size,
         )
 
-    if loss_mode in {"cached_mnrl", "cached_gist"}:
+    if effective_loss in {"cached_mnrl", "cached_gist"}:
         cache_splits = (args.batch_size + args.mnrl_mini_batch_size - 1) // max(
             1, args.mnrl_mini_batch_size
         )
@@ -2613,10 +2595,8 @@ def run_training(args):
             loss_obj,
             gor_weight=gor_weight,
             mini_batch_size=mini_batch_size,
-            max_samples=getattr(args, "gor_max_samples", 192),
-            mean_weight=getattr(args, "gor_mean_weight", 1.0),
-            second_moment_weight=getattr(args, "gor_second_moment_weight", 1.0),
-            aggregation=getattr(args, "gor_aggregation", "mean"),
+            max_samples=args.gor_max_samples,
+            mean_weight=args.gor_mean_weight,
         )
 
     # ── Build datasets & loss, then train ────────────────────────────────
@@ -2741,7 +2721,7 @@ def run_training(args):
                 similarity_fct=similarity_fct,
                 mini_batch_size=args.mnrl_mini_batch_size,
                 gather_across_devices=_gather_across_devices,
-                directions=_mnrl_directions(args),
+                directions=mnrl_directions,
             )
         else:
             loss = losses.MultipleNegativesRankingLoss(
@@ -2749,7 +2729,7 @@ def run_training(args):
                 scale=mnrl_scale,
                 similarity_fct=similarity_fct,
                 gather_across_devices=_gather_across_devices,
-                directions=_mnrl_directions(args),
+                directions=mnrl_directions,
             )
 
         loss = _apply_gor(loss)
@@ -2918,7 +2898,7 @@ def run_training(args):
                         similarity_fct=similarity_fct,
                         mini_batch_size=args.mnrl_mini_batch_size,
                         gather_across_devices=_gather_across_devices,
-                        directions=_mnrl_directions(args),
+                        directions=mnrl_directions,
                     )
                 )
             if primary_loss == "mnrl":
@@ -2928,7 +2908,7 @@ def run_training(args):
                         scale=mnrl_scale,
                         similarity_fct=similarity_fct,
                         gather_across_devices=_gather_across_devices,
-                        directions=_mnrl_directions(args),
+                        directions=mnrl_directions,
                     )
                 )
             if primary_loss == "cached_gist":
@@ -3553,7 +3533,7 @@ if __name__ == "__main__":
     train_cmd.add_argument(
         "--mnrl_mini_batch_size",
         type=int,
-        default=192,
+        default=256,
         help="Mini-batch size for CachedMultipleNegativesRankingLoss / CachedGISTEmbedLoss. "
         "Ignored by non-cached MNRL/GIST except as a legacy DMS fallback in helper tests.",
     )
@@ -3660,19 +3640,6 @@ if __name__ == "__main__":
         default=1.0,
         help="Weight on GOR's mean term. EmbeddingGemma (2509.20354) sets this to 0, "
         "keeping only the second moment.",
-    )
-    train_cmd.add_argument(
-        "--gor_second_moment_weight",
-        type=float,
-        default=1.0,
-        help="Weight on GOR's second-moment term.",
-    )
-    train_cmd.add_argument(
-        "--gor_aggregation",
-        choices=["mean", "sum"],
-        default="mean",
-        help="How GOR combines its per-column losses. For a 2-column dataset sum is "
-        "exactly 2x mean, so this only rescales --gor_weight.",
     )
     train_cmd.add_argument("--max_files", type=int, default=0)
     train_cmd.add_argument("--max_pairs_per_cluster", type=int, default=30)

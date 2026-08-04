@@ -70,23 +70,14 @@ def test_loss_with_gor_adds_weighted_regularizer(
 def test_gor_term_weights_reach_the_regularizer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """EmbeddingGemma drops the mean term entirely, so these must be reachable
-    rather than frozen at the sentence-transformers defaults."""
+    """EmbeddingGemma drops the mean term entirely, so it must be reachable
+    rather than frozen at the sentence-transformers default of 1.0."""
     seen: list = []
     built: list = []
     _install_fake_gor(monkeypatch, seen, built)
 
-    LossWithGOR(
-        _FakeModel(),
-        _ConstantLoss(0.0),
-        gor_weight=1.0,
-        mean_weight=0.0,
-        second_moment_weight=1.0,
-        aggregation="sum",
-    )
-    assert built == [
-        {"mean_weight": 0.0, "second_moment_weight": 1.0, "aggregation": "sum"}
-    ]
+    LossWithGOR(_FakeModel(), _ConstantLoss(0.0), gor_weight=1.0, mean_weight=0.0)
+    assert built == [{"mean_weight": 0.0}]
 
 
 def test_gor_subsamples_the_batch(monkeypatch: pytest.MonkeyPatch) -> None:

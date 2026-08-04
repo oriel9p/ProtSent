@@ -32,13 +32,13 @@ uv run --no-sync python - <<'PY'
 import re, statistics, pathlib
 # tqdm prints "<elapsed><remaining, X.XXs/it]"; the last-40-of-60 window skips
 # warmup, the LR ramp's first steps, and any lazy CUDA init.
-for w in ("0p1", "0"):
-    p = pathlib.Path(f"logs/v2p5/timing_gor{w}.log")
-    if not p.exists():
-        print(f"gor={w}: no log"); continue
+# Glob rather than re-deriving the mangled names: the weight list lives in one
+# place (the bash loop above), and a hardcoded list here would print "no log"
+# after any edit to it.
+for p in sorted(pathlib.Path("logs/v2p5").glob("timing_gor*.log")):
     r = [float(x) for x in re.findall(r"(\d+\.\d+)s/it", p.read_text())][-40:]
     if not r:
-        print(f"gor={w}: no timings -- run failed, check the log"); continue
-    print(f"gor_weight={w:>3}  median {statistics.median(r):.3f} s/it  "
+        print(f"{p.stem}: no timings -- run failed, check the log"); continue
+    print(f"{p.stem:>16}  median {statistics.median(r):.3f} s/it  "
           f"n={len(r)}  min {min(r):.3f}  max {max(r):.3f}")
 PY
