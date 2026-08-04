@@ -1634,9 +1634,17 @@ def _resolve_primary_loss(args) -> str:
 def _resolve_batch_sampler(batch_sampler: str, loss_mode: str) -> Optional[object]:
     """Map a resolved loss to its sampler. Takes ``effective_loss``, never "multi".
 
-    The ST docs pair NO_DUPLICATES with (Cached)MNRL; V1, V2 and V2.5 all trained
-    without it, because this used to be handed the raw mode and "multi" matched
-    nothing here.
+    ``auto`` deliberately does NOT select NO_DUPLICATES for the MNRL family, even
+    though the sentence-transformers docs pair the two. That recommendation assumes
+    a shuffled corpus; ours are cluster-sorted, and at k=8 each protein recurs in
+    several consecutive pairs, so NoDuplicatesBatchSampler rejects long runs while
+    trying to fill a batch. Measured on 4 B300s at batch 1024: **zero steps in 23
+    minutes at 0% GPU**, against 10 steps in 4m44s with the sampler off. It is a
+    hang, not a slowdown.
+
+    Both variants stay reachable through an explicit --batch_sampler. The hashed
+    one makes each check cheap but does not reduce how many checks a sorted corpus
+    forces, so it is opt-in and unmeasured here rather than a new default.
     """
     if batch_sampler == "none":
         return None
@@ -1647,14 +1655,13 @@ def _resolve_batch_sampler(batch_sampler: str, loss_mode: str) -> Optional[objec
         return None
 
     if batch_sampler == "auto":
-        if loss_mode in {"mnrl", "cached_mnrl", "cached_gist", "gist"}:
-            return BatchSamplers.NO_DUPLICATES
         if loss_mode == "triplet":
             return BatchSamplers.GROUP_BY_LABEL
         return None
 
     mapping = {
         "no_duplicates": BatchSamplers.NO_DUPLICATES,
+        "no_duplicates_hashed": BatchSamplers.NO_DUPLICATES_HASHED,
         "group_by_label": BatchSamplers.GROUP_BY_LABEL,
     }
     return mapping.get(batch_sampler)
@@ -3495,9 +3502,11 @@ if __name__ == "__main__":
     )
     train_cmd.add_argument(
         "--batch_sampler",
-        choices=["auto", "no_duplicates", "group_by_label", "none"],
+        choices=["auto", "no_duplicates", "no_duplicates_hashed", "group_by_label", "none"],
         default="auto",
-        help="Batch sampler selection (map mode only)",
+        help="Batch sampler (map mode only). auto picks GROUP_BY_LABEL for triplet "
+        "and nothing otherwise: no_duplicates hangs on cluster-sorted corpora "
+        "(0 steps in 23 min, measured), so it is opt-in.",
     )
     train_cmd.add_argument(
         "--multi_dataset_sampler",

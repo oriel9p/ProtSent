@@ -35,26 +35,36 @@ pytestmark = pytest.mark.skipif(
 @pytest.mark.parametrize(
     ("effective_loss", "expected"),
     [
-        # The bug this fixes lived upstream of here: run_training passed the raw
-        # loss_mode, so "multi" matched nothing and every multi-dataset run trained
-        # without the sampler the CachedMNRL docs pair with it. This helper now only
-        # ever sees an already-resolved loss.
-        ("cached_mnrl", "NO_DUPLICATES"),
+        # auto must NOT escalate the MNRL family to NO_DUPLICATES. The ST docs
+        # recommend that pairing, but it assumes a shuffled corpus; ours are
+        # cluster-sorted and it measured zero steps in 23 minutes at 0% GPU.
+        ("cached_mnrl", None),
+        ("mnrl", None),
         ("triplet", "GROUP_BY_LABEL"),
         # A triplet primary under multi-task is masked to "" by the caller, because
         # GroupByLabelBatchSampler raises on a dataset with no label column and a
         # multi-task dict mixes labelled and unlabelled datasets.
         ("", None),
-        ("simcse", None),
     ],
 )
-def test_batch_sampler_resolution(effective_loss, expected) -> None:
+def test_auto_never_escalates_to_no_duplicates(effective_loss, expected) -> None:
     got = _resolve_batch_sampler("auto", effective_loss)
     assert got is (None if expected is None else getattr(BatchSamplers, expected))
 
 
-def test_explicit_batch_sampler_overrides_auto() -> None:
-    assert _resolve_batch_sampler("none", "cached_mnrl") is None
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("none", None),
+        ("no_duplicates", "NO_DUPLICATES"),
+        ("no_duplicates_hashed", "NO_DUPLICATES_HASHED"),
+        ("group_by_label", "GROUP_BY_LABEL"),
+    ],
+)
+def test_explicit_batch_sampler_is_honoured(name, expected) -> None:
+    """Opt-in stays possible, including the hashed variant."""
+    got = _resolve_batch_sampler(name, "cached_mnrl")
+    assert got is (None if expected is None else getattr(BatchSamplers, expected))
 
 
 def test_primary_loss_resolution() -> None:
