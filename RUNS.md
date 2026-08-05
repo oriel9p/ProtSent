@@ -709,6 +709,46 @@ and a 20-minute timeout kills it (exit 124) at step 0 of 15. `GATHER` is a new
 toggle on that script and defaults to 0; anything multi-GPU with `--dms_file`
 should be smoke-tested this way before being trusted.
 
+**Gather is not the cause. Fixed 2026-08-05; this heading is kept only because
+the old name is what people will search for.** Diagnosed on ESM-C 300M
+(`train_esmc_300m_v2.sh`) and reproduced five times: 2 and 3 ranks, gather on and
+off, Matryoshka on and off, machine load 107 to 722. It always died at step 3,
+11, 19, 19 or 20, and turning gather off changed nothing except which collective
+mismatched first.
+
+The real mechanism is dataset sharding. accelerate's `BatchSamplerShard`
+(`_iter_with_no_split`) hands rank *i* batches *i, i+N, i+2N, ...*, so with a
+multi-dataset sampler the ranks routinely run **different datasets on the same
+step**. That is harmless while every dataset shares a loss, and fatal the moment
+one does not: `CachedMultipleNegativesRankingLoss` calls `.backward()` inside its
+own forward and `CoSENTLoss` does not, so on a mixed step the ranks emit
+different numbers of DDP gradient allreduces. Their collective streams drift
+apart and NCCL aborts on a type mismatch at one sequence number:
+
+    Rank 0: SeqNum=14603, ALLREDUCE, NumelIn=9285184     <- still in training_step
+    Rank 1: SeqNum=14603, ALLGATHER, NumelIn=1, NumelOut=3  <- already logging loss
+    Rank 2: SeqNum=14603, ALLGATHER, NumelIn=1, NumelOut=3
+
+`py-spy`-style SIGUSR1 stacks agree: rank 0 in `trainer.py:training_step`, the
+others in `trainer.py:_maybe_log_save_evaluate`, whose `_nested_gather(tr_loss)`
+is that 1-element allgather. A slow rank changes *when* a collective is issued,
+never *which* one, so this is not contention -- which is also why the failure
+step did not move while load varied sevenfold.
+
+**Fix:** `_align_proportional_sampler_to_world_size` in `protein_pipeline.py`
+emits batches in blocks of `world_size` from a single dataset, so every rank's
+slice of a block is that same dataset. It is applied automatically when the
+sampler is PROPORTIONAL and `dms_cosent` is in the interleave. Cost is the last
+`world_size - 1` batches of each dataset, single digits out of ~21.6k.
+`tests/test_sampler_alignment.py` asserts the hazard exists unpatched (4.4% of
+steps at 2 ranks, 6.5% at 3, 8.6% at 4) and is zero patched. After the fix the
+ESM-C 300M run cleared step 20 and kept going.
+
+**A short smoke does not clear this class of bug.** Ten steps ran clean at 37.5
+s/it before step 11 hung. The hazard is per-step and only fires once the sampler
+first splits datasets across ranks, so "it stepped fine for 10 steps" is not
+evidence of anything. Budget 30+ steps.
+
 **What this rules out.** On N GPUs there is no way to lower the per-device batch
 and recover the lost in-batch negatives through a gather. The parallelism that
 works is the one V2 already used: gather off, per-device batch 1024, so each rank
