@@ -1283,6 +1283,75 @@ class NoisySimCSECollator(SentenceTransformerDataCollator):
         return batch
 
 
+def _align_proportional_sampler_to_world_size(world_size: int) -> bool:
+    """Make every DDP rank draw the same dataset on the same step.
+
+    accelerate shards a batch sampler by handing rank i batches i, i+N, i+2N...
+    (``BatchSamplerShard._iter_with_no_split``). With a multi-dataset sampler
+    that means ranks routinely run *different* datasets on one step. That is
+    fine while every dataset shares a loss, and fatal the moment one does not:
+    CachedMNRL calls .backward() inside its own forward and CoSENT does not, so
+    the ranks emit different numbers of DDP gradient allreduces, their collective
+    streams drift apart, and NCCL's watchdog eventually aborts the job on a
+    type mismatch at the same sequence number:
+
+        Rank 0: SeqNum=14603, ALLREDUCE, NumelIn=9285184
+        Rank 1: SeqNum=14603, ALLGATHER, NumelIn=1, NumelOut=3
+
+    Reproduced five times on ESM-C 300M at 2 and 3 ranks, gather on and off,
+    machine load 107 to 722 -- always at step 11-20, which is what the ~5-7%
+    per-step chance of a mixed step predicts and what load does not.
+
+    Fix: emit batches in blocks of ``world_size`` from one dataset, so a rank's
+    slice of every block is that same dataset. Whole blocks only, so a dataset's
+    last (world_size - 1) batches at most are dropped -- single digits out of
+    ~21.6k. Returns False when there is nothing to patch.
+    """
+    if world_size <= 1:
+        return False
+    try:
+        from sentence_transformers.base.sampler import ProportionalBatchSampler
+        from torch.utils.data import SubsetRandomSampler
+    except ImportError:
+        logger.warning("Cannot align proportional sampler; leaving it unpatched.")
+        return False
+
+    def __iter__(self):
+        if self.generator and self.seed is not None:
+            self.generator.manual_seed(self.seed + self.epoch)
+
+        sample_offsets = [0]
+        for dataset in self.dataset.datasets:
+            sample_offsets.append(sample_offsets[-1] + len(dataset))
+
+        # One entry per whole block of world_size batches, shuffled as blocks and
+        # then expanded, so each run of world_size batches is one dataset.
+        blocks = [
+            idx
+            for idx, sampler in enumerate(self.batch_samplers)
+            for _ in range(len(sampler) // world_size)
+        ]
+        block_sampler = SubsetRandomSampler(blocks, generator=self.generator)
+
+        batch_samplers = [iter(sampler) for sampler in self.batch_samplers]
+        for dataset_idx in block_sampler:
+            sample_offset = sample_offsets[dataset_idx]
+            for _ in range(world_size):
+                try:
+                    yield [idx + sample_offset for idx in next(batch_samplers[dataset_idx])]
+                except StopIteration:
+                    break
+
+    ProportionalBatchSampler.__iter__ = __iter__
+    logger.info(
+        "🔒 Proportional sampler aligned to world_size=%d "
+        "(all ranks share a dataset per step; required when CoSENT and "
+        "CachedMNRL are interleaved under DDP)",
+        world_size,
+    )
+    return True
+
+
 def _resolve_dms_train_batch_size(
     base_batch_size: int,
     dms_batch_size: int,
@@ -3202,6 +3271,12 @@ def run_training(args):
             )
             training_kwargs["multi_dataset_batch_sampler"] = chosen
             logger.info("🎯 Multi-dataset sampler: %s", chosen)
+            # Only PROPORTIONAL is patched, and only when a non-CachedMNRL loss
+            # shares the interleave -- that is the combination that desyncs DDP.
+            if chosen == MultiDatasetBatchSamplers.PROPORTIONAL and (
+                "dms_cosent" in train_dataset
+            ):
+                _align_proportional_sampler_to_world_size(world_size)
         except ImportError:
             logger.warning("MultiDatasetBatchSamplers not available; using default.")
 
