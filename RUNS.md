@@ -14,6 +14,7 @@ which checkpoint produced it.
 | ProtSent-V2-150M (near-trough) | same run, checkpoint 3250 | same | `models/protsent_esm2_150m_v2_snapshots/checkpoint-3250` | `results/benchmarks/v2_150m/protsent_v2_150m_ckpt3250_*` | control for the peak-LR final checkpoint |
 | **ProtSent-V2.5-35M** | continues ProtSent-V2-35M | **decontaminated** dc40 + DMS | `models/protsent_esm2_35m_v2p5/final` | `results/benchmarks/v3/protsent_v2p5_*` | **done 2026-08-04 06:27**, 14,924 steps, GOR 0.1 |
 | ProtSent-V2.5-35M (noGOR) | same config, `--gor_weight 0` | same | `models/protsent_esm2_35m_v2p5_nogor/final` | `results/benchmarks/v3/protsent_v2p5_nogor_*` | ablation, done 2026-08-04 12:36 |
+| **ProtSent-V2.5-150M** | continues ProtSent-V2-150M | **decontaminated** dc40 + DMS | `models/protsent_esm2_150m_v2p5/final` | `results/benchmarks/v2_150m/protsent_v2p5_150m_*` | **done 2026-08-05 08:33**, k=8, 3,600 steps, GOR 1.0 |
 
 The internal `v3` in the 35M paths is an inherited `RUN_NAME`; the paper name for
 that model is **ProtSent-V2-35M**. The 150M directory is named for the paper
@@ -547,6 +548,116 @@ measurement leaves +0.0154 on the table after whitening and the whitening gain i
 +0.0555, so the channel is open at that scale. GOR was run at `gor_weight=0.1`
 with `max_samples=128` and both terms at 1.0 — an arbitrary weight, a tenth of
 the 1.0 the GOR paper uses. The null result is for that configuration at 35M.
+
+## ProtSent-V2.5-150M — a continuation pass on V2-150M (2026-08-05)
+
+`train_esm2_150m_v2p5.sh`. Started 2026-08-04 18:13 on 4 B300s, finished
+2026-08-05 08:33: 3,600 steps, 14 h 18 m, no OOM.
+
+Init is `models/protsent_150m_v2p5_init`, which is
+`models/protsent_esm2_150m_v2/final` with FastPLM's `config.json` and
+`tokenizer_config.json` restored from the `.fastplm` backups. Verified before
+training: 515 tensors, 147.7M parameters, max absolute difference **0.0** against
+the V2-150M weights.
+
+| setting | V2-150M | V2.5-150M |
+|---|---|---|
+| loss | CachedMNRL | + GOR 1.0 + DMS CoSENT |
+| `--mnrl_directions` | one-directional | symmetric |
+| `--batch_sampler` | none | none (explicit) |
+| batch / mini-batch | 1024 / 512 | 1024 / 64 |
+| `--gor_max_samples` | — | 64 |
+| k (pairs per cluster) | 5 | 8 |
+| LR | 2e-4 | 5e-5, half-cosine |
+| seeds (shuffle / global) | 40 / 41 | 17 / 11 |
+| steps / GPUs | 3,890 / 1 | 3,600 / 4 |
+| Matryoshka | off | off |
+
+Corpus: Pfam 777,306 + AFDB 18.98M + STRING 15.0M + DMS 1.0M = **35.8M pairs
+available**, of which 3,600 x 4,096 = **14.7M trained** (41%). AFDB exhausted at
+k=8 before the `--max_map_rows` cap bound; STRING hit its own file size.
+
+**Sizing.** `probe_150m_v2p5.sh`, 4 B300s: mini 256 OOMs at 260 GiB of 267 and
+mini 128 fits; len 768 OOMs at mini 128; Matryoshka [128, 640] hung at step 6 of
+10 twice and was killed at 20 min, so it was dropped; batch 2048 measures 501
+samples/s against batch 1024 / mini 64 at 273, but needs a near-empty box and
+OOMed once a co-tenant job took ~57 GiB per card. Two probe lessons worth
+keeping: a 10-step average is useless here because step one costs ~4 minutes
+(measure steps over a wall-clock window instead), and
+`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` breaks the DataLoader with
+`pidfd_getfd: Operation not permitted` because expandable segments do not
+support CUDA IPC.
+
+### Results
+
+SCOPe-40 retrieval, eligible queries (n=1,693 of 2,207). Alignment baselines are
+the authoritative ones named at the top of this file.
+
+| method | R@1 | R@10 | R@30 | MAP |
+|---|---:|---:|---:|---:|
+| ESM-2 150M | 0.5535 | 0.7702 | 0.8423 | 0.4236 |
+| MMseqs2 | 0.6556 | 0.7401 | 0.7566 | 0.4098 |
+| HMMER, filters off | 0.7525 | 0.8978 | 0.9232 | 0.6067 |
+| ProtSent-V1-150M | 0.6615 | 0.8943 | 0.9439 | 0.6431 |
+| ProtSent-V2-150M | 0.7431 | 0.9368 | 0.9681 | 0.7046 |
+| **ProtSent-V2.5-150M** | **0.7513** | **0.9445** | **0.9722** | **0.7227** |
+
+Paired bootstrap, 10,000 resamples, V2.5 − V2: R@1 +0.0095 [−0.0024, +0.0213]
+unresolved; R@10 +0.0077 [+0.0012, +0.0142]; R@30 +0.0053 [+0.0006, +0.0106];
+MAP +0.0189 [+0.0137, +0.0241]. Three of four exclude zero, against one of four
+at 35M. `results/benchmarks/scope40_bootstrap_ci_v2p5_150m.json`.
+
+Note the arm used: the authoritative V2-150M is `protsent_v2_150m_*`. The
+`protsent_v2_150m_ckpt3250_*` arm is the near-trough control, and comparing
+against it by mistake inflates every V2.5 − V2 delta (hit1 +0.0224 rather than
++0.0095, all four "significant").
+
+Win/tie/loss over the 20 tasks with a defined one-vs-rest AUC, ties at
+|δ| < 0.005, median δ:
+
+| comparison | k-NN | linear |
+|---|---|---|
+| V2.5 vs ESM-2 150M | 12W/2T/5L, +0.010 | 3W/2T/14L, −0.016 |
+| V2 vs ESM-2 150M | 9W/3T/7L, +0.004 | 3W/4T/12L, −0.014 |
+| V2.5 vs V1-150M | 13W/3T/3L, +0.007 | 4W/6T/9L, −0.004 |
+| V2.5 vs V2-150M | 8W/8T/3L, +0.001 | 3W/11T/5L, −0.003 |
+
+Both V2.5 − V2 medians sit inside the tie band. The per-metric breakdown shows
+the effect is entirely in the Spearman regression tasks, and that they move in
+opposite directions by probe: AUC +0.000 k-NN / −0.001 linear, F1_Macro −0.009 /
+−0.009, **Spearman +0.020 k-NN / −0.006 linear** (means over 8 / 2 / 9 tasks).
+Eval protocol is identical across all four arms — `--eval_split test`,
+`EvalMode=standard`, `BenchmarkSeed=42`, 23/23 clean per `bench_arm_status.py`.
+
+Largest k-NN gains: Fluorescence +0.068, Thermostability +0.033, Variant Effect
+(GB1) +0.025, Cloning +0.023, beta-lactamase +0.021. Largest linear losses: AAV
+Fitness −0.086, Stability −0.023. Both of those decline monotonically across the
+whole lineage at this scale (AAV 0.589 → 0.398 → 0.451 → 0.365; Stability 0.706 →
+0.699 → 0.663 → 0.639), so V2.5 continues a trend rather than starting one.
+
+**The AAV linear drop is not embedding collapse.** The obvious hypothesis — MNRL
+teaches near-identical sequences to be positives, so a mutational scan gets
+flattened — is measurable and false here. Over 3,000 AAV test variants:
+
+| arm | mean pairwise cosine | effective dim | best-direction corr with fitness |
+|---|---:|---:|---:|
+| ESM-2 150M | 0.9990 | 7.73 | 0.554 |
+| ProtSent-V2-150M | 0.9916 | 6.79 | 0.542 |
+| ProtSent-V2.5-150M | 0.9829 | 10.39 | 0.576 |
+
+V2.5 spreads the variants more, not less, and its best single linear direction
+correlates better with fitness than vanilla ESM-2's. Since that correlation is
+fitted in-sample on test while the probe is fitted on train, what degraded is
+train → test transfer, not the information content. AAV FLIP splits are
+constructed to be hard in exactly that way.
+
+DMS training sequences have zero exact overlap with the AAV Fitness (0/50,430),
+Stability, Variant Effect and Fluorescence test sets. The DMS parquet is still
+not MMseqs2-filtered, so this is an exact-match check, not an identity check.
+
+**Not attributable to GOR.** V2.5-150M changes six things at once (GOR, DMS,
+symmetric directions, k, seeds, batch geometry) and there is no GOR-off ablation
+at this scale. The 35M ablation found GOR contributed nothing measurable there.
 
 ## Loss-configuration audit (2026-08-04)
 
