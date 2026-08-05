@@ -233,3 +233,59 @@ CATH / ProtTucker-EAT results are a separate protocol and live in
 | Variant Effect (GB1) | Spearman | 0.8047 | 0.8448 | 0.8294 | 0.8268 |
 | beta-lactamase-PEER | Spearman | 0.7788 | 0.6807 | 0.6454 | 0.6939 |
 
+## 300M, knn probe
+
+| task | metric | ESM-C 300M (uncontrolled) | ISM-C 300M (uncontrolled) |
+|---|---|---:|---:|
+| AAV Fitness (FLIP) | Spearman | 0.4921 | 0.4835 |
+| Antibiotic Resistance | Accuracy | 0.9628 | 0.9420 |
+| Binary Subcellular Localization | AUC | 0.8813 | 0.8660 |
+| Cloning Classification | Spearman | 0.3272 | 0.5071 |
+| EC Classification | F1_Macro | 0.6404 | 0.5274 |
+| Enzyme Catalytic Efficiency | Spearman | 0.6957 | 0.6908 |
+| Fluorescence (TAPE) | Spearman | 0.3706 | 0.5436 |
+| Material Production | AUC | 0.7266 | 0.8087 |
+| Metal Ion Binding | AUC | 0.7369 | 0.6947 |
+| Molecular Function (GO) | F1_Macro | 0.5164 | 0.4378 |
+| Neuropeptide Precursor Prediction (ProFET/NeuroPID) | AUC | 0.9781 | 0.9673 |
+| Optimal pH | Spearman | 0.5113 | 0.4525 |
+| Peptide-HLA Binding | AUC | 0.7220 | 0.7457 |
+| Remote Homology (Fold) | Accuracy | 0.3545 | 0.4026 |
+| SCOPe-40 Structural Retrieval | eligible_MAP | 0.2212 | 0.2733 |
+| Signal Peptide Prediction (SignalP/ProteinBERT) | AUC | 0.9749 | 0.9679 |
+| Solubility (DeepSol) | AUC | 0.5944 | 0.6852 |
+| Stability (Biomap) | Spearman | 0.6935 | 0.5794 |
+| Subcellular Localisation | AUC | 0.7862 | 0.7756 |
+| Temperature Stability | Accuracy | 0.9257 | 0.8394 |
+| Thermostability (FLIP) | Spearman | 0.4497 | 0.4447 |
+| Variant Effect (GB1) | Spearman | 0.7989 | 0.7199 |
+| beta-lactamase-PEER | Spearman | 0.8239 | 0.8351 |
+
+## 300M, linear probe
+
+| task | metric | ESM-C 300M (uncontrolled) | ISM-C 300M (uncontrolled) |
+|---|---|---:|---:|
+| AAV Fitness (FLIP) | Spearman | 0.6058 | 0.5814 |
+| Antibiotic Resistance | Accuracy | 0.9814 | 0.9658 |
+| Binary Subcellular Localization | AUC | 0.9519 | 0.9394 |
+| Cloning Classification | Spearman | 0.5129 | 0.5736 |
+| EC Classification | F1_Macro | 0.6404 | 0.5274 |
+| Enzyme Catalytic Efficiency | Spearman | 0.6073 | 0.5845 |
+| Fluorescence (TAPE) | Spearman | 0.6155 | 0.6585 |
+| Material Production | AUC | 0.8454 | 0.8771 |
+| Metal Ion Binding | AUC | 0.7882 | 0.7662 |
+| Molecular Function (GO) | F1_Macro | 0.5164 | 0.4378 |
+| Neuropeptide Precursor Prediction (ProFET/NeuroPID) | AUC | 0.9915 | 0.9837 |
+| Optimal pH | Spearman | 0.5238 | 0.5079 |
+| Peptide-HLA Binding | AUC | 0.8659 | 0.8946 |
+| Remote Homology (Fold) | Accuracy | 0.6995 | 0.6705 |
+| SCOPe-40 Structural Retrieval | eligible_MAP | 0.2212 | 0.2733 |
+| Signal Peptide Prediction (SignalP/ProteinBERT) | AUC | 0.9942 | 0.9957 |
+| Solubility (DeepSol) | AUC | 0.7538 | 0.8222 |
+| Stability (Biomap) | Spearman | 0.7550 | 0.7003 |
+| Subcellular Localisation | AUC | 0.9231 | 0.9185 |
+| Temperature Stability | Accuracy | 0.9562 | 0.9333 |
+| Thermostability (FLIP) | Spearman | 0.5498 | 0.5517 |
+| Variant Effect (GB1) | Spearman | 0.8165 | 0.8412 |
+| beta-lactamase-PEER | Spearman | 0.8324 | 0.8082 |
+

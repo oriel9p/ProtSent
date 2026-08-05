@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import glob
 import json
-import os
 from pathlib import Path
 
 import pandas as pd
@@ -179,7 +178,9 @@ def ci_rows() -> list[dict]:
                     {
                         "comparison": comparison,
                         "metric": metric,
-                        "delta": round(v.get("mean", v.get("delta", 0.0)), 4),
+                        # No silent 0.0 default: an unrecognised key would read
+                        # as "no effect" rather than "not parsed".
+                        "delta": round(v["mean"] if "mean" in v else v["delta"], 4),
                         "ci_lo": round(lo, 4),
                         "ci_hi": round(hi, 4),
                         "excludes_zero": bool(lo > 0 or hi < 0),
@@ -236,7 +237,9 @@ def render(suite: pd.DataFrame, retrieval: pd.DataFrame, cis: pd.DataFrame) -> s
         lines += ["## Paired bootstrap comparisons", "",
                   _md(cis.set_index("comparison"), ["comparison", "metric", "source"]), ""]
 
-    for scale in ("35M", "150M"):
+    # Iterate the scales the data actually has. A literal list here silently
+    # dropped the 300M arms from the Markdown while leaving them in the CSV.
+    for scale in sorted(suite.scale.unique(), key=lambda s: int(s.rstrip("M"))):
         for probe in ("knn", "linear"):
             sub = suite[(suite.scale == scale) & (suite.probe == probe)]
             if sub.empty:
