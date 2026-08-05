@@ -1878,7 +1878,8 @@ def _build_pair_dataset(
     max_pairs: int,
     hard_negatives: bool = False,
     length_labels: bool = False,
-    max_seq_length: int = 1024,
+    max_seq_length: int = 512,
+    pair_sampling: str = "disjoint",
 ) -> Dataset:
     """Build a pair Dataset using a generator over group-sorted data.
 
@@ -1897,9 +1898,23 @@ def _build_pair_dataset(
         file_paths: Parquet file paths (must be pre-sorted by group_col).
         seq_col: Column name for sequences.
         group_col: Column name for group/family labels.
-        max_pairs_per_cluster: Cap on sequences sampled per group.
+        max_pairs_per_cluster: Per-group budget, as the k in C(min(n, k), 2).
         max_pairs: Global cap on emitted pairs (0 = no limit).
         hard_negatives: If True, include hard negative columns when present.
+        pair_sampling: How a group's pair budget is spent over its members.
+            ``"disjoint"`` (default) shuffles the group and pairs members off
+            two at a time, reshuffling as needed, so the budget touches as many
+            distinct sequences as it can. ``"combinations"`` is the original
+            behaviour: sample k members, emit every C(k, 2) pair among them.
+            Both emit the same number of pairs per group, so switching does not
+            change the corpus size, the step count, or the schedule.
+
+            Measured on AFDB at k=8: ``combinations`` reuses each sampled
+            sequence in 7 pairs and reaches 5.7% of the corpus, because 97% of
+            sequences sit in groups larger than the cap and only 3.14% of those
+            members are ever drawn. ``disjoint`` spends the identical budget on
+            29.3% of the corpus. Use ``combinations`` to reproduce V1, V2 or
+            V2.5.
 
     Returns:
         HuggingFace Dataset with sentence_0, sentence_1,
@@ -1940,14 +1955,45 @@ def _build_pair_dataset(
         if has_neg:
             columns.append("hard_negative")
 
+        def _group_pairs(n: int):
+            """Index pairs for one group of n members, under the k budget.
+
+            Both modes emit the same count, C(min(n, k), 2), so the per-group
+            weighting that keeps a 303k-member cluster from swamping a 9-member
+            one is unchanged. They differ only in how many distinct members that
+            budget touches.
+            """
+            k = min(n, max_pairs_per_cluster)
+            budget = k * (k - 1) // 2
+            # At or under the cap the budget is every pair, so enumerate them.
+            # Disjoint pairing would spend the same budget with repeats -- a
+            # 3-member group yields one pair per shuffle, so three rounds can
+            # emit {01, 01, 02} and miss 12 entirely.
+            if n <= max_pairs_per_cluster or pair_sampling == "combinations":
+                yield from _comb(
+                    range(n) if n <= max_pairs_per_cluster else random.sample(range(n), k),
+                    2,
+                )
+                return
+            # Above the cap, pair members off two at a time from a shuffled
+            # order, so the budget touches min(2 * budget, n) distinct members
+            # instead of always k. Groups needing more than n // 2 pairs
+            # reshuffle, which repeats sequences but always with a new partner.
+            idx = list(range(n))
+            emitted = 0
+            while emitted < budget:
+                random.shuffle(idx)
+                for a_i, b_i in zip(idx[0::2], idx[1::2]):
+                    yield a_i, b_i
+                    emitted += 1
+                    if emitted >= budget:
+                        break
+
         def _flush_group():
             nonlocal total_pairs, skipped_null_neg
             if len(buf_seqs) < 2:
                 return
-            sample_idx = list(range(len(buf_seqs)))
-            if len(sample_idx) > max_pairs_per_cluster:
-                sample_idx = random.sample(sample_idx, max_pairs_per_cluster)
-            for a_i, b_i in _comb(sample_idx, 2):
+            for a_i, b_i in _group_pairs(len(buf_seqs)):
                 # A null hard negative must not become an empty sentence_2:
                 # MNRL pools every sentence_2 in the batch into the candidate
                 # set, so a "" would be a degenerate zero-residue negative that
@@ -2636,6 +2682,7 @@ def run_training(args):
                     seq_col=seq_col,
                     group_col=group_col,
                     max_pairs_per_cluster=args.max_pairs_per_cluster,
+                    pair_sampling=args.pair_sampling,
                     max_pairs=per_file_max,
                     hard_negatives=args.hard_negatives,
                     length_labels=args.length_bucketed_batches,
@@ -2673,6 +2720,7 @@ def run_training(args):
                     seq_col=seq_col,
                     group_col=group_col,
                     max_pairs_per_cluster=args.max_pairs_per_cluster,
+                    pair_sampling=args.pair_sampling,
                     max_pairs=args.max_map_rows,
                     hard_negatives=args.hard_negatives,
                     length_labels=args.length_bucketed_batches,
@@ -2999,6 +3047,7 @@ def run_training(args):
                         seq_col=seq_col,
                         group_col=group_col,
                         max_pairs_per_cluster=args.max_pairs_per_cluster,
+                        pair_sampling=args.pair_sampling,
                         max_pairs=_pair_cap_for_file(f),
                         hard_negatives=args.hard_negatives,
                         length_labels=args.length_bucketed_batches,
@@ -3652,6 +3701,16 @@ if __name__ == "__main__":
     )
     train_cmd.add_argument("--max_files", type=int, default=0)
     train_cmd.add_argument("--max_pairs_per_cluster", type=int, default=30)
+    train_cmd.add_argument(
+        "--pair_sampling",
+        choices=["disjoint", "combinations"],
+        default="disjoint",
+        help="How a cluster's pair budget is spent over its members. Both emit "
+        "C(min(n, k), 2) pairs per cluster, so this changes neither corpus size "
+        "nor step count. disjoint pairs members off two at a time and reaches "
+        "29%% of AFDB at k=8; combinations draws k members and emits every pair "
+        "among them, reaching 5.7%%. Use combinations to reproduce V1/V2/V2.5.",
+    )
     train_cmd.add_argument(
         "--gradient_checkpointing",
         action="store_true",
