@@ -15,6 +15,7 @@ which checkpoint produced it.
 | **ProtSent-V2.5-35M** | continues ProtSent-V2-35M | **decontaminated** dc40 + DMS | `models/protsent_esm2_35m_v2p5/final` | `results/benchmarks/v3/protsent_v2p5_*` | **done 2026-08-04 06:27**, 14,924 steps, GOR 0.1 |
 | ProtSent-V2.5-35M (noGOR) | same config, `--gor_weight 0` | same | `models/protsent_esm2_35m_v2p5_nogor/final` | `results/benchmarks/v3/protsent_v2p5_nogor_*` | ablation, done 2026-08-04 12:36 |
 | **ProtSent-V2.5-150M** | continues ProtSent-V2-150M | **decontaminated** dc40 + DMS | `models/protsent_esm2_150m_v2p5/final` | `results/benchmarks/v2_150m/protsent_v2p5_150m_*` | **done 2026-08-05 08:33**, k=8, 3,600 steps, GOR 1.0 |
+| **ProtSent-ESMC-300M-V2** | Synthyra ESMplusplus-small (vanilla ESM-C-300M) | **decontaminated** dc40 + DMS | `/storage/users/ddofer/protsent_models/protsent_esmc_300m_v2/final` | `results/benchmarks/ism/protsent_esmc_300m_v2_*` | **done 2026-08-07 15:00**, k=10, 7,216 steps, GOR/Matryoshka off |
 
 The internal `v3` in the 35M paths is an inherited `RUN_NAME`; the paper name for
 that model is **ProtSent-V2-35M**. The 150M directory is named for the paper
@@ -363,15 +364,44 @@ and retrieval tasks use a built-in evaluator and ignore `--probe_type`.
 | ProtSent-V2 35M | 0.6852 | 0.9220 | 0.6459 |
 | ProtSent-V2 150M | 0.7431 | 0.9368 | 0.7046 |
 | HMMER (phmmer, filters off) | 0.7525 | 0.8978 | 0.6067 |
+| **ProtSent-ESMC-300M-V2** | **0.7974** | **0.9539** | **0.7692** |
 
-**Do not read the ProtSent rows as beating ISM in a controlled sense.** They differ in
-both family and scale, and raw mean-pooled ESM-C is simply weak at retrieval — below even
-ESM-2 35M. Nothing here separates "contrastive post-training beats structure
-distillation" from "ESM-2 beats ESM-C at this task". The experiment that would is
-ProtSent post-training on an ESM-C backbone, giving a 2x2 of {ESM-C, ISM-C} x {raw,
-ProtSent}. `load_model_for_training` already builds a SentenceTransformer over
-`/storage/models/ISM-C-300M` (Transformer + Pooling, dim 960, 332,997,184 trainable), so
-that needs no code — only GPU time: 23.9M pairs at batch 1024 on one GPU is ~23,300 steps.
+**Do not read the ProtSent-V2-150M / -35M rows as beating ISM in a controlled sense.**
+They differ in both family and scale, and raw mean-pooled ESM-C is simply weak at
+retrieval — below even ESM-2 35M. Nothing there separates "contrastive post-training
+beats structure distillation" from "ESM-2 beats ESM-C at this task".
+
+**ProtSent-ESMC-300M-V2 is that missing cell.** ProtSent post-training run directly on
+the ESM-C backbone, giving the 2x2 of {ESM-C, ISM-C} x {raw, ProtSent} this section asked
+for. `load_model_for_training` already built a SentenceTransformer over
+`Synthyra/ESMplusplus_small` with no code changes needed — see
+`train_esmc_300m_v2.sh` and the sampler-hazard section below for what it took to get a
+multi-GPU run to survive. Point estimate is the best R@1 and MAP in the whole table,
+ProtSent or baseline — above HMMER filters-off, the project's authoritative top baseline
+(`results/benchmarks/hmmer_maxsens.json`). **This is a point estimate, not yet bootstrap
+CI'd** (the "Quote these" intervals above are for the 150M arms only) — do not cite the
+HMMER comparison as resolved until `bootstrap_ci.py` is run against this arm.
+
+### ProtSent-ESMC-300M-V2 vs its own backbone and vs ISM-C, 23 tasks
+
+Full per-task CSVs: `results/benchmarks/ism/protsent_esmc_300m_v2_{knn,linear}/`. Same
+`-e test`, seed 42, 23-task set as the ESM-C/ISM-C arms above, so directly comparable —
+`ism_comparison.py` has not been re-run for this arm, so these are hand-tallied counts,
+not the sign-test / bootstrap machinery used above. Do not upgrade these to a
+significance claim.
+
+| probe | vs ESM-C 300M (own backbone) | vs ISM-C 300M |
+|---|---|---|
+| kNN | 16W / 0T / 7L | 14W / 1T / 8L |
+| linear | 6W / 3T / 14L | 6W / 4T / 13L |
+
+Same shape as every other arm in this project: strong under kNN, weak under a trained
+linear probe. kNN wins concentrate in SCOPe-40 (see above), Remote Homology (0.681 vs
+0.355 base / 0.403 ISM-C), Metal Ion Binding, Optimal pH, Subcellular Localisation.
+Linear losses are largest exactly where kNN wins are largest elsewhere in the suite —
+Stability (0.459 vs 0.755 base / 0.700 ISM-C), beta-lactamase (0.682 vs 0.832 / 0.808),
+AAV Fitness (0.450 vs 0.606 / 0.581) — consistent with the alignment-leads-at-top-1
+pattern noted for the other arms; this is not a new failure mode.
 
 ## CATH v4.3 midnight-zone (ProtTucker / EAT)
 
