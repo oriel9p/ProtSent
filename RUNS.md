@@ -403,6 +403,20 @@ Stability (0.459 vs 0.755 base / 0.700 ISM-C), beta-lactamase (0.682 vs 0.832 / 
 AAV Fitness (0.450 vs 0.606 / 0.581) — consistent with the alignment-leads-at-top-1
 pattern noted for the other arms; this is not a new failure mode.
 
+**Contamination caveat, not unique to this arm.** `train_esmc_300m_v2.sh` interleaved
+`/storage/users/ddofer/data/dms_cosent.parquet` under CoSENT, and that file predates
+`protsent-data-dc40` — it was never run through the MMseqs2 decontamination pass the
+Pfam/AFDB/STRING sources got. Fluorescence, Stability, beta-lactamase-PEER and Variant
+Effect (GB1) are DMS/ProteinGym-derived, so this arm's numbers on those four tasks are
+unverified for train/test leakage; treat Stability and beta-lactamase above accordingly
+until checked at sequence identity. **The same unfiltered `dms_cosent.parquet` is also
+used by ProtSent-V2.5-35M and ProtSent-V2.5-150M above** (`train_esm2_35m_v2p5.sh`,
+`train_esm2_150m_v2p5.sh` both point at the identical path) — their "decontaminated dc40
++ DMS" table label refers only to the Pfam/AFDB/STRING portion, not the DMS portion. This
+was not previously called out in this file; the same four tasks on those two arms carry
+the same unverified-leakage caveat and it should be checked project-wide rather than
+assumed clean.
+
 ## CATH v4.3 midnight-zone (ProtTucker / EAT)
 
 Full writeup, results and controls: `results/benchmarks/cath_eat/CATH_COMPARISON.md`.
