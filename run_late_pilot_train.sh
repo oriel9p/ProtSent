@@ -13,7 +13,7 @@ ARM="${ARM:-protsent}"           # protsent | esm2
 GPUS="${GPUS:-2,3}"
 DATA="${DATA:-/storage/users/ddofer/data/protsent-data-dc40}"
 STEPS="${STEPS:-2000}"
-BATCH="${BATCH:-32}"
+BATCH="${BATCH:-128}"
 export HF_HOME="${HF_HOME:-/storage/models/hf_home}"
 export TOKENIZERS_PARALLELISM=false
 
@@ -36,6 +36,7 @@ run() {  # run <steps> <batch> <outdir> [extra args...]
     --num_processes "$NPROC" --mixed_precision bf16 --main_process_port 0 \
     train_late_interaction.py --model "$MODEL" --files "${FILES[@]}" \
     --output_dir "$outdir" --max_steps "$steps" --batch_size "$batch" \
+    --mini_batch_size "${MINI_BATCH:-64}" --score_mini_batch_size "${SCORE_MINI:-32}" \
     --run_name "${ARM}_late" "$@"
 }
 
