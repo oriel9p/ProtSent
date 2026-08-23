@@ -161,8 +161,8 @@ def main() -> None:
         lr_scheduler_type="cosine",
         batch_sampler=BatchSamplers.BATCH_SAMPLER,  # NO_DUPLICATES hangs on cluster-sorted corpora
         multi_dataset_batch_sampler=MultiDatasetBatchSamplers.ROUND_ROBIN,
-        save_strategy="steps",
-        save_steps=args.save_steps,
+        save_strategy="steps" if args.save_steps > 0 else "no",
+        save_steps=args.save_steps if args.save_steps > 0 else 500,
         save_total_limit=None,
         logging_steps=10,
         dataloader_num_workers=args.dataloader_num_workers,
