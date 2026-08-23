@@ -24,6 +24,10 @@ case "$ARM" in
 esac
 
 NPROC=$(( $(tr -cd , <<<"$GPUS" | wc -c) + 1 ))
+# NOTE: train_late_interaction.py caps each cluster file at --max_pairs_per_file
+# (default 2M) built from the *prefix* of the group-sorted corpus (~500k distinct
+# AFDB clusters at k=8). A <=2.5k-step pilot sees <<2M pairs per source, so this
+# only trades corpus randomness for build time; drop the cap for longer runs.
 FILES=("$DATA/pfam_sorted.parquet" "$DATA/afdb_sorted.parquet" "$DATA/stringdb_train_15M.parquet")
 
 run() {  # run <steps> <batch> <outdir> [extra args...]
