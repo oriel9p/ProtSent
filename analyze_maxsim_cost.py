@@ -74,6 +74,10 @@ def main() -> int:
         assert li.ranking_from_similarity(cos)[0].tolist() == [1, 2]
         assert rerank(cos, maxsim, 2)[0].tolist() == [2, 1]
         assert rerank(cos, maxsim, 1)[0].tolist() == [1, 2]
+        # a positive per-row rescale leaves every row's ranking untouched
+        lens = np.array([2.0, 5.0, 11.0])
+        assert (li.ranking_from_similarity(maxsim / lens[:, None])
+                == li.ranking_from_similarity(maxsim)).all()
         print("selfcheck ok")
         return 0
 
@@ -135,13 +139,13 @@ def main() -> int:
             # symmetrisation is the meaningful one.
             lens = np.array([min(len(x), args.max_seq_length - 2) for x in seqs], dtype=float)
             mean_sim = sim / lens[:, None]
-            mean_base = metrics(li.ranking_from_similarity(mean_sim), fam)
+            # MeanMaxSim on its own is not reported: rescaling a row by a positive constant
+            # cannot reorder that row, so every ranking metric is identical to MaxSim's.
             mean_sym = metrics(li.ranking_from_similarity((mean_sim + mean_sim.T) / 2), fam)
             sym_rows.append({"arm": name,
                              **{f"{k}_maxsim": v for k, v in base.items()},
                              **{f"{k}_symmetrised_raw": v for k, v in sym.items()},
-                             **{f"{k}_meanmaxsim": v for k, v in mean_base.items()},
-                             **{f"{k}_meanmaxsim_symmetrised": v for k, v in mean_sym.items()}})
+                             **{f"{k}_symmetrised_meanmaxsim": v for k, v in mean_sym.items()}})
             stem = name.replace("_zeroshot", "").replace("_late", "")
             cos = cosine_cache.get(stem)
             if cos is not None:

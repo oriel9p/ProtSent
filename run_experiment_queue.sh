@@ -63,10 +63,15 @@ queue_b() {  # GPU B: vanilla ESM2-150M late
 
 queue_c() {  # GPU C: cheap 35M ablations first, then the long runs
   local gpu="$1"
+  # These run on ONE GPU, where a step consumes batch_size pairs; the pilot arms ran
+  # on two, where a step consumes 2 x batch_size. 4,000 single-GPU steps therefore match
+  # the pilot's 512,000-pair budget, and the in-batch negative count (128) is identical
+  # either way because gather_across_devices is off. Comparing at equal steps instead of
+  # equal pairs would confound the ablation with half the training data.
   # C1 head size: 128-D projection vs the pilot's 64-D
-  train "$gpu" protsent_late_proj128 GrimSqueaker/ProtSent-V2-35M 2000 128 500 --proj_dim 128
+  train "$gpu" protsent_late_proj128 GrimSqueaker/ProtSent-V2-35M 4000 128 500 --proj_dim 128
   # C1b symmetry: identical recipe, pair order randomly swapped
-  train "$gpu" protsent_late_swap GrimSqueaker/ProtSent-V2-35M 2000 128 500 --swap_pair_order
+  train "$gpu" protsent_late_swap GrimSqueaker/ProtSent-V2-35M 4000 128 500 --swap_pair_order
   scope_rows "$gpu" "$RES/pilot_35m/scope" - \
     "protsent_late_proj128=late:$MODELS/protsent_late_proj128/late" \
     "protsent_late_swap=late:$MODELS/protsent_late_swap/late"

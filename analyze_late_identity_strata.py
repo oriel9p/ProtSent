@@ -21,7 +21,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from bootstrap_ci import boot_ci  # noqa: E402
+from bootstrap_ci import N_BOOT, boot_ci  # noqa: E402
 from scope_identity_correlation import load_identities  # noqa: E402
 
 THRESHOLDS = (0.4, 0.5, 0.7, 1.01)
@@ -53,7 +53,9 @@ def main() -> int:
     ap.add_argument("--npz_dir", default="results/late_interaction/pilot_35m/scope")
     ap.add_argument("--out", default="results/late_interaction/pilot_35m/scope/scope_identity_strata.csv")
     ap.add_argument("--levels", nargs="+", default=["family", "superfamily", "fold"])
-    ap.add_argument("--n_boot", type=int, default=1000)
+    ap.add_argument("--n_boot", type=int, default=N_BOOT,
+                    help="Resamples; defaults to bootstrap_ci.N_BOOT so this table matches "
+                         "scope_clean_subset.py's identity strata rather than resampling differently")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--selfcheck", action="store_true")
     args = ap.parse_args()
