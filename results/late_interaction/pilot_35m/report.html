@@ -133,10 +133,10 @@
     <h3>Late interaction is worth having. Most of the win needs no training.</h3>
     <p>Swapping pooled cosine for residue MaxSim improves retrieval on both backbones with <strong>zero training</strong>,
     on both benchmarks tested. Training a 64-D late head on top of vanilla ESM-2 buys a large further jump for
-    ~1.5 GPU-hours. Training the same head on top of ProtSent-V2 buys nothing on SCOPe and <em>costs</em> 3.3 points on
-    the harder CATH midnight-zone task — the 64-D projection is lossy compression, and on an already-contrastive
-    backbone that is all it is. The ordering survives restriction to low-identity queries; alignment still leads at
-    rank 1 while the late arms win ranking depth.</p>
+    ~1.5 GPU-hours. Training the same head on top of ProtSent-V2 buys nothing measurable: flat on SCOPe, and 3.3 points
+    below its own zero-shot scoring on CATH — a gap of five proteins on a 150-query benchmark, which is suggestive of
+    projection loss but not separable from noise. The ordering survives restriction to low-identity queries; alignment
+    still leads at rank 1 while the late arms win ranking depth.</p>
   </div>
   <div class="cards">
     <div class="card"><span class="k">Free (no training)</span><span class="v">.421 → .545</span>
@@ -145,8 +145,8 @@
     <div class="card"><span class="k">Bought by training</span><span class="v">.545 → .698</span>
       <span class="n">ESM-2 the rest of the way, for 512k pairs — 68× fewer than ProtSent-V2's own 34.8M-pair run</span></div>
     <div class="card"><span class="k">ProtSent + late training</span><span class="v">.684 → .681</span>
-      <span class="n">flat on SCOPe, −3.3 pts on CATH. Buys 7.5× smaller vectors and faster scoring — 5× on SCOPe,
-      only 1.6× on encode-dominated CATH — at a cost</span></div>
+      <span class="n">flat on SCOPe; 3.3 pts below its own zero-shot on CATH, but that is 5 of 150 queries and
+      not separable from noise. Buys 7.5× smaller vectors and faster scoring — 5× on SCOPe, 1.6× on CATH</span></div>
     <div class="card"><span class="k">Scoring, 2,207² pairs</span><span class="v">0.03 s → 8 s</span>
       <span class="n">cosine → 64-D MaxSim (480-D MaxSim: 41 s), on a shared 3–8 s encode</span></div>
     <div class="card"><span class="k">Best 35M arm on CATH</span><span class="v">61.3%</span>
@@ -340,7 +340,7 @@
   </div>
   <div class="tablewrap">
     <table>
-      <thead><tr><th>Arm</th><th>Scoring</th><th class="num">H-level accuracy</th><th class="num">vs its own dense</th><th class="num">Scoring runtime</th></tr></thead>
+      <thead><tr><th>Arm</th><th>Scoring</th><th class="num">H-level accuracy <span class="dim">(±7.8–8.0)</span></th><th class="num">vs its own dense</th><th class="num">Scoring runtime</th></tr></thead>
       <tbody>
         <tr class="baseline"><td>MMseqs2</td><td>alignment</td><td class="num">34.7</td><td class="num dim">—</td><td class="num dim">CPU</td></tr>
         <tr><td>ESM-2 35M</td><td>pooled, EAT 1-NN</td><td class="num">40.7</td><td class="num dim">—</td><td class="num dim">—</td></tr>
@@ -353,9 +353,12 @@
       </tbody>
       <caption>Two results worth separating. <strong>Zero-shot MaxSim on ProtSent-V2-35M is the best 35M configuration
       here</strong> — 61.3, within 1.4 points of the four-times-larger 150M dense model, for no training at all.
-      And the trained 64-D head, which merely looked flat on SCOPe, is <strong>3.3 points worse</strong> than the
-      untrained 480-D residues it was distilled from: on an already-contrastive backbone the projection is lossy
-      compression, and the harder benchmark shows the loss. Dense rows use the published EAT protocol (euclidean 1-NN
+      And the trained 64-D head, which looked flat on SCOPe, sits 3.3 points <em>below</em> the untrained 480-D
+      residues it projects from — consistent with the projection being lossy compression on an already-contrastive
+      backbone. Read that gap carefully: <strong>test_h holds 150 queries, so one protein is 0.67 points and 3.3 points
+      is five proteins</strong>. Each arm's own 95% interval is ±8 points, and even the most favourable paired
+      (McNemar) assumption — that the two arms disagree on exactly those five queries and no others — gives p = 0.07.
+      The direction is worth chasing; the magnitude is not yet established. Dense rows use the published EAT protocol (euclidean 1-NN
       on unnormalised embeddings); MaxSim rows use cosine-space MaxSim, so the two groups are labelled separately
       rather than merged. Note CATH is encode-dominated (150 × 69,605), which is why 64-D is only 1.6× faster than
       480-D here against 5× on SCOPe.</caption>
@@ -551,6 +554,10 @@
     <li><strong>Function benchmarks are thin.</strong> EC, metal-ion binding and catalytic efficiency are in; GO-MF and
     CAFA5 are not, so "does late training hurt function prediction?" is half-answered. EC is mildly negative for both
     late arms under both probes; metal-ion binding is negative under KNN but positive for ProtSent under linear.</li>
+    <li><strong>CATH's test_h split is 150 queries.</strong> Every accuracy in that table carries a ±8-point marginal
+    interval, so only the large gaps there (dense → MaxSim, +14 for ESM-2) are safe to lean on; the 3.3-point
+    trained-vs-zero-shot difference is five proteins. Per-query correctness is now saved so future runs can compare
+    arms with McNemar instead of by subtraction.</li>
     <li><strong>Built on ProtSent-V2, not the shipped V2.5.</strong> Numbers here should not be quoted against V2.5 results.</li>
     <li><strong>No PROTOCOL comparison.</strong> Different splits, relevance definitions and hierarchy level — a direct
     number-to-number comparison would be wrong without redoing their protocol.</li>

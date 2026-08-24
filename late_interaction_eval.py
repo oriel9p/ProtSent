@@ -277,9 +277,18 @@ def cmd_cath(args) -> None:
         t0 = time.time()
         sim = scorer(gal_seqs, queries=q_seqs, bs=args.batch_size)
         pred = gal_y[np.argmax(sim, axis=1)]
+        correct = (pred == q_y)
+        acc = float(correct.mean())
+        # test_h is 150 queries, so one query is 0.67 points and a 3-point gap is five
+        # proteins. Save per-query correctness so arms can be compared with McNemar
+        # rather than by eyeballing accuracies, and carry the marginal CI in the row.
+        half_width = 1.96 * float(np.sqrt(acc * (1 - acc) / len(q_y)))
+        np.savez_compressed(Path(args.out_dir) / f"cath_per_query_{name.replace('/', '_')}.npz",
+                            correct=correct, labels=q_y)
         rows.append({
             "model": name, "scoring": scoring, "level": args.label_col, "test_split": args.test_split,
-            "accuracy": float((pred == q_y).mean()), "n_queries": int(len(q_y)),
+            "accuracy": acc, "ci95_half_width": round(half_width, 4),
+            "n_queries": int(len(q_y)), "n_correct": int(correct.sum()),
             "n_lookup": int(len(gal_y)), "runtime_s": round(time.time() - t0, 2),
         })
         logger.info("%s cath %s: acc=%.4f", name, args.test_split, rows[-1]["accuracy"])
