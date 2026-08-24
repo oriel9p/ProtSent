@@ -117,11 +117,11 @@
 <header class="masthead">
   <div class="eyebrow">ProtSent · late-interaction pilot · 35M</div>
   <h1>Residue-level MaxSim for protein retrieval</h1>
-  <p class="standfirst">What ColBERT-style late interaction costs, what it buys, and which of those gains need
-  training at all. Everything here is measured on this box — A100-80GBs, sentence-transformers 6.0, a 2,000-step
-  contrastive continuation per arm. Fourth revision: scoring the trained backbones at their <em>native</em> 480-D
-  residues, rather than through the 64-D head, separated two effects that were confounded in every earlier version —
-  and reversed the conclusion about what late training does to a ProtSent backbone.</p>
+  <p class="standfirst">A dense protein model squeezes each protein into <strong>one</strong> vector and compares two
+  proteins with a single dot product. A late-interaction model keeps <strong>one small vector per residue</strong>, and
+  compares two proteins by letting every residue of one shop for its best match in the other and adding those matches
+  up — that operation is MaxSim. This is what that costs, what it buys, and which of the gains need training at all.
+  Measured on A100-80GBs with sentence-transformers 6.0.</p>
   <div class="meta">
     <span>branch LateInteractions</span><span>2026-08-24</span><span>ESM-2 35M scale</span><span>150M arms + ablations still running</span>
   </div>
@@ -181,9 +181,31 @@
       residues — which is exactly the distinction this revision exists to make. "+ MaxSim" means <strong>no late head
       and no late training</strong>; it does not mean an untrained model, and ProtSent-V2 in particular is heavily
       post-trained already. Both late arms trained 2,000 steps / 512,000 pairs on the general ProtSent-V2 pair corpus
-      — never on a benchmark's training set — for ~1.5 GPU-h each, against the 4,850 steps / 34.8M pairs behind
-      ProtSent-V2 itself.</caption>
+      — never on a benchmark's training set — for ~1.5 GPU-h each. Two GPUs × 128 sequences means the optimiser sees
+      256 pairs per step, while the contrastive comparison stays within each GPU's 128 (<code>gather_across_devices</code>
+      is off), so <strong>in-batch negatives are 128</strong>. ProtSent-V2 is ESM-2 35M after its own contrastive
+      post-training on 34.8M Pfam / AFDB / STRING pairs — the same three sources used here, filtered against the
+      remote-homology and PPI test splits but <em>not</em> against SCOPe or CATH, which is why the contamination check
+      below exists.</caption>
     </table>
+  </div>
+  <div class="prose">
+    <h3>Terms used throughout</h3>
+    <dl class="method" style="max-width: none">
+      <dt>MaxSim</dt><dd>the late-interaction score: for each residue of the query, its best match anywhere in the
+      document, summed. One number per protein pair, as cosine gives one number per pair.</dd>
+      <dt>R@1 / R@10</dt><dd>recall at 1 and 10: the fraction of queries with at least one correct hit that high in the
+      ranking. <strong>MAP</strong> is mean average precision over the <em>whole</em> ranking, so it rewards depth that
+      R@10 cannot see.</dd>
+      <dt>Eligible</dt><dd>a query with at least one non-self protein sharing its label. The rest are unreachable for
+      any method, so they are excluded from the headline metrics (1,693 / 2,020 / 2,116 queries at family /
+      superfamily / fold).</dd>
+      <dt>Transfer suite</dt><dd>ProtBench's 13-task benchmark of frozen-embedding probes — everything from solubility
+      to secondary structure. Distinct from "mean-pooled", which is what the model does to residues.</dd>
+      <dt>W / T / L</dt><dd>win / tie / loss counts across those tasks, ties being |Δ| &lt; 0.005.</dd>
+      <dt>EAT</dt><dd>embedding-based annotation transfer: label a query with its nearest neighbour's label. The CATH
+      convention, and the protocol behind that benchmark's published numbers.</dd>
+    </dl>
   </div>
   <div class="prose">
     <h3>Method, in full</h3>
@@ -211,7 +233,7 @@
     <div class="step"><span class="stage">Stage 1 · read</span><span class="what">Run the protein through the model</span>
       <span class="cost">identical to dense; the 480→64 head is &lt;0.1% of forward FLOPs</span></div>
     <div class="step"><span class="stage">Stage 2 · store</span><span class="what">Keep the vectors</span>
-      <span class="cost">480 numbers dense · 9,878 at 64-D (20.6×) · 74,088 zero-shot (154×)</span></div>
+      <span class="cost">one vector per protein, or one per residue — see the table</span></div>
     <div class="step"><span class="stage">Stage 3 · compare</span><span class="what">Score a pair</span>
       <span class="cost">cosine 1 dot product · MaxSim L<sub>q</sub>×L<sub>d</sub> dot products, chunked on GPU</span></div>
     <div class="step"><span class="stage">Stage 4 · train (optional)</span><span class="what">Teach the head</span>
@@ -233,52 +255,12 @@
     </table>
   </div>
   <div class="prose">
-    <p>Two things follow that matter for anything bigger than a benchmark. <strong>Storage scales with residues:</strong>
-    at UniRef50 scale (~60M sequences, mean length ~350, fp16) a 64-D late index is ≈2.7 TB against ≈58 GB dense.
-    <strong>Scoring scales with pairs</strong>, so nobody deploys brute-force MaxSim — the standard answer is two-stage
-    retrieval, which this pilot priced without spending a GPU-minute:</p>
+    <p>Two things follow that matter beyond a benchmark. <strong>Storage scales with residues:</strong> at UniRef50
+    scale (~60M sequences, mean length ~350, fp16) a 64-D late index is ≈2.7 TB against ≈58 GB dense, and the native
+    480-D variant is 7.5× larger again. <strong>Scoring scales with pairs</strong>, so nobody deploys brute-force
+    MaxSim — the two-stage alternative is priced in the SCOPe section below.</p>
   </div>
-  <div class="tablewrap">
-    <table>
-      <thead><tr><th>Retrieval scheme</th><th class="num">R@1</th><th class="num">R@10</th><th class="num">MAP</th><th class="num">Pairs scored with MaxSim</th></tr></thead>
-      <tbody>
-        <tr class="group"><td colspan="5">ProtSent-V2 + MaxSim, reranking its own cosine shortlist</td></tr>
-        <tr><td>cosine only (no MaxSim)</td><td class="num">.685</td><td class="num">.924</td><td class="num">.646</td><td class="num best">0</td></tr>
-        <tr><td>cosine → MaxSim rerank of top 10</td><td class="num best">.727</td><td class="num">.924</td><td class="num">.675</td><td class="num">10 per query</td></tr>
-        <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.726</td><td class="num">.932</td><td class="num">.684</td><td class="num">100 per query</td></tr>
-        <tr><td>full all-vs-all MaxSim</td><td class="num">.726</td><td class="num best">.932</td><td class="num best">.684</td><td class="num">2,207 per query</td></tr>
-        <tr class="group"><td colspan="5">ProtSent-Late (64-D), reranking the same shortlist</td></tr>
-        <tr><td>cosine → MaxSim rerank of top 10</td><td class="num">.717</td><td class="num">.924</td><td class="num">.674</td><td class="num">10 per query</td></tr>
-        <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.719</td><td class="num">.935</td><td class="num">.681</td><td class="num">100 per query</td></tr>
-        <tr><td>full all-vs-all MaxSim</td><td class="num">.719</td><td class="num">.936</td><td class="num">.681</td><td class="num">2,207 per query</td></tr>
-        <tr class="group"><td colspan="5">ESM-2-Late (64-D), reranking vanilla ESM-2's cosine shortlist</td></tr>
-        <tr><td>cosine only (no MaxSim)</td><td class="num">.499</td><td class="num">.760</td><td class="num">.421</td><td class="num best">0</td></tr>
-        <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.705</td><td class="num">.869</td><td class="num">.593</td><td class="num">100 per query</td></tr>
-        <tr><td>full all-vs-all MaxSim</td><td class="num best">.742</td><td class="num best">.942</td><td class="num best">.698</td><td class="num">2,207 per query</td></tr>
-      </tbody>
-      <caption>Eligible-query metrics, family level; both trained and untrained ProtSent arms behave the same way.
-      A two-stage system is only as good as its first stage:
-      on ProtSent's strong cosine shortlist, reranking just the top 10 recovers almost all of full MaxSim at
-      <strong>1/220th</strong> of the scoring work — that is the deployable configuration. On vanilla ESM-2's weaker
-      shortlist the recall ceiling is set before MaxSim ever runs.</caption>
-    </table>
-  </div>
-  <div class="flag prose" style="max-width: none">
-    <span class="k">Every timing on this page leaves ~2× on the table</span>
-    <p>None of these runs used flash attention. The shared environment ships <code>kernels</code> 0.12.3, below the
-    0.15.2 floor the flash kernels need, and <code>flash-attn</code> is absent — so every run silently fell back to
-    sdpa. In an isolated venv with <code>attn_implementation="kernels-community/vllm-flash-attn3"</code> and bf16, the
-    same ProtSent-V2-35M training step measures <strong>240.9 pairs/s against 122.2 on sdpa (1.97×) on Pfam</strong>,
-    and 135.6 against 91.4 (1.48×) on STRING, with peak VRAM <em>falling</em> 10.7 → 4.2 GB. Numerics check out
-    (pooled cosine agreement ≥ .99974, MaxSim top-1 retrieval agreement 100%), though FA3-produced and sdpa-produced
-    eval numbers should not be mixed in one table. Two corollaries: the ~21% late-vs-dense training overhead above is
-    an sdpa-vs-sdpa figure and is <em>smaller than the attention backend choice in either direction</em>; and the
-    token-packing null result reported earlier has a better explanation than "sdpa" — with flash attention Sentence
-    Transformers already unpads inputs automatically, so packing has no padding left to reclaim (240.9 → 239.2 pairs/s)
-    and buys memory predictability instead. <code>torch.compile</code> measured a net loss at this scale
-    (−13% steady-state plus 266 s of warmup), consistent with the upstream note about small models on fast GPUs.</p>
-  </div>
-  <p class="note prose">The 18-task pooled benchmark suite never touches MaxSim. Late-trained models are evaluated there
+  <p class="note prose">The transfer suite never touches MaxSim. Late-trained models are evaluated there
   through their <em>dense view</em> — the same backbone with the original mean-pooling head — so those numbers stay
   directly comparable to every previous ProtSent run and cost exactly what a dense model costs.</p>
 </section>
@@ -354,6 +336,53 @@
       hold. At &lt;40% identity the 95% CIs are wide (±.05) on 164 queries, so read the ordering, not the decimals.</caption>
     </table>
   </div>
+  <div class="prose">
+    <h3>Two-stage retrieval: the deployable shape</h3>
+    <p>Brute-force MaxSim over a whole corpus is not how anyone runs this. The standard answer is a cheap dense
+    shortlist reranked by MaxSim, and the same matrices price it without a GPU-minute:</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Retrieval scheme</th><th class="num">R@1</th><th class="num">R@10</th><th class="num">MAP</th><th class="num">Pairs scored with MaxSim</th></tr></thead>
+      <tbody>
+        <tr class="group"><td colspan="5">ProtSent-V2 + MaxSim, reranking its own cosine shortlist</td></tr>
+        <tr><td>cosine only (no MaxSim)</td><td class="num">.685</td><td class="num">.924</td><td class="num">.646</td><td class="num best">0</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 10</td><td class="num best">.727</td><td class="num">.924</td><td class="num">.675</td><td class="num">10 per query</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.726</td><td class="num">.932</td><td class="num">.684</td><td class="num">100 per query</td></tr>
+        <tr><td>full all-vs-all MaxSim</td><td class="num">.726</td><td class="num best">.932</td><td class="num best">.684</td><td class="num">2,207 per query</td></tr>
+        <tr class="group"><td colspan="5">ProtSent-Late (64-D), reranking the same shortlist</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 10</td><td class="num">.717</td><td class="num">.924</td><td class="num">.674</td><td class="num">10 per query</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.719</td><td class="num">.935</td><td class="num">.681</td><td class="num">100 per query</td></tr>
+        <tr><td>full all-vs-all MaxSim</td><td class="num">.719</td><td class="num">.936</td><td class="num">.681</td><td class="num">2,207 per query</td></tr>
+        <tr class="group"><td colspan="5">ESM-2-Late (64-D), reranking vanilla ESM-2's cosine shortlist</td></tr>
+        <tr><td>cosine only (no MaxSim)</td><td class="num">.499</td><td class="num">.760</td><td class="num">.421</td><td class="num best">0</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.705</td><td class="num">.869</td><td class="num">.593</td><td class="num">100 per query</td></tr>
+        <tr><td>full all-vs-all MaxSim</td><td class="num best">.742</td><td class="num best">.942</td><td class="num best">.698</td><td class="num">2,207 per query</td></tr>
+      </tbody>
+      <caption>Eligible-query metrics, family level; both trained and untrained ProtSent arms behave the same way.
+      A two-stage system is only as good as its first stage:
+      on ProtSent's strong cosine shortlist, reranking just the top 10 recovers almost all of full MaxSim at
+      <strong>1/220th</strong> of the scoring work — that is the deployable configuration. On vanilla ESM-2's weaker
+      shortlist the recall ceiling is set before MaxSim ever runs. Note what this does and does not fix:
+      <strong>reranking cuts scoring cost, not storage</strong> — the residue index is exactly the same size either
+      way, so the 2.7 TB figure above stands.</caption>
+    </table>
+  </div>
+  <div class="flag prose" style="max-width: none">
+    <span class="k">Every timing on this page leaves ~2× on the table</span>
+    <p>None of these runs used flash attention. The shared environment ships <code>kernels</code> 0.12.3, below the
+    0.15.2 floor the flash kernels need, and <code>flash-attn</code> is absent — so every run silently fell back to
+    sdpa. In an isolated venv with <code>attn_implementation="kernels-community/vllm-flash-attn3"</code> and bf16, the
+    same ProtSent-V2-35M training step measures <strong>240.9 pairs/s against 122.2 on sdpa (1.97×) on Pfam</strong>,
+    and 135.6 against 91.4 (1.48×) on STRING, with peak VRAM <em>falling</em> 10.7 → 4.2 GB. Numerics check out
+    (pooled cosine agreement ≥ .99974, MaxSim top-1 retrieval agreement 100%), though FA3-produced and sdpa-produced
+    eval numbers should not be mixed in one table. Two corollaries: the ~21% late-vs-dense training overhead above is
+    an sdpa-vs-sdpa figure and is <em>smaller than the attention backend choice in either direction</em>; and the
+    token-packing null result reported earlier has a better explanation than "sdpa" — with flash attention Sentence
+    Transformers already unpads inputs automatically, so packing has no padding left to reclaim (240.9 → 239.2 pairs/s)
+    and buys memory predictability instead. <code>torch.compile</code> measured a net loss at this scale
+    (−13% steady-state plus 266 s of warmup), consistent with the upstream note about small models on fast GPUs.</p>
+  </div>
 </section>
 
 <section id="head">
@@ -428,8 +457,8 @@
       (McNemar) assumption — that the two arms disagree on exactly those five queries and no others — gives p = 0.07.
       The direction is worth chasing; the magnitude is not yet established. Dense rows use the published EAT protocol (euclidean 1-NN
       on unnormalised embeddings); MaxSim rows use cosine-space MaxSim, so the two groups are labelled separately
-      rather than merged. Note CATH is encode-dominated (150 × 69,605), which is why 64-D is only 1.6× faster than
-      480-D here against 5× on SCOPe.</caption>
+      rather than merged. Note CATH is encode-dominated — 69,755 sequences to embed against 150 queries' worth of scoring —
+      which is why 64-D is only 1.6× faster than 480-D here against 5× on SCOPe.</caption>
     </table>
   </div>
 </section>
@@ -562,18 +591,19 @@
   </div>
   <div class="tablewrap">
     <table>
-      <thead><tr><th>Arm</th><th class="num">N=100</th><th class="num">N=500</th><th class="num">N=1000</th></tr></thead>
+      <thead><tr><th>Arm</th><th class="num">N=500 acc</th><th class="num">N=1000 acc</th><th class="num">N=1000 F1 macro</th></tr></thead>
       <tbody>
-        <tr><td>ESM-2</td><td class="num">.167</td><td class="num">.329</td><td class="num">.406</td></tr>
-        <tr><td>ESM-2 + MaxSim</td><td class="num">.175</td><td class="num">.363</td><td class="num">.440</td></tr>
-        <tr><td><strong>ESM-2-Late (64-D)</strong></td><td class="num">.222</td><td class="num best">.457</td><td class="num best">.548</td></tr>
-        <tr><td>ProtSent-V2</td><td class="num">.213</td><td class="num">.426</td><td class="num">.512</td></tr>
-        <tr><td>ProtSent-V2 + MaxSim</td><td class="num">.222</td><td class="num">.453</td><td class="num">.546</td></tr>
-        <tr><td>ProtSent-Late (64-D)</td><td class="num best">.223</td><td class="num">.454</td><td class="num">.537</td></tr>
+        <tr><td>ESM-2</td><td class="num">.329</td><td class="num">.406</td><td class="num">.156</td></tr>
+        <tr><td>ESM-2 + MaxSim</td><td class="num">.363</td><td class="num">.440</td><td class="num">.193</td></tr>
+        <tr><td><strong>ESM-2-Late (64-D)</strong></td><td class="num best">.457</td><td class="num best">.548</td><td class="num">.218</td></tr>
+        <tr><td>ProtSent-V2</td><td class="num">.426</td><td class="num">.512</td><td class="num">.201</td></tr>
+        <tr><td>ProtSent-V2 + MaxSim</td><td class="num">.453</td><td class="num">.546</td><td class="num best">.226</td></tr>
+        <tr><td>ProtSent-Late (64-D)</td><td class="num">.454</td><td class="num">.537</td><td class="num">.209</td></tr>
       </tbody>
-      <caption>Accuracy on the fold-prediction test split. One gallery draw per budget, and this repository's
-      multi-seed runs of the same task show ±.005–.010 at N=100 — so the N=100 column separates nothing.
-      Read N=500 and N=1000, where the ordering matches SCOPe and CATH.</caption>
+      <caption>Fold prediction, test split, one gallery draw per budget. The N=100 column is omitted: this
+      repository's multi-seed runs of the same task show ±.005–.010 there, wider than any gap it contains. Note the
+      F1 column — on a 1,195-class task with a long tail, accuracy runs ~2.5× higher than macro-F1, so the accuracy
+      figures flatter every arm equally and the ordering is what to read.</caption>
     </table>
   </div>
 </section>
@@ -581,10 +611,11 @@
 <section id="asymmetry">
   <div class="sec-head"><span class="tick"></span><h2>One thing we did not expect</h2></div>
   <div class="prose">
-    <p>Query and document are encoded by the identical function here, so it is tempting to symmetrise the score matrix.
-    Doing it naively destroys the ranking, because a raw MaxSim row's scale is the <em>query's</em> length, so averaging
-    with the transpose smuggles document length into the comparison. Even the scale-free form (MeanMaxSim, each score
-    divided by its query's residue count) costs the trained arms badly:</p>
+    <p>Query and document are encoded by the identical function here, so it is tempting to symmetrise the score
+    matrix. Doing it naively destroys the ranking: a raw MaxSim row's scale is the <em>query's</em> length, so averaging
+    with the transpose smuggles document length into the comparison. Length-normalising (MeanMaxSim) stops the collapse
+    but still costs every arm except the untouched ProtSent-V2, and costs the two trained arms most — −.275 and −.128
+    MAP:</p>
   </div>
   <div class="tablewrap">
     <table>
@@ -606,41 +637,32 @@
 <section id="caveats">
   <div class="sec-head"><span class="tick"></span><h2>What this does not yet show</h2></div>
   <ul class="prose">
-    <li><strong>One seed, one run per arm, no confidence intervals on the pooled tables.</strong> Both probes are now
-    run and reported side by side, which is what exposed the Stability reversal — but with a single seed and a 0.005
-    tie threshold, individual small deltas are noise. Read the tallies and the sign changes, not the third decimal.</li>
-    <li><strong>SCOPe-40 is not decontaminated</strong> against the pretraining corpus (see the identity-stratified
-    check above, which is the mitigation, not a clean split).</li>
-    <li><strong>2,000 steps on a prefix-limited pair build.</strong> The plateau may be a diversity limit rather than a
-    real ceiling; the 10,000-step uncapped runs will confound "more steps" with "more diverse pairs" unless the
-    2,000-step uncapped control also gets run.</li>
-    <li><strong>No hard-negative mining.</strong> Upstream guidance calls it essential for competitive late-interaction
-    models; this pilot used in-batch negatives only. Probably the largest untapped gain.</li>
-    <li><strong>One head size (64-D), one scale (35M).</strong> The 128-D head ablation and both 150M arms are running.
-    CATH suggests 64-D is genuinely too small on an already-contrastive backbone, which makes the head-size result
-    the one to watch.</li>
-    <li><strong>Function benchmarks are thin.</strong> EC, metal-ion binding and catalytic efficiency are in; GO-MF and
-    CAFA5 are not, so "does late training hurt function prediction?" is half-answered. EC is mildly negative for both
-    late arms under both probes; metal-ion binding is negative under KNN but positive for ProtSent under linear.</li>
-    <li><strong>The CATH table has two separate problems, and they are different problems.</strong> First, test_h is
-    150 queries, so every accuracy carries a ±8-point interval and the 3.3-point trained-vs-zero-shot difference is
-    five proteins (McNemar p ≥ 0.07 under the most favourable pairing). Second — and this one is not about sample
-    size — the dense rows are the <em>published EAT numbers</em>: euclidean 1-NN on unnormalised embeddings, a
-    different scoring rule and a different code path from the cosine/MaxSim rows beside them. So the large
-    dense → MaxSim gaps (+14.0 for ESM-2, 21 proteins) are cross-protocol comparisons, and an unknown share of them
-    belongs to cosine-vs-euclidean rather than to MaxSim. Treat +14.0 as an upper bound. A six-arm rerun through one
-    pipeline, which makes every pair properly paired and McNemar-testable, is running.</li>
-    <li><strong>Built on ProtSent-V2, not the shipped V2.5.</strong> Numbers here should not be quoted against V2.5 results.</li>
-    <li><strong>No PROTOCOL comparison.</strong> Different splits, relevance definitions and hierarchy level — a direct
-    number-to-number comparison would be wrong without redoing their protocol.</li>
+    <li><strong>One seed, one run per arm.</strong> The SCOPe comparisons carry paired bootstrap CIs over queries; the
+    transfer tables carry none at all. With a 0.005 tie threshold, read the tallies and the sign changes, not the third
+    decimal.</li>
+    <li><strong>Neither retrieval benchmark is decontaminated against the pretraining corpus.</strong> The identity
+    stratification above is the mitigation, not a clean split — the median SCOPe domain sits at 0.91 max identity to
+    training data.</li>
+    <li><strong>The CATH table has two independent problems.</strong> Its 150 queries make one protein worth 0.67
+    points, so the small trained-vs-untrained gaps there are not resolvable; and its dense rows are published EAT
+    numbers on a different scoring rule, so the large dense → MaxSim deltas are cross-protocol upper bounds. A
+    single-pipeline rerun that makes every pair McNemar-testable is running. Alignment baselines also exist only at
+    the family level, not at superfamily, which is the level declared primary here.</li>
+    <li><strong>No hard-negative mining, one head size, one scale, one training corpus slice.</strong> In-batch
+    negatives only; 64-D and 128-D but nothing larger; 35M with 150M still training; and AFDB/STRING pairs drawn from
+    the group-sorted prefix of the corpus rather than sampled across it, so 2,000 steps saw a narrow slice of clusters.
+    Hard negatives are the largest untouched lever.</li>
+    <li><strong>Function coverage is thin, and this is V2 not V2.5.</strong> EC, metal-ion binding and catalytic
+    efficiency are in; GO-MF and CAFA5 are not, so "does late training hurt function prediction?" is half-answered.
+    The pilot also builds on ProtSent-V2 while the shipped small model is V2.5, so none of these numbers should be
+    quoted against V2.5 results. No PROTOCOL comparison either — different splits and relevance definitions.</li>
   </ul>
 </section>
 
 <section id="next">
   <div class="sec-head"><span class="tick"></span><h2>Running now, and what comes after</h2></div>
   <div class="prose">
-    <p>A resumable queue is on three A100s as of this writing — it survives SSH disconnects, skips finished work, and
-    restarts interrupted training from its own checkpoint. A fourth GPU is running the linear-probe pass.</p>
+    <p>Still running on three A100s:</p>
   </div>
   <div class="tablewrap">
     <table>
@@ -649,10 +671,8 @@
         <tr><td>ProtSent-V2-150M-Late · 5,000 steps</td><td>Does the scale story change at 150M?</td><td class="num">~5 GPU-h</td><td>running</td></tr>
         <tr><td>ESM-2-150M-Late · 5,000 steps</td><td>Same recipe from vanilla, at 150M</td><td class="num">~5 GPU-h</td><td>running</td></tr>
         <tr><td>128-D head vs 64-D (35M)</td><td>Is the head the bottleneck?</td><td class="num">~1.2 GPU-h</td><td>running</td></tr>
-        <tr><td>Linear-probe pass, 4 arms</td><td>Does the "backbone survived" verdict depend on the probe?</td><td class="num">~2 GPU-h</td><td><strong>done — it does</strong></td></tr>
         <tr><td>Pair-order swap ablation (35M)</td><td>Does the loss's query/document role matter on symmetric pairs?</td><td class="num">~1.2 GPU-h</td><td>queued</td></tr>
         <tr><td>10,000-step runs, uncapped pair build</td><td>Plateau, or narrow pair diversity?</td><td class="num">~4.4 GPU-h each</td><td>queued</td></tr>
-        <tr><td>CATH midnight zone (1-NN, ProtTucker setting)</td><td>Remote homology where alignment fails</td><td class="num">~1 GPU-h</td><td><strong>done — see above</strong></td></tr>
         <tr><td>GO-MF function suite</td><td>The function gap above</td><td class="num">~2 GPU-h</td><td>queued last</td></tr>
       </tbody>
       <caption>Ranked by expected value, rewritten around the head-vs-backbone result:
