@@ -231,6 +231,7 @@ run_late_bench.sh            # Pooled benchmarks over each arm's dense view
 snapshot_checkpoints.sh      # Keeps weights-only checkpoint copies for the curve
 validate_run.py              # Is a run's backbone actually moving? (dtype/loss/drift)
 watch_validation.sh          # Runs validate_run.py per arm as checkpoints appear
+run_after_training.sh        # Waits for the arms, then benchmarks them (SCOPe/CATH/pooled/PGym)
 pyproject.toml               # Dependencies and project config
 tests/                       # Unit and integration tests
 data/                        # Small metadata files (large data is generated)

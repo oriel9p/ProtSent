@@ -74,7 +74,7 @@ scope_rows() {  # scope_rows <gpu> <out_dir> <specs...>
 PHASE2_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 15000000 --seed 42
              --multi_dataset_sampler proportional --compile)
 P2_STEPS="${P2_STEPS:-31000}"          # 35M:  x 256 pairs/step = 7.9M pairs, ~8.0 h
-P2_STEPS_150M="${P2_STEPS_150M:-15000}"  # x 256 = 3.8M pairs, ~8.7 h at 2.10 s/it
+P2_STEPS_150M="${P2_STEPS_150M:-30000}"  # x 256 = 7.7M pairs, ~17.5 h at 2.10 s/it
 
 queue_a() {  # ProtSent 35M, cards 0+1
   watch_curve 0 protsent_late_35m_prop "$RES/pilot_35m/scope"
