@@ -119,10 +119,11 @@
   <h1>Residue-level MaxSim for protein retrieval</h1>
   <p class="standfirst">What ColBERT-style late interaction costs, what it buys, and which of those gains need
   training at all. Everything here is measured on this box — A100-80GBs, sentence-transformers 6.0, a 2,000-step
-  contrastive continuation per arm. Second revision, after coauthor review: cost timings were re-measured with
-  encoding separated from scoring, and the contamination, alignment-baseline and probe-type gaps are now stated.</p>
+  contrastive continuation per arm. Third revision: cost timings re-measured with encoding separated from scoring,
+  contamination and alignment baselines added, and — the change that matters — the linear-probe pass and the CATH
+  midnight-zone benchmark both landed and both moved a headline.</p>
   <div class="meta">
-    <span>branch LateInteractions</span><span>2026-08-24</span><span>ESM-2 35M scale</span><span>150M arms + ablations running</span>
+    <span>branch LateInteractions</span><span>2026-08-24</span><span>ESM-2 35M scale</span><span>150M arms + ablations still running</span>
   </div>
 </header>
 
@@ -130,11 +131,12 @@
   <div class="sec-head"><span class="tick"></span><h2>The short version</h2></div>
   <div class="verdict prose">
     <h3>Late interaction is worth having. Most of the win needs no training.</h3>
-    <p>Swapping pooled cosine for residue MaxSim improves SCOPe retrieval on both backbones with
-    <strong>zero training</strong>. Training a 64-D late head on top of vanilla ESM-2 buys a large further jump for
-    ~1.5 GPU-hours. Training the same head on top of ProtSent-V2 buys <em>compression and speed</em>, not accuracy —
-    it lands on its own zero-shot numbers. The ordering survives restriction to low-identity queries, and the trained
-    arms beat both alignment baselines on ranking depth while alignment still leads at rank 1.</p>
+    <p>Swapping pooled cosine for residue MaxSim improves retrieval on both backbones with <strong>zero training</strong>,
+    on both benchmarks tested. Training a 64-D late head on top of vanilla ESM-2 buys a large further jump for
+    ~1.5 GPU-hours. Training the same head on top of ProtSent-V2 buys nothing on SCOPe and <em>costs</em> 3.3 points on
+    the harder CATH midnight-zone task — the 64-D projection is lossy compression, and on an already-contrastive
+    backbone that is all it is. The ordering survives restriction to low-identity queries; alignment still leads at
+    rank 1 while the late arms win ranking depth.</p>
   </div>
   <div class="cards">
     <div class="card"><span class="k">Free (no training)</span><span class="v">.421 → .545</span>
@@ -143,9 +145,14 @@
     <div class="card"><span class="k">Bought by training</span><span class="v">.545 → .698</span>
       <span class="n">ESM-2 the rest of the way, for 512k pairs — 68× fewer than ProtSent-V2's own 34.8M-pair run</span></div>
     <div class="card"><span class="k">ProtSent + late training</span><span class="v">.684 → .681</span>
-      <span class="n">flat. What it buys instead: 7.5× smaller residue vectors, 5× faster scoring</span></div>
+      <span class="n">flat on SCOPe, −3.3 pts on CATH. Buys 7.5× smaller vectors and 5× faster scoring, at a cost</span></div>
     <div class="card"><span class="k">Scoring, 2,207² pairs</span><span class="v">0.03 s → 8 s</span>
       <span class="n">cosine → 64-D MaxSim (480-D MaxSim: 41 s), on a shared 3–8 s encode</span></div>
+    <div class="card"><span class="k">Best 35M arm on CATH</span><span class="v">61.3%</span>
+      <span class="n">ProtSent-V2 + zero-shot MaxSim — beats every trained arm, and comes within 1.4 pts of
+      ProtSent-V2-<em>150M</em> dense at a quarter the parameters</span></div>
+    <div class="card"><span class="k">Probe dependence</span><span class="v">4/5/4 → 10/2/1</span>
+      <span class="n">ProtSent-Late vs ProtSent-V2 on 13 pooled tasks, KNN vs linear. The verdict depends on the probe</span></div>
   </div>
 </section>
 
@@ -179,7 +186,8 @@
     <dt>Head</dt><dd>token-level <code>Dense(480→64, no bias, no activation)</code> → mask → per-residue L2 normalisation. Randomly initialised; step 0 is therefore a random projection.</dd>
     <dt>Masking</dt><dd><code>&lt;cls&gt;</code> and <code>&lt;eos&gt;</code> excluded from scoring on <em>both</em> sides. There is no ColBERT-style query expansion and no query/document prefix: the two encoders are literally the same function, so <code>encode_query ≡ encode_document</code>.</dd>
     <dt>Loss</dt><dd><code>CachedMultiVectorMultipleNegativesRankingLoss</code>, scale 1.0 (correct for unnormalised MaxSim; the dense recipe's 20.0 would be wrong), in-batch negatives only — <strong>no hard-negative mining</strong>.</dd>
-    <dt>Optimisation</dt><dd>backbone LR 1e-5, fresh projection LR 1e-4, cosine schedule, 100 warmup steps, bf16, max_seq_length 512, seed 42, round-robin over the three pair sources.</dd>
+    <dt>Optimisation</dt><dd>backbone LR 1e-5, fresh projection LR 1e-4, cosine schedule, 100 warmup steps, bf16, max_seq_length 512, seed 42.</dd>
+    <dt>Data</dt><dd>round-robin over <code>protsent-data-dc40/{pfam_sorted, afdb_sorted, stringdb_train_15M}.parquet</code>, built into 777k + 2.0M + 2.0M pairs (AFDB and STRING capped at 2M each, taken from the group-sorted prefix). Effective contrastive batch 256 = 2 GPUs × 128, <code>gather_across_devices</code> off, so in-batch negatives are 128.</dd>
     <dt>Control</dt><dd>the step-0 dense view reproduces the base model's pooled embeddings to <strong>0.0</strong> max absolute difference on both backbones — the wrapper adds nothing and removes nothing.</dd>
   </dl>
 </section>
@@ -231,12 +239,17 @@
         <tr><td>cosine → MaxSim rerank of top 10</td><td class="num best">.727</td><td class="num">.924</td><td class="num">.675</td><td class="num">10 per query</td></tr>
         <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.726</td><td class="num">.932</td><td class="num">.684</td><td class="num">100 per query</td></tr>
         <tr><td>full all-vs-all MaxSim</td><td class="num">.726</td><td class="num best">.932</td><td class="num best">.684</td><td class="num">2,207 per query</td></tr>
+        <tr class="group"><td colspan="5">ProtSent-Late (trained 64-D), reranking the same shortlist</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 10</td><td class="num">.717</td><td class="num">.924</td><td class="num">.674</td><td class="num">10 per query</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.719</td><td class="num">.935</td><td class="num">.681</td><td class="num">100 per query</td></tr>
+        <tr><td>full all-vs-all MaxSim</td><td class="num">.719</td><td class="num">.936</td><td class="num">.681</td><td class="num">2,207 per query</td></tr>
         <tr class="group"><td colspan="5">ESM2-Late MaxSim, reranking vanilla ESM-2's cosine shortlist</td></tr>
         <tr><td>cosine only (no MaxSim)</td><td class="num">.499</td><td class="num">.760</td><td class="num">.421</td><td class="num best">0</td></tr>
         <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.705</td><td class="num">.869</td><td class="num">.593</td><td class="num">100 per query</td></tr>
         <tr><td>full all-vs-all MaxSim</td><td class="num best">.742</td><td class="num best">.942</td><td class="num best">.698</td><td class="num">2,207 per query</td></tr>
       </tbody>
-      <caption>Eligible-query metrics, family level. A two-stage system is only as good as its first stage:
+      <caption>Eligible-query metrics, family level; both trained and untrained ProtSent arms behave the same way.
+      A two-stage system is only as good as its first stage:
       on ProtSent's strong cosine shortlist, reranking just the top 10 recovers almost all of full MaxSim at
       <strong>1/220th</strong> of the scoring work — that is the deployable configuration. On vanilla ESM-2's weaker
       shortlist the recall ceiling is set before MaxSim ever runs.</caption>
@@ -263,31 +276,33 @@
         <tr class="baseline"><td>phmmer, max sensitivity</td><td>profile alignment</td><td class="num best">.753</td><td class="num">.898</td><td class="num">.607</td><td class="num dim">CPU</td></tr>
         <tr class="baseline"><td>MMseqs2</td><td>alignment</td><td class="num">.656</td><td class="num">.740</td><td class="num">.410</td><td class="num dim">CPU</td></tr>
         <tr><td>ESM2</td><td>cosine</td><td class="num">.499</td><td class="num">.760</td><td class="num">.421</td><td class="num">0.03 s</td></tr>
-        <tr><td>ESM2</td><td>MaxSim 480-D, untrained</td><td class="num">.601</td><td class="num">.804</td><td class="num">.545</td><td class="num">41.5 s</td></tr>
+        <tr><td>ESM2</td><td>MaxSim 480-D, untrained</td><td class="num">.601</td><td class="num">.804</td><td class="num">.545</td><td class="num">41 s</td></tr>
         <tr><td><strong>ESM2-Late</strong></td><td>MaxSim 64-D</td><td class="num">.742</td><td class="num best">.942</td><td class="num best">.698</td><td class="num">8.1 s</td></tr>
-        <tr><td>ProtSent-V2</td><td>cosine</td><td class="num">.685</td><td class="num">.924</td><td class="num">.646</td><td class="num">0.04 s</td></tr>
-        <tr><td>ProtSent-V2</td><td>MaxSim 480-D, untrained</td><td class="num">.726</td><td class="num">.932</td><td class="num">.684</td><td class="num">40.2 s</td></tr>
-        <tr><td>ProtSent-Late</td><td>MaxSim 64-D</td><td class="num">.719</td><td class="num">.936</td><td class="num">.681</td><td class="num">17.5 s</td></tr>
+        <tr><td>ProtSent-V2</td><td>cosine</td><td class="num">.685</td><td class="num">.924</td><td class="num">.646</td><td class="num">0.03 s</td></tr>
+        <tr><td>ProtSent-V2</td><td>MaxSim 480-D, untrained</td><td class="num">.726</td><td class="num">.932</td><td class="num">.684</td><td class="num">41 s</td></tr>
+        <tr><td>ProtSent-Late</td><td>MaxSim 64-D</td><td class="num">.719</td><td class="num">.936</td><td class="num">.681</td><td class="num">8.1 s<span class="dim">*</span></td></tr>
         <tr class="group"><td colspan="6">Superfamily (primary)</td></tr>
         <tr><td>ESM2</td><td>cosine</td><td class="num">.698</td><td class="num">.845</td><td class="num">.398</td><td class="num">0.03 s</td></tr>
-        <tr><td>ESM2</td><td>MaxSim 480-D, untrained</td><td class="num">.719</td><td class="num">.856</td><td class="num">.474</td><td class="num">41.5 s</td></tr>
+        <tr><td>ESM2</td><td>MaxSim 480-D, untrained</td><td class="num">.719</td><td class="num">.856</td><td class="num">.474</td><td class="num">41 s</td></tr>
         <tr><td><strong>ESM2-Late</strong></td><td>MaxSim 64-D</td><td class="num best">.896</td><td class="num best">.959</td><td class="num">.671</td><td class="num">8.1 s</td></tr>
-        <tr><td>ProtSent-V2</td><td>cosine</td><td class="num">.857</td><td class="num">.956</td><td class="num">.654</td><td class="num">0.04 s</td></tr>
-        <tr><td>ProtSent-V2</td><td>MaxSim 480-D, untrained</td><td class="num">.878</td><td class="num">.956</td><td class="num best">.683</td><td class="num">40.2 s</td></tr>
-        <tr><td>ProtSent-Late</td><td>MaxSim 64-D</td><td class="num">.880</td><td class="num best">.959</td><td class="num">.672</td><td class="num">17.5 s</td></tr>
+        <tr><td>ProtSent-V2</td><td>cosine</td><td class="num">.857</td><td class="num">.956</td><td class="num">.654</td><td class="num">0.03 s</td></tr>
+        <tr><td>ProtSent-V2</td><td>MaxSim 480-D, untrained</td><td class="num">.878</td><td class="num">.956</td><td class="num best">.683</td><td class="num">41 s</td></tr>
+        <tr><td>ProtSent-Late</td><td>MaxSim 64-D</td><td class="num">.880</td><td class="num best">.959</td><td class="num">.672</td><td class="num">8.1 s<span class="dim">*</span></td></tr>
         <tr class="group"><td colspan="6">Fold</td></tr>
         <tr><td>ESM2</td><td>cosine</td><td class="num">.725</td><td class="num">.869</td><td class="num">.358</td><td class="num">0.03 s</td></tr>
-        <tr><td>ESM2</td><td>MaxSim 480-D, untrained</td><td class="num">.727</td><td class="num">.869</td><td class="num">.404</td><td class="num">41.5 s</td></tr>
+        <tr><td>ESM2</td><td>MaxSim 480-D, untrained</td><td class="num">.727</td><td class="num">.869</td><td class="num">.404</td><td class="num">41 s</td></tr>
         <tr><td><strong>ESM2-Late</strong></td><td>MaxSim 64-D</td><td class="num best">.901</td><td class="num best">.961</td><td class="num">.600</td><td class="num">8.1 s</td></tr>
-        <tr><td>ProtSent-V2</td><td>cosine</td><td class="num">.887</td><td class="num best">.961</td><td class="num">.582</td><td class="num">0.04 s</td></tr>
-        <tr><td>ProtSent-V2</td><td>MaxSim 480-D, untrained</td><td class="num">.897</td><td class="num">.958</td><td class="num">.601</td><td class="num">40.2 s</td></tr>
-        <tr><td>ProtSent-Late</td><td>MaxSim 64-D</td><td class="num">.898</td><td class="num best">.961</td><td class="num best">.602</td><td class="num">17.5 s</td></tr>
+        <tr><td>ProtSent-V2</td><td>cosine</td><td class="num">.887</td><td class="num best">.961</td><td class="num">.582</td><td class="num">0.03 s</td></tr>
+        <tr><td>ProtSent-V2</td><td>MaxSim 480-D, untrained</td><td class="num">.897</td><td class="num">.958</td><td class="num">.601</td><td class="num">41 s</td></tr>
+        <tr><td>ProtSent-Late</td><td>MaxSim 64-D</td><td class="num">.898</td><td class="num best">.961</td><td class="num best">.602</td><td class="num">8.1 s<span class="dim">*</span></td></tr>
       </tbody>
       <caption>The alignment rows carry the pattern this project has reported before: <strong>alignment still wins at
       rank 1</strong> (phmmer .753 vs the best embedding arm's .742), while embeddings win on depth and MAP
       (.942 / .698 vs .898 / .607). Paired bootstrap over shared eligible queries: ESM2-Late beats ProtSent-V2
       zero-shot MaxSim on family AP by +.014 [+.004, +.025]; ProtSent-Late differs from it by −.011 [−.015, −.007]
-      at superfamily and not detectably at family.</caption>
+      at superfamily and not detectably at family. <span class="dim">*</span> Score times are per scoring mode, not per
+      arm: the two 64-D arms do identical work, and a raw stopwatch reading of 17.5 s for one of them was GPU
+      contention with a concurrent job, not a model property.</caption>
     </table>
   </div>
   <div class="flag prose" style="max-width: none">
@@ -310,6 +325,39 @@
       </tbody>
       <caption>Every arm degrades on harder queries, as expected, and by a similar amount — the gaps between arms
       hold. At &lt;40% identity the 95% CIs are wide (±.05) on 164 queries, so read the ordering, not the decimals.</caption>
+    </table>
+  </div>
+</section>
+
+<section id="cath">
+  <div class="sec-head"><span class="tick"></span><h2>CATH midnight zone: the harder test</h2></div>
+  <div class="prose">
+    <p>SCOPe-40 is a self-retrieval benchmark on 2.2k domains. The CATH v4.3 "midnight zone" set from the ProtTucker
+    paper is the sterner one: 150 queries whose homologues are <em>not</em> findable by sequence alignment, transferred
+    1-nearest-neighbour from a 69,605-domain lookup set at the H (superfamily) level. Alignment scores 34.7 here; the
+    dense numbers are the repository's published EAT-protocol runs, and the MaxSim rows are new.</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Arm</th><th>Scoring</th><th class="num">H-level accuracy</th><th class="num">vs its own dense</th><th class="num">Scoring runtime</th></tr></thead>
+      <tbody>
+        <tr class="baseline"><td>MMseqs2</td><td>alignment</td><td class="num">34.7</td><td class="num dim">—</td><td class="num dim">CPU</td></tr>
+        <tr><td>ESM-2 35M</td><td>pooled, EAT 1-NN</td><td class="num">40.7</td><td class="num dim">—</td><td class="num dim">—</td></tr>
+        <tr><td>ESM-2 35M</td><td>MaxSim 480-D, untrained</td><td class="num">54.7</td><td class="num pos">+14.0</td><td class="num">210 s</td></tr>
+        <tr><td>ESM2-Late</td><td>MaxSim 64-D</td><td class="num">59.3</td><td class="num pos">+18.6</td><td class="num">127 s</td></tr>
+        <tr><td>ProtSent-V2-35M</td><td>pooled, EAT 1-NN</td><td class="num">56.7</td><td class="num dim">—</td><td class="num dim">—</td></tr>
+        <tr><td><strong>ProtSent-V2-35M</strong></td><td><strong>MaxSim 480-D, untrained</strong></td><td class="num best">61.3</td><td class="num pos">+4.6</td><td class="num">180 s</td></tr>
+        <tr><td>ProtSent-Late</td><td>MaxSim 64-D</td><td class="num">58.0</td><td class="num neg">−3.3 vs its zero-shot</td><td class="num">127 s</td></tr>
+        <tr class="baseline"><td>ProtSent-V2-<strong>150M</strong> (4× the parameters)</td><td>pooled, EAT 1-NN</td><td class="num">62.7</td><td class="num dim">—</td><td class="num dim">—</td></tr>
+      </tbody>
+      <caption>Two results worth separating. <strong>Zero-shot MaxSim on ProtSent-V2-35M is the best 35M configuration
+      here</strong> — 61.3, within 1.4 points of the four-times-larger 150M dense model, for no training at all.
+      And the trained 64-D head, which merely looked flat on SCOPe, is <strong>3.3 points worse</strong> than the
+      untrained 480-D residues it was distilled from: on an already-contrastive backbone the projection is lossy
+      compression, and the harder benchmark shows the loss. Dense rows use the published EAT protocol (euclidean 1-NN
+      on unnormalised embeddings); MaxSim rows use cosine-space MaxSim, so the two groups are labelled separately
+      rather than merged. Note CATH is encode-dominated (150 × 69,605), which is why 64-D is only 1.6× faster than
+      480-D here against 5× on SCOPe.</caption>
     </table>
   </div>
 </section>
@@ -364,44 +412,77 @@
 </section>
 
 <section id="pooled">
-  <div class="sec-head"><span class="tick"></span><h2>Did the backbone survive?</h2></div>
+  <div class="sec-head"><span class="tick"></span><h2>Did the backbone survive? It depends on the probe</h2></div>
   <div class="prose">
     <p>The foundation-model question: after late training, is the ordinary mean-pooled 480-D embedding still good?
-    Same protocol for every arm — ProtBench fast suite, test split, KNN probe (k=3), seed 42, 20k-sample cap. Two
-    honesty notes. First, three rows are the same SCOPe-40 test set the late head was trained to win, so they are
-    listed separately from the transfer tasks and excluded from the record. Second, EC classification is multilabel
-    and ProtBench forces a linear probe there regardless of the flag.</p>
+    Same protocol for every arm — ProtBench fast suite, test split, seed 42, 20k-sample cap — run twice, once with a
+    KNN probe (k=3) and once with a linear probe. The two are reported side by side and never averaged, because they
+    disagree, and the disagreement is the finding.</p>
+    <p>Five rows are excluded from the tallies because ProtBench forces a linear probe for them in <em>both</em> passes
+    (EC classification and secondary structure are multilabel/token-level; the three SCOPe rows are retrieval, and are
+    the benchmark the late head was trained to win anyway). That leaves <strong>13 comparable transfer tasks</strong>.</p>
+  </div>
+  <div class="cards">
+    <div class="card"><span class="k">KNN probe (k=3)</span><span class="v">4 W / 5 T / 4 L</span>
+      <span class="n">ProtSent-Late vs ProtSent-V2 — neutral. ESM2-Late vs ESM-2: 7 / 1 / 5</span></div>
+    <div class="card"><span class="k">Linear probe</span><span class="v">10 W / 2 T / 1 L</span>
+      <span class="n">ProtSent-Late vs ProtSent-V2 — clearly improved. ESM2-Late vs ESM-2: 7 / 2 / 4</span></div>
   </div>
   <div class="tablewrap">
     <table>
-      <thead><tr><th>Task</th><th>Metric</th><th class="num">ESM2</th><th class="num">ESM2-Late</th><th class="num">Δ</th><th class="num">ProtSent-V2</th><th class="num">ProtSent-Late</th><th class="num">Δ</th></tr></thead>
+      <thead><tr>
+        <th rowspan="2">Transfer task</th><th rowspan="2">Metric</th>
+        <th class="num" colspan="3">KNN probe</th><th class="num" colspan="3">Linear probe</th></tr>
+        <tr><th class="num">ESM-2 → Late</th><th class="num">Δ</th><th class="num">ProtSent → Late</th>
+            <th class="num">ESM-2 → Late</th><th class="num">Δ</th><th class="num">ProtSent → Late (Δ)</th></tr></thead>
       <tbody>
-        <tr class="group"><td colspan="8">Retrieval on the training target — reported, not counted</td></tr>
-        <tr><td>SCOPe-40 (family)</td><td>Recall@10</td><td class="num">.584</td><td class="num">.645</td><td class="num pos">+.061</td><td class="num">.707</td><td class="num best">.707</td><td class="num dim">+.000</td></tr>
-        <tr><td>SCOPe-40 (superfamily)</td><td>Recall@10</td><td class="num">.775</td><td class="num">.829</td><td class="num pos">+.054</td><td class="num best">.875</td><td class="num">.871</td><td class="num dim">−.004</td></tr>
-        <tr><td>SCOPe-40 (fold)</td><td>Recall@10</td><td class="num">.836</td><td class="num">.880</td><td class="num pos">+.044</td><td class="num best">.921</td><td class="num">.920</td><td class="num dim">−.001</td></tr>
-        <tr class="group"><td colspan="8">Transfer tasks — 15 tasks, the actual test</td></tr>
-        <tr><td>Remote Homology (Fold)</td><td>F1 macro</td><td class="num">.319</td><td class="num">.346</td><td class="num pos">+.028</td><td class="num best">.409</td><td class="num">.405</td><td class="num dim">−.004</td></tr>
-        <tr><td>Fluorescence (TAPE)</td><td>Spearman</td><td class="num">.360</td><td class="num">.414</td><td class="num pos">+.054</td><td class="num">.457</td><td class="num best">.460</td><td class="num dim">+.003</td></tr>
-        <tr><td>Variant Effect (GB1)</td><td>Spearman</td><td class="num">.663</td><td class="num">.716</td><td class="num pos">+.053</td><td class="num best">.779</td><td class="num">.758</td><td class="num neg">−.021</td></tr>
-        <tr><td>Peptide-HLA Binding</td><td>F1 macro</td><td class="num">.668</td><td class="num">.714</td><td class="num pos">+.046</td><td class="num">.710</td><td class="num best">.715</td><td class="num dim">+.005</td></tr>
-        <tr><td>Secondary Structure 3</td><td>F1 macro</td><td class="num best">.778</td><td class="num">.764</td><td class="num neg">−.014</td><td class="num">.651</td><td class="num">.685</td><td class="num pos">+.034</td></tr>
-        <tr><td>Subcellular Localisation</td><td>F1 macro</td><td class="num">.494</td><td class="num">.511</td><td class="num pos">+.017</td><td class="num best">.536</td><td class="num">.522</td><td class="num neg">−.013</td></tr>
-        <tr><td>Solubility (DeepSol)</td><td>F1 macro</td><td class="num">.558</td><td class="num">.557</td><td class="num dim">−.001</td><td class="num">.558</td><td class="num best">.570</td><td class="num pos">+.012</td></tr>
-        <tr><td>PPI (Bernett gold)</td><td>F1 macro</td><td class="num">.543</td><td class="num">.552</td><td class="num pos">+.009</td><td class="num">.559</td><td class="num best">.570</td><td class="num pos">+.011</td></tr>
-        <tr><td>Signal Peptide</td><td>F1 macro</td><td class="num">.955</td><td class="num">.963</td><td class="num pos">+.008</td><td class="num">.965</td><td class="num best">.967</td><td class="num dim">+.003</td></tr>
-        <tr><td>Neuropeptide Precursor</td><td>F1 macro</td><td class="num">.904</td><td class="num">.894</td><td class="num neg">−.009</td><td class="num">.898</td><td class="num best">.907</td><td class="num pos">+.009</td></tr>
-        <tr><td>EC Classification <span class="dim">(linear, forced)</span></td><td>F1 macro</td><td class="num best">.596</td><td class="num">.578</td><td class="num neg">−.018</td><td class="num">.593</td><td class="num">.584</td><td class="num neg">−.009</td></tr>
-        <tr><td>Metal Ion Binding</td><td>F1 macro</td><td class="num">.745</td><td class="num">.730</td><td class="num neg">−.016</td><td class="num best">.752</td><td class="num">.745</td><td class="num neg">−.006</td></tr>
-        <tr><td>Enzyme Catalytic Efficiency</td><td>Spearman</td><td class="num best">.698</td><td class="num">.687</td><td class="num neg">−.011</td><td class="num">.667</td><td class="num">.670</td><td class="num dim">+.003</td></tr>
-        <tr><td>β-lactamase (PEER)</td><td>Spearman</td><td class="num best">.738</td><td class="num">.683</td><td class="num neg">−.054</td><td class="num">.706</td><td class="num">.711</td><td class="num pos">+.005</td></tr>
-        <tr><td>Stability (Biomap)</td><td>Spearman</td><td class="num">.399</td><td class="num">.237</td><td class="num neg">−.162</td><td class="num best">.476</td><td class="num">.431</td><td class="num neg">−.046</td></tr>
+        <tr><td>Stability (Biomap)</td><td>Spearman</td>
+          <td class="num">.399 → .237</td><td class="num neg">−.162</td><td class="num">.476 → .431 <span class="neg">(−.045)</span></td>
+          <td class="num">.437 → .417</td><td class="num neg">−.020</td><td class="num">.396 → <strong>.468</strong> <span class="pos">(+.072)</span></td></tr>
+        <tr><td>β-lactamase (PEER)</td><td>Spearman</td>
+          <td class="num">.738 → .683</td><td class="num neg">−.054</td><td class="num">.706 → .711 <span class="dim">(+.005)</span></td>
+          <td class="num">.735 → .692</td><td class="num neg">−.043</td><td class="num">.635 → .656 <span class="pos">(+.020)</span></td></tr>
+        <tr><td>Variant Effect (GB1)</td><td>Spearman</td>
+          <td class="num">.663 → .716</td><td class="num pos">+.053</td><td class="num">.778 → .758 <span class="neg">(−.021)</span></td>
+          <td class="num">.844 → .853</td><td class="num pos">+.009</td><td class="num">.846 → .852 <span class="pos">(+.006)</span></td></tr>
+        <tr><td>Fluorescence (TAPE)</td><td>Spearman</td>
+          <td class="num">.360 → .414</td><td class="num pos">+.053</td><td class="num">.457 → .460 <span class="dim">(+.003)</span></td>
+          <td class="num">.588 → .613</td><td class="num pos">+.025</td><td class="num">.588 → .616 <span class="pos">(+.028)</span></td></tr>
+        <tr><td>Remote Homology (Fold)</td><td>F1 macro</td>
+          <td class="num">.319 → .346</td><td class="num pos">+.028</td><td class="num">.409 → .405 <span class="dim">(−.004)</span></td>
+          <td class="num">.364 → .375</td><td class="num pos">+.011</td><td class="num">.417 → .411 <span class="neg">(−.006)</span></td></tr>
+        <tr><td>Peptide-HLA Binding</td><td>F1 macro</td>
+          <td class="num">.668 → .714</td><td class="num pos">+.046</td><td class="num">.710 → .715 <span class="dim">(+.005)</span></td>
+          <td class="num">.782 → .816</td><td class="num pos">+.034</td><td class="num">.775 → .792 <span class="pos">(+.017)</span></td></tr>
+        <tr><td>Subcellular Localisation</td><td>F1 macro</td>
+          <td class="num">.494 → .511</td><td class="num pos">+.017</td><td class="num">.536 → .522 <span class="neg">(−.013)</span></td>
+          <td class="num">.561 → .592</td><td class="num pos">+.031</td><td class="num">.520 → .552 <span class="pos">(+.032)</span></td></tr>
+        <tr><td>PPI (Bernett gold)</td><td>F1 macro</td>
+          <td class="num">.543 → .552</td><td class="num pos">+.009</td><td class="num">.559 → .569 <span class="pos">(+.011)</span></td>
+          <td class="num">.501 → .511</td><td class="num pos">+.010</td><td class="num">.523 → .537 <span class="pos">(+.014)</span></td></tr>
+        <tr><td>Solubility (DeepSol)</td><td>F1 macro</td>
+          <td class="num">.558 → .557</td><td class="num dim">−.001</td><td class="num">.558 → .570 <span class="pos">(+.012)</span></td>
+          <td class="num">.601 → .612</td><td class="num pos">+.011</td><td class="num">.618 → .619 <span class="dim">(+.001)</span></td></tr>
+        <tr><td>Neuropeptide Precursor</td><td>F1 macro</td>
+          <td class="num">.904 → .894</td><td class="num neg">−.009</td><td class="num">.898 → .907 <span class="pos">(+.009)</span></td>
+          <td class="num">.925 → .928</td><td class="num dim">+.003</td><td class="num">.908 → <strong>.933</strong> <span class="pos">(+.025)</span></td></tr>
+        <tr><td>Signal Peptide</td><td>F1 macro</td>
+          <td class="num">.955 → .963</td><td class="num pos">+.008</td><td class="num">.965 → .967 <span class="dim">(+.003)</span></td>
+          <td class="num">.972 → .972</td><td class="num dim">+.000</td><td class="num">.969 → <strong>.972</strong> <span class="dim">(+.003)</span></td></tr>
+        <tr><td>Metal Ion Binding</td><td>F1 macro</td>
+          <td class="num">.745 → .730</td><td class="num neg">−.016</td><td class="num">.751 → .745 <span class="neg">(−.006)</span></td>
+          <td class="num">.717 → .707</td><td class="num neg">−.010</td><td class="num">.688 → .697 <span class="pos">(+.009)</span></td></tr>
+        <tr><td>Enzyme Catalytic Efficiency</td><td>Spearman</td>
+          <td class="num">.698 → .687</td><td class="num neg">−.011</td><td class="num">.667 → .670 <span class="dim">(+.003)</span></td>
+          <td class="num">.545 → .507</td><td class="num neg">−.038</td><td class="num">.500 → .512 <span class="pos">(+.012)</span></td></tr>
       </tbody>
-      <caption>Record on the 15 transfer tasks (ties are |Δ| &lt; 0.005): ESM2-Late <strong>7 win / 1 tie / 7 loss</strong>
-      against vanilla ESM-2 — a wash overall, with its gains concentrated in retrieval-flavoured tasks and its losses in
-      fitness and stability regression. ProtSent-Late <strong>5 / 5 / 5</strong> against ProtSent-V2 — the foundation
-      embedding is preserved. Single seed, single split, no confidence intervals: treat small deltas as noise.
-      All four arms feed the probe the same masked-mean-pooled 480-D vector.</caption>
+      <caption>Ties are |Δ| &lt; 0.005. The headline is the Stability row: under KNN, late training looks like it
+      costs ProtSent 4.5 points of stability prediction and costs ESM-2 sixteen; under a linear probe the ProtSent
+      loss becomes a <strong>+7.2 gain</strong> and the ESM-2 loss shrinks eightfold. "Late training hurts fitness and
+      stability tasks" was largely a property of the KNN probe, not of the representation. The consistent reading
+      across both probes: late training leaves neighbourhood geometry roughly where it was while making more
+      information linearly decodable — the opposite of the retrieval-specialisation trade-off this pilot was watching
+      for. Single seed, single split, no confidence intervals: directional only.</caption>
     </table>
   </div>
   <div class="prose">
@@ -420,7 +501,7 @@
       </tbody>
       <caption>Accuracy on the fold-prediction test split. One gallery draw per budget, and this repository's
       multi-seed runs of the same task show ±.005–.010 at N=100 — so the N=100 column separates nothing.
-      Read N=500 and N=1000, where the ordering matches SCOPe.</caption>
+      Read N=500 and N=1000, where the ordering matches SCOPe and CATH.</caption>
     </table>
   </div>
 </section>
@@ -453,9 +534,9 @@
 <section id="caveats">
   <div class="sec-head"><span class="tick"></span><h2>What this does not yet show</h2></div>
   <ul class="prose">
-    <li><strong>One seed, one run per arm, no linear probes yet.</strong> The pooled table has no confidence intervals,
-    and this project has been burned here before: ProtSent-V2's advantage over stock ESM-2 partly reverses under a
-    linear probe. A matching linear pass is running now and gets its own table — KNN and linear are never averaged.</li>
+    <li><strong>One seed, one run per arm, no confidence intervals on the pooled tables.</strong> Both probes are now
+    run and reported side by side, which is what exposed the Stability reversal — but with a single seed and a 0.005
+    tie threshold, individual small deltas are noise. Read the tallies and the sign changes, not the third decimal.</li>
     <li><strong>SCOPe-40 is not decontaminated</strong> against the pretraining corpus (see the identity-stratified
     check above, which is the mitigation, not a clean split).</li>
     <li><strong>2,000 steps on a prefix-limited pair build.</strong> The plateau may be a diversity limit rather than a
@@ -463,10 +544,12 @@
     2,000-step uncapped control also gets run.</li>
     <li><strong>No hard-negative mining.</strong> Upstream guidance calls it essential for competitive late-interaction
     models; this pilot used in-batch negatives only. Probably the largest untapped gain.</li>
-    <li><strong>One head size (64-D), one scale (35M), one probe type.</strong> All three are being extended.</li>
+    <li><strong>One head size (64-D), one scale (35M).</strong> The 128-D head ablation and both 150M arms are running.
+    CATH suggests 64-D is genuinely too small on an already-contrastive backbone, which makes the head-size result
+    the one to watch.</li>
     <li><strong>Function benchmarks are thin.</strong> EC, metal-ion binding and catalytic efficiency are in; GO-MF and
-    CAFA5 are not, so "does late training hurt function prediction?" is half-answered — and the EC signal is mildly
-    negative for both late arms.</li>
+    CAFA5 are not, so "does late training hurt function prediction?" is half-answered. EC is mildly negative for both
+    late arms under both probes; metal-ion binding is negative under KNN but positive for ProtSent under linear.</li>
     <li><strong>Built on ProtSent-V2, not the shipped V2.5.</strong> Numbers here should not be quoted against V2.5 results.</li>
     <li><strong>No PROTOCOL comparison.</strong> Different splits, relevance definitions and hierarchy level — a direct
     number-to-number comparison would be wrong without redoing their protocol.</li>
@@ -486,17 +569,19 @@
         <tr><td>ProtSent-V2-150M-Late · 5,000 steps</td><td>Does the scale story change at 150M?</td><td class="num">~5 GPU-h</td><td>running</td></tr>
         <tr><td>ESM2-150M-Late · 5,000 steps</td><td>Same recipe from vanilla, at 150M</td><td class="num">~5 GPU-h</td><td>running</td></tr>
         <tr><td>128-D head vs 64-D (35M)</td><td>Is the head the bottleneck?</td><td class="num">~1.2 GPU-h</td><td>running</td></tr>
-        <tr><td>Linear-probe pass, 4 arms</td><td>Does the "backbone survived" verdict depend on the probe?</td><td class="num">~2 GPU-h</td><td>running</td></tr>
+        <tr><td>Linear-probe pass, 4 arms</td><td>Does the "backbone survived" verdict depend on the probe?</td><td class="num">~2 GPU-h</td><td><strong>done — it does</strong></td></tr>
         <tr><td>Pair-order swap ablation (35M)</td><td>Does the loss's query/document role matter on symmetric pairs?</td><td class="num">~1.2 GPU-h</td><td>queued</td></tr>
         <tr><td>10,000-step runs, uncapped pair build</td><td>Plateau, or narrow pair diversity?</td><td class="num">~4.4 GPU-h each</td><td>queued</td></tr>
-        <tr><td>CATH midnight zone (1-NN, ProtTucker setting)</td><td>Remote homology where alignment fails</td><td class="num">~1 GPU-h</td><td>claimed, not yet started</td></tr>
+        <tr><td>CATH midnight zone (1-NN, ProtTucker setting)</td><td>Remote homology where alignment fails</td><td class="num">~1 GPU-h</td><td><strong>done — see above</strong></td></tr>
         <tr><td>GO-MF function suite</td><td>The function gap above</td><td class="num">~2 GPU-h</td><td>queued last</td></tr>
       </tbody>
-      <caption>Ranked by expected value beyond the queue: <strong>(1) freeze the backbone and train only the projection</strong>
-      — if that matches full training on the ProtSent init, late interaction becomes a drop-in head with no backbone risk
-      and this whole "did the backbone survive" section stops existing; <strong>(2) hard-negative mining</strong>;
-      <strong>(3) a lower backbone learning rate for the vanilla arm</strong>, to keep its retrieval gains without the
-      stability regression.</caption>
+      <caption>Ranked by expected value beyond the queue, updated by the CATH and linear results:
+      <strong>(1) a larger head — or none.</strong> CATH says 64-D loses 3.3 points against the raw 480-D residues on a
+      ProtSent backbone, so the head-size ablation now matters more than any further training, and "ship zero-shot
+      480-D MaxSim" is a serious candidate configuration. <strong>(2) freeze the backbone, train the projection only</strong>
+      — if that matches full training, late interaction becomes a drop-in head with no backbone risk.
+      <strong>(3) hard-negative mining.</strong> The previously-listed "lower backbone LR to avoid the stability
+      regression" is demoted: that regression was mostly a KNN-probe artefact.</caption>
     </table>
   </div>
 </section>
