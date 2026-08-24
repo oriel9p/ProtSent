@@ -182,18 +182,19 @@ Outputs land in `--output_dir` as `late/` (the multi-vector model), `dense_view/
 (its mean-pooled equivalent), `step0/` (both, before training, as a parity control),
 plus `runtime.json` and `train_log.csv`.
 
-**Defaults worth knowing.** `--proj_dim 128` (measured better than 64-D and better
-than no projection at all); `--attn_implementation auto` tries flash attention and
-falls back to sdpa, logging which it got and recording it in `runtime.json`.
-**Weights stay fp32** — flash needs half-precision activations, which bf16 autocast
-supplies, not half-precision weights. Loading in bf16 puts AdamW's parameters in bf16,
-where an update at lr 1e-5 is below the representable spacing and rounds away; that
-froze 97.6% of the backbone before it was caught. TF32 is on for the fp32 matmuls.
-Flash needs `0.15.2 <= kernels < 0.16` — outside that window transformers rejects the
-kernel and the run silently trains on sdpa, so check the logged backend after any
-environment change. `--compile` is off by default (it helps short Pfam pairs and
-hurts longer STRING ones). FastPLM checkpoints (`Synthyra/*`) always take sdpa,
-because the flash path loads a plain `EsmModel` instead of the FastPLM wrapper.
+**Defaults.** `--proj_dim 128` (beats 64-D and beats no projection). `--attn_implementation auto`
+tries flash, falls back to sdpa, and records which it got in `runtime.json`. `--compile` is 1.14x
+faster under 2-way DDP. Weights stay **fp32** with bf16 autocast and TF32 matmuls — flash needs
+half-precision *activations*, not half-precision weights, and loading in bf16 puts AdamW's
+parameters there, where a 1e-5 update rounds to nothing (it froze 97.6% of one backbone before it
+was caught). `kernels` must be `0.15.2 <= v < 0.16` or flash silently falls back. FastPLM
+checkpoints (`Synthyra/*`) always take sdpa.
+
+After any environment change, check the backend a run actually got, and check it is training:
+
+```bash
+python validate_run.py models/late_interaction/<run>   # dtype + loss + drift from step0
+```
 
 Results, method notes and the caveats that go with them:
 [`results/late_interaction/pilot_35m/SUMMARY.md`](results/late_interaction/pilot_35m/SUMMARY.md).
@@ -228,6 +229,8 @@ late_interaction_eval.py     # SCOPe / CATH / few-shot evaluation for late model
 run_experiment_queue.sh      # Resumable, disconnect-proof training queue
 run_late_bench.sh            # Pooled benchmarks over each arm's dense view
 snapshot_checkpoints.sh      # Keeps weights-only checkpoint copies for the curve
+validate_run.py              # Is a run's backbone actually moving? (dtype/loss/drift)
+watch_validation.sh          # Runs validate_run.py per arm as checkpoints appear
 pyproject.toml               # Dependencies and project config
 tests/                       # Unit and integration tests
 data/                        # Small metadata files (large data is generated)
