@@ -145,7 +145,8 @@
     <div class="card"><span class="k">Bought by training</span><span class="v">.545 → .698</span>
       <span class="n">ESM-2 the rest of the way, for 512k pairs — 68× fewer than ProtSent-V2's own 34.8M-pair run</span></div>
     <div class="card"><span class="k">ProtSent + late training</span><span class="v">.684 → .681</span>
-      <span class="n">flat on SCOPe, −3.3 pts on CATH. Buys 7.5× smaller vectors and 5× faster scoring, at a cost</span></div>
+      <span class="n">flat on SCOPe, −3.3 pts on CATH. Buys 7.5× smaller vectors and faster scoring — 5× on SCOPe,
+      only 1.6× on encode-dominated CATH — at a cost</span></div>
     <div class="card"><span class="k">Scoring, 2,207² pairs</span><span class="v">0.03 s → 8 s</span>
       <span class="n">cosine → 64-D MaxSim (480-D MaxSim: 41 s), on a shared 3–8 s encode</span></div>
     <div class="card"><span class="k">Best 35M arm on CATH</span><span class="v">61.3%</span>
