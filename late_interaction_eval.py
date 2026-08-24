@@ -249,7 +249,13 @@ def cmd_watch_curve(args) -> None:
                                    args.follow_pid, run)
                     return
         if (run / "late").exists():  # training finished and exported
-            if f"{args.name}@final" not in already():
+            # `late/` is exported from the same weights as the last checkpoint, so scoring it
+            # again just spends ~3 GPU-minutes to write a bit-identical row into the curve.
+            # Confirmed on the 35M runs: esm2_late@2000 and @final have identical per-query AP
+            # vectors at every level. Only score it if no checkpoint was captured at all.
+            done = already()
+            scored_any = any(m.startswith(f"{args.name}@") and not m.endswith("@final") for m in done)
+            if not scored_any and f"{args.name}@final" not in done:
                 score(f"{args.name}@final", str(run / "late"))
             logger.info("curve watcher done for %s", args.name)
             return
