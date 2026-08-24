@@ -54,6 +54,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max_seq_length", type=int, default=512)
     p.add_argument("--batch_size", type=int, default=32, help="Per-device contrastive batch")
     p.add_argument("--mini_batch_size", type=int, default=16, help="GradCache embedding chunk")
+    p.add_argument("--mini_batch_num_tokens", type=int, default=0,
+                   help="Token-packed GradCache mini-batches (ST>=5.7); overrides --mini_batch_size when >0")
     p.add_argument("--score_mini_batch_size", type=int, default=8, help="MaxSim scoring chunk")
     p.add_argument("--max_steps", type=int, default=2000)
     p.add_argument("--max_minutes", type=int, default=165, help="Hard wall-clock stop (<2h45m default)")
@@ -71,6 +73,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--run_name", default="protsent_late")
     p.add_argument("--gather_across_devices", action="store_true")
     p.add_argument("--skip_step0_export", action="store_true")
+    p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True,
+                   help="Resume from the latest checkpoint-* in --output_dir if present")
+    p.add_argument("--save_total_limit", type=int, default=1,
+                   help="Checkpoints kept on disk (1 = crash-resume only; curve sampling reads them live)")
+    p.add_argument("--keep_checkpoints", action="store_true",
+                   help="Skip the end-of-run checkpoint-* cleanup")
+    p.add_argument("--swap_pair_order", action="store_true",
+                   help="Randomly swap (sentence_0, sentence_1) per pair, seeded — symmetry ablation")
     return p.parse_args()
 
 
@@ -94,8 +104,21 @@ def build_datasets(args, world_size: int):
                     max_pairs=args.max_pairs_per_file,
                     max_seq_length=args.max_seq_length,
                 )
+            if args.swap_pair_order:
+                # symmetry ablation: seeded per-row swap of (sentence_0, sentence_1)
+                import numpy as np
+
+                flip = np.random.default_rng(args.seed).random(len(ds)) < 0.5
+
+                def _swap(row, idx, _flip=flip):
+                    if _flip[idx]:
+                        return {"sentence_0": row["sentence_1"], "sentence_1": row["sentence_0"]}
+                    return {}
+
+                ds = ds.map(_swap, with_indices=True)
             out[name] = ds.shuffle(seed=args.seed)
-            logger.info("dataset %s: %d pairs", name, len(ds))
+            logger.info("dataset %s: %d pairs%s", name, len(ds),
+                        " (pair order swapped)" if args.swap_pair_order else "")
         return out
 
     is_ddp = world_size > 1 and torch.distributed.is_initialized()
@@ -143,7 +166,7 @@ def main() -> None:
         multi_dataset_batch_sampler=MultiDatasetBatchSamplers.ROUND_ROBIN,
         save_strategy="steps" if args.save_steps > 0 else "no",
         save_steps=args.save_steps if args.save_steps > 0 else 500,
-        save_total_limit=None,
+        save_total_limit=args.save_total_limit if args.save_total_limit > 0 else None,
         logging_steps=10,
         dataloader_num_workers=args.dataloader_num_workers,
         dataloader_drop_last=True,
@@ -161,7 +184,7 @@ def main() -> None:
     if frozen:
         logger.info("froze %d unused head params (pooler/contact_head) for DDP", frozen)
 
-    if is_main and not args.skip_step0_export:
+    if is_main and not args.skip_step0_export and not (out / "step0" / "late").exists():
         li.save_late_and_dense(mve, pooling, str(out / "step0"))
         logger.info("step-0 late + dense_view exported (parity control)")
 
@@ -170,6 +193,7 @@ def main() -> None:
     loss = CachedMultiVectorMultipleNegativesRankingLoss(
         mve,
         mini_batch_size=args.mini_batch_size,
+        mini_batch_num_tokens=args.mini_batch_num_tokens or None,
         score_mini_batch_size=args.score_mini_batch_size,
         gather_across_devices=args.gather_across_devices,
     )
@@ -188,18 +212,19 @@ def main() -> None:
         callbacks=[TimeLimitCallback(args.max_minutes)] if args.max_minutes > 0 else [],
     )
 
+    has_ckpt = any(out.glob("checkpoint-*"))
     t0 = time.time()
-    trainer.train()
+    trainer.train(resume_from_checkpoint=bool(args.resume and has_ckpt))
     wall = time.time() - t0
 
     if is_main:
         li.save_late_and_dense(mve, pooling, str(out))
-        # Every trainer checkpoint stays in MVE format; make each loadable and give it a dense view.
-        for ckpt in sorted(out.glob("checkpoint-*")):
-            li.make_loadable(str(ckpt))
-            ckpt_mve = li.load_multivector_encoder(str(ckpt), device=device)
-            li.save_dense_view(ckpt_mve, pooling, str(ckpt / "dense_view"))
-            del ckpt_mve
+        if not args.keep_checkpoints:
+            import shutil
+
+            for ckpt in sorted(out.glob("checkpoint-*")):
+                shutil.rmtree(ckpt)
+            logger.info("checkpoints cleaned up (final late/ + dense_view/ kept)")
 
         import sentence_transformers as st_pkg
         import transformers
@@ -211,6 +236,7 @@ def main() -> None:
             "max_seq_length": args.max_seq_length,
             "per_device_batch_size": args.batch_size,
             "mini_batch_size": args.mini_batch_size,
+            "mini_batch_num_tokens": args.mini_batch_num_tokens or None,
             "score_mini_batch_size": args.score_mini_batch_size,
             "world_size": world_size,
             "steps": steps_done,

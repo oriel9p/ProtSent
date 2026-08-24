@@ -171,6 +171,91 @@ def cmd_fewshot_rh(args) -> None:
     append_csv(Path(args.out_dir) / "late_fewshot_knn.csv", rows)
 
 
+def cmd_watch_curve(args) -> None:
+    """Poll a training run for new checkpoint-* dirs and score SCOPe before they are deleted.
+
+    Runs alongside training on the same GPU (small model + 2.2k sequences), so the run can keep
+    save_total_limit=1 and still produce a training curve. Idempotent: already-scored steps are
+    skipped, so restarting the watcher after a crash is safe.
+    """
+    import time as _time
+
+    run = Path(args.run_dir)
+    out = Path(args.out_dir)
+    curve = out / "scope_checkpoint_curve.csv"
+    seqs, families = li.load_scope40()
+
+    def already() -> set[str]:
+        if not curve.exists():
+            return set()
+        import csv as _csv
+
+        return {r["model"] for r in _csv.DictReader(curve.open())}
+
+    def score(name: str, path: str) -> None:
+        try:
+            mve = li.load_multivector_encoder(path, device=args.device)
+            mve.max_seq_length = args.max_seq_length
+            t0 = _time.time()
+            sim = li.maxsim_matrix(mve, seqs, batch_size=args.batch_size, chunk_elements=args.chunk_elements)
+            rows, _ = li.scope_rows(sim, families, model=name, scoring="maxsim", n_boot=0,
+                                   runtime_s=round(_time.time() - t0, 2))
+            append_csv(curve, rows)
+            del mve, sim
+            import torch
+
+            torch.cuda.empty_cache()
+        except Exception as exc:  # a busy GPU or a half-written checkpoint must not kill the watcher
+            logger.warning("curve point %s failed: %s", name, exc)
+
+    deadline = _time.time() + args.max_hours * 3600
+    while _time.time() < deadline:
+        done = already()
+        if (run / "step0" / "late").exists() and f"{args.name}@0" not in done:
+            score(f"{args.name}@0", str(run / "step0" / "late"))
+        for ckpt in sorted(run.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1])):
+            tag = f"{args.name}@{ckpt.name.split('-')[1]}"
+            if tag not in done and (ckpt / "modules.json").exists():
+                score(tag, str(ckpt))
+        if (run / "late").exists():  # training finished and exported
+            if f"{args.name}@final" not in already():
+                score(f"{args.name}@final", str(run / "late"))
+            logger.info("curve watcher done for %s", args.name)
+            return
+        _time.sleep(args.poll_seconds)
+    logger.warning("curve watcher timed out for %s", args.name)
+
+
+def cmd_cath(args) -> None:
+    """CATH midnight-zone (ProtTucker setting): 1-NN superfamily transfer, test_h vs the lookup set."""
+    from datasets import load_dataset
+
+    ds = load_dataset("GrimSqueaker/cath43-eat")
+    lookup, test = ds["lookup"], ds[args.test_split]
+    gal_seqs, gal_y = list(lookup["sequence"]), np.asarray(lookup[args.label_col])
+    q_seqs, q_y = list(test["sequence"]), np.asarray(test[args.label_col])
+    if args.max_lookup and len(gal_seqs) > args.max_lookup:
+        rng = np.random.default_rng(args.seed)
+        idx = rng.choice(len(gal_seqs), args.max_lookup, replace=False)
+        gal_seqs, gal_y = [gal_seqs[i] for i in idx], gal_y[idx]
+
+    rows = []
+    for spec in args.models:
+        name, kind, path = parse_model_spec(spec)
+        scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
+        t0 = time.time()
+        sim = scorer(gal_seqs, queries=q_seqs, bs=args.batch_size)
+        pred = gal_y[np.argmax(sim, axis=1)]
+        rows.append({
+            "model": name, "scoring": scoring, "level": args.label_col, "test_split": args.test_split,
+            "accuracy": float((pred == q_y).mean()), "n_queries": int(len(q_y)),
+            "n_lookup": int(len(gal_y)), "runtime_s": round(time.time() - t0, 2),
+        })
+        logger.info("%s cath %s: acc=%.4f", name, args.test_split, rows[-1]["accuracy"])
+        del scorer, sim
+    append_csv(Path(args.out_dir) / "cath_eat.csv", rows)
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -195,6 +280,20 @@ def main() -> None:
     pf.add_argument("--knn_k", type=int, default=3)
     pf.add_argument("--max_test", type=int, default=0, help="Subsample the test split (0 = all)")
     pf.set_defaults(fn=cmd_fewshot_rh)
+
+    pc = sub.add_parser("watch_curve", parents=[common])
+    pc.add_argument("--run_dir", required=True)
+    pc.add_argument("--name", required=True, help="Curve label, e.g. protsent_late_150m")
+    pc.add_argument("--chunk_elements", type=int, default=25_000_000)
+    pc.add_argument("--poll_seconds", type=int, default=120)
+    pc.add_argument("--max_hours", type=float, default=24.0)
+    pc.set_defaults(fn=cmd_watch_curve)
+
+    pcath = sub.add_parser("cath", parents=[common])
+    pcath.add_argument("--test_split", default="test_h", choices=["test_h", "test219", "test300", "validation"])
+    pcath.add_argument("--label_col", default="cath_h")
+    pcath.add_argument("--max_lookup", type=int, default=0, help="Subsample the lookup set (0 = all 69,605)")
+    pcath.set_defaults(fn=cmd_cath)
 
     args = p.parse_args()
     args.fn(args)
