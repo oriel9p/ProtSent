@@ -137,9 +137,14 @@ def test_configured_learning_rate_actually_moves_the_backbone(tiny_models):
     mve, _ = tiny_models
     assert _fraction_of_params_moved(mve, lr=1e-5) > 0.9, "fp32 baseline must move"
 
-    # The flash path pins dtype=bfloat16; attn_implementation="sdpa" reaches it without a GPU.
-    bf16_mve, _ = li.build_multivector_encoder(
+    # Pinning a backend must not silently change the weight dtype. sdpa reaches the same
+    # model_kwargs path as flash without needing a GPU; the regression this guards is a
+    # dtype=bfloat16 that used to ride along with it.
+    pinned_mve, _ = li.build_multivector_encoder(
         TINY, proj_dim=16, max_seq_length=64, device="cpu", attn_implementation="sdpa"
     )
-    moved = _fraction_of_params_moved(bf16_mve, lr=1e-5)
-    assert moved > 0.9, f"bf16 backbone lost updates at lr 1e-5: only {moved:.1%} of elements moved"
+    moved = _fraction_of_params_moved(pinned_mve, lr=1e-5)
+    assert moved > 0.9, (
+        f"pinning a backend cost the backbone its updates at lr 1e-5: only {moved:.1%} of "
+        f"elements moved (half-precision weights cannot represent a step that small)"
+    )
