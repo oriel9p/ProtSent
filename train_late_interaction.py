@@ -128,29 +128,9 @@ def main() -> None:
     )
 
     device = f"cuda:{local_rank}" if torch.cuda.is_available() else None
-    mve, dense_st = li.build_multivector_encoder(
-        args.model, proj_dim=args.proj_dim, max_seq_length=args.max_seq_length, device=device
-    )
-    pooling = dense_st[1]
 
-    if is_main and not args.skip_step0_export:
-        li.save_late_and_dense(mve, pooling, str(out / "step0"))
-        logger.info("step-0 late + dense_view exported (parity control)")
-
-    train_dataset = build_datasets(args, world_size)
-
-    loss = CachedMultiVectorMultipleNegativesRankingLoss(
-        mve,
-        mini_batch_size=args.mini_batch_size,
-        score_mini_batch_size=args.score_mini_batch_size,
-        gather_across_devices=args.gather_across_devices,
-    )
-    backbone, proj = li.backbone_and_projection_params(mve)
-    param_groups = [{"params": backbone, "lr": args.lr}]
-    if proj:
-        param_groups.append({"params": proj, "lr": args.proj_lr})
-    optimizer = torch.optim.AdamW(param_groups, lr=args.lr, weight_decay=0.01)
-
+    # Creating TrainingArguments first initializes the accelerate/torch.distributed
+    # state, which build_datasets relies on for its rank-0-first barrier.
     train_args = MultiVectorEncoderTrainingArguments(
         output_dir=str(out),
         max_steps=args.max_steps,
@@ -172,6 +152,33 @@ def main() -> None:
         report_to=args.report_to,
         run_name=args.run_name,
     )
+
+    mve, dense_st = li.build_multivector_encoder(
+        args.model, proj_dim=args.proj_dim, max_seq_length=args.max_seq_length, device=device
+    )
+    pooling = dense_st[1]
+    frozen = li.freeze_unused_heads(mve)
+    if frozen:
+        logger.info("froze %d unused head params (pooler/contact_head) for DDP", frozen)
+
+    if is_main and not args.skip_step0_export:
+        li.save_late_and_dense(mve, pooling, str(out / "step0"))
+        logger.info("step-0 late + dense_view exported (parity control)")
+
+    train_dataset = build_datasets(args, world_size)
+
+    loss = CachedMultiVectorMultipleNegativesRankingLoss(
+        mve,
+        mini_batch_size=args.mini_batch_size,
+        score_mini_batch_size=args.score_mini_batch_size,
+        gather_across_devices=args.gather_across_devices,
+    )
+    backbone, proj = li.backbone_and_projection_params(mve)
+    param_groups = [{"params": backbone, "lr": args.lr}]
+    if proj:
+        param_groups.append({"params": proj, "lr": args.proj_lr})
+    optimizer = torch.optim.AdamW(param_groups, lr=args.lr, weight_decay=0.01)
+
     trainer = MultiVectorEncoderTrainer(
         model=mve,
         args=train_args,

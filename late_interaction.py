@@ -123,11 +123,24 @@ def save_late_and_dense(
     return late_dir, dense_dir
 
 
+def freeze_unused_heads(mve: MultiVectorEncoder) -> int:
+    """Freeze heads that never feed token_embeddings (EsmModel pooler / contact
+    head, FastPLM's dropped lm_head): DDP's reducer aborts on parameters that
+    receive no grad. Confirmed unused by DDP's own no-grad report on both arms.
+    """
+    frozen = 0
+    for name, param in mve.named_parameters():
+        if ".pooler." in name or "contact_head" in name or "lm_head" in name:
+            param.requires_grad_(False)
+            frozen += 1
+    return frozen
+
+
 def backbone_and_projection_params(mve: MultiVectorEncoder):
-    """(backbone params, projection params) for two-LR optimisers."""
-    proj = [p for m in mve if isinstance(m, Dense) for p in m.parameters()]
+    """(backbone params, projection params) for two-LR optimisers (trainable only)."""
+    proj = [p for m in mve if isinstance(m, Dense) for p in m.parameters() if p.requires_grad]
     proj_ids = {id(p) for p in proj}
-    backbone = [p for p in mve.parameters() if id(p) not in proj_ids]
+    backbone = [p for p in mve.parameters() if p.requires_grad and id(p) not in proj_ids]
     return backbone, proj
 
 
