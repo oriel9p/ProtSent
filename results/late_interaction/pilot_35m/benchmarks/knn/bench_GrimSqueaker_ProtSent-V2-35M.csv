@@ -1,0 +1,27 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,EmbeddingNorm,BenchmarkSeed,Accuracy,F1_Weighted,F1_Macro,BalancedAccuracy,MCC,F1,AUC,AP,Spearman,Pearson,MSE,MAE,R2,F1_Micro,Error,Recall@1,Recall@10,Recall@30,MAP,eligible_Recall@1,eligible_Recall@10,eligible_Recall@30,eligible_MAP,n_queries,n_eligible_queries
+GrimSqueaker/ProtSent-V2-35M,Remote Homology (Fold),20000,2026-08-24,knn,standard,test,test_split,none,42,0.66677,0.65166,0.4088,0.49564,0.66299,,,,,,,,,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Solubility (DeepSol),20000,2026-08-24,knn,standard,test,test_split,none,42,0.56122,,0.55752,0.56117,0.12444,0.51705,0.57648,0.55059,,,,,,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Signal Peptide Prediction (SignalP/ProteinBERT),20000,2026-08-24,knn,standard,test,test_split,none,42,0.98073,,0.96458,0.96458,0.92915,0.94065,0.98532,0.95156,,,,,,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Neuropeptide Precursor Prediction (ProFET/NeuroPID),20000,2026-08-24,knn,standard,test,test_split,none,42,0.90801,,0.89791,0.92016,0.80436,0.93002,0.96447,0.97686,,,,,,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,beta-lactamase-PEER,20000,2026-08-24,knn,standard,test,test_split_column,none,42,,,,,,,,,0.70598,0.78616,0.0396,0.13494,0.61614,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Peptide-HLA Binding,20000,2026-08-24,knn,standard,test,test_split,none,42,0.71175,,0.70992,0.7133,0.43331,0.733,0.76876,0.7021,,,,,,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Metal Ion Binding,20000,2026-08-24,knn,standard,test,test_split,none,42,0.7515,,0.7515,0.7515,0.50302,0.75243,0.81625,0.77756,,,,,,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Subcellular Localisation,20000,2026-08-24,knn,standard,test,test_split,none,42,0.67427,0.67265,0.53569,0.52146,0.59847,,0.83234,,,,,,,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,EC Classification,20000,2026-08-24,linear,standard,test,test_split,none,42,0.55112,,0.59308,,,,,,,,,,,0.77417,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Variant Effect (GB1),20000,2026-08-24,knn,standard,test,test_split,none,42,,,,,,,,,0.77847,0.75362,0.68202,0.55559,0.53067,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Fluorescence (TAPE),20000,2026-08-24,knn,standard,test,test_split,none,42,,,,,,,,,0.45684,0.48889,1.54288,0.91667,-0.62541,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Stability (Biomap),20000,2026-08-24,knn,standard,test,test_split,none,42,,,,,,,,,0.47627,0.46799,0.16105,0.31729,0.03588,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Enzyme Catalytic Efficiency,20000,2026-08-24,knn,standard,test,test_split,none,42,,,,,,,,,0.66717,0.6784,14.42704,2.65481,0.42057,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,PPI (Bernett Gold Standard),20000,2026-08-24,knn,standard,test,test_split,none,42,0.5597,,0.55885,0.55981,0.12011,0.57818,0.57239,0.54493,,,,,,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Secondary Structure 3 (NetSurfP-SS3),20000,2026-08-24,knn,standard,test,test_split,none,42,0.66587,,0.65103,,0.47296,,,,,,,,,,,,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Residue Conservation (FLIP),20000,2026-08-24,knn,standard,test,task_exception,none,42,,,,,,,,,,,,,,,"Local dataset 'data/conservation_flip' is not present. It is built from source rather than downloaded, so a fresh clone does not have it.
+Build it first:
+    python scripts/prep_conservation.py
+See docs/DATASETS.md.",,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,Intrinsic Disorder (DisProt),20000,2026-08-24,knn,standard,test,task_exception,none,42,,,,,,,,,,,,,,,"Local dataset 'data/disprot' is not present. It is built from source rather than downloaded, so a fresh clone does not have it.
+Build it first:
+    python scripts/prep_disprot.py
+See docs/DATASETS.md.",,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,SCOPe-40 Structural Retrieval,20000,2026-08-24,linear,standard,test,retrieval_unchanged,none,42,,,,,,,,,,,,,,,,0.52515,0.70684,0.73901,0.49457,0.68458,0.92144,0.96338,0.64472,2207.0,1693.0
+GrimSqueaker/ProtSent-V2-35M,SCOPe-40 Structural Retrieval (fold),20000,2026-08-24,linear,standard,test,retrieval_unchanged,none,42,,,,,,,,,,,,,,,,0.85002,0.92116,0.93657,0.55732,0.88658,0.96078,0.97684,0.58129,2207.0,2116.0
+GrimSqueaker/ProtSent-V2-35M,SCOPe-40 Structural Retrieval (superfamily),20000,2026-08-24,linear,standard,test,retrieval_unchanged,none,42,,,,,,,,,,,,,,,,0.78432,0.87494,0.88899,0.59794,0.85693,0.95594,0.97129,0.65329,2207.0,2020.0

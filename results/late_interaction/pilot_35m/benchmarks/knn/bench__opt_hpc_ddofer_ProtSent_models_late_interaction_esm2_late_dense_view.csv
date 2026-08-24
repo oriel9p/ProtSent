@@ -1,0 +1,27 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,EmbeddingNorm,BenchmarkSeed,Accuracy,F1_Weighted,F1_Macro,BalancedAccuracy,MCC,F1,AUC,AP,Spearman,Pearson,MSE,MAE,R2,F1_Micro,Error,Recall@1,Recall@10,Recall@30,MAP,eligible_Recall@1,eligible_Recall@10,eligible_Recall@30,eligible_MAP,n_queries,n_eligible_queries
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Remote Homology (Fold),20000,2026-08-24,knn,standard,test,test_split,none,42,0.60758,0.59068,0.34645,0.39945,0.60294,,,,,,,,,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Solubility (DeepSol),20000,2026-08-24,knn,standard,test,test_split,none,42,0.56022,,0.55683,0.56018,0.12223,0.51807,0.57193,0.55309,,,,,,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Signal Peptide Prediction (SignalP/ProteinBERT),20000,2026-08-24,knn,standard,test,test_split,none,42,0.98025,,0.96307,0.95532,0.92644,0.93788,0.9852,0.95568,,,,,,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Neuropeptide Precursor Prediction (ProFET/NeuroPID),20000,2026-08-24,knn,standard,test,test_split,none,42,0.90504,,0.8944,0.91539,0.79654,0.92793,0.96078,0.97303,,,,,,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,beta-lactamase-PEER,20000,2026-08-24,knn,standard,test,test_split_column,none,42,,,,,,,,,0.68332,0.76384,0.0434,0.14334,0.57931,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Peptide-HLA Binding,20000,2026-08-24,knn,standard,test,test_split,none,42,0.71758,,0.7142,0.71962,0.45177,0.74528,0.78182,0.71559,,,,,,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Metal Ion Binding,20000,2026-08-24,knn,standard,test,test_split,none,42,0.72973,,0.72969,0.72973,0.45959,0.73294,0.79789,0.7579,,,,,,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Subcellular Localisation,20000,2026-08-24,knn,standard,test,test_split,none,42,0.62975,0.6236,0.51097,0.49461,0.53989,,0.81502,,,,,,,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,EC Classification,20000,2026-08-24,linear,standard,test,test_split,none,42,0.56484,,0.57815,,,,,,,,,,,0.78357,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Variant Effect (GB1),20000,2026-08-24,knn,standard,test,test_split,none,42,,,,,,,,,0.71634,0.69795,0.84483,0.63502,0.41863,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Fluorescence (TAPE),20000,2026-08-24,knn,standard,test,test_split,none,42,,,,,,,,,0.41373,0.44824,1.67191,0.98353,-0.76134,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Stability (Biomap),20000,2026-08-24,knn,standard,test,test_split,none,42,,,,,,,,,0.23731,0.24225,0.25242,0.3871,-0.51106,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Enzyme Catalytic Efficiency,20000,2026-08-24,knn,standard,test,test_split,none,42,,,,,,,,,0.68737,0.69421,13.60689,2.57261,0.4535,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,PPI (Bernett Gold Standard),20000,2026-08-24,knn,standard,test,test_split,none,42,0.5516,,0.55158,0.55159,0.10318,0.54848,0.56497,0.54035,,,,,,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Secondary Structure 3 (NetSurfP-SS3),20000,2026-08-24,knn,standard,test,test_split,none,42,0.77154,,0.76387,,0.64114,,,,,,,,,,,,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Residue Conservation (FLIP),20000,2026-08-24,knn,standard,test,task_exception,none,42,,,,,,,,,,,,,,,"Local dataset 'data/conservation_flip' is not present. It is built from source rather than downloaded, so a fresh clone does not have it.
+Build it first:
+    python scripts/prep_conservation.py
+See docs/DATASETS.md.",,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,Intrinsic Disorder (DisProt),20000,2026-08-24,knn,standard,test,task_exception,none,42,,,,,,,,,,,,,,,"Local dataset 'data/disprot' is not present. It is built from source rather than downloaded, so a fresh clone does not have it.
+Build it first:
+    python scripts/prep_disprot.py
+See docs/DATASETS.md.",,,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,SCOPe-40 Structural Retrieval,20000,2026-08-24,linear,standard,test,retrieval_unchanged,none,42,,,,,,,,,,,,,,,,0.43135,0.64477,0.69189,0.371,0.56232,0.84052,0.90195,0.48363,2207.0,1693.0
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,SCOPe-40 Structural Retrieval (fold),20000,2026-08-24,linear,standard,test,retrieval_unchanged,none,42,,,,,,,,,,,,,,,,0.75396,0.87947,0.91346,0.41204,0.78639,0.9173,0.95274,0.42976,2207.0,2116.0
+/opt/hpc/ddofer/ProtSent/models/late_interaction/esm2_late/dense_view,SCOPe-40 Structural Retrieval (superfamily),20000,2026-08-24,linear,standard,test,retrieval_unchanged,none,42,,,,,,,,,,,,,,,,0.69098,0.82918,0.86226,0.43255,0.75495,0.90594,0.94208,0.4726,2207.0,2020.0
