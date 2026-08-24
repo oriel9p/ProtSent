@@ -75,21 +75,43 @@ queue_c() {  # GPU C: cheap 35M ablations first, then the long runs
   scope_rows "$gpu" "$RES/pilot_35m/scope" - \
     "protsent_late_proj128=late:$MODELS/protsent_late_proj128/late" \
     "protsent_late_swap=late:$MODELS/protsent_late_swap/late"
-  # C2/C3 long runs: 10k steps on an uncapped AFDB pair build (tests the step-1500 plateau)
+}
+
+# The long runs live in their own queues so they can take the two GPUs the 150M arms
+# free up, rather than running back to back on one card.
+#
+# 18,219 steps is one complete ROUND_ROBIN pass: the sampler cycles until the smallest
+# source is exhausted, Pfam is smallest at 777,306 pairs = 6,073 batches, so a pass over
+# three sources is 3x that = 2.33M pairs. Stopping at a round 10k would end mid-pass with
+# the sources unevenly represented.
+#
+# 128-D, not the 64-D default: the head-size ablation measured 128-D at +.034 MAP over
+# 64-D and +.007 over scoring the backbone's own 480-D residues, both with paired CIs
+# clear of zero, so the 64-D head these runs originally inherited is the wrong one to
+# spend 8 GPU-h on.
+LONG_STEPS="${LONG_STEPS:-18219}"
+LONG_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 6000000)
+
+queue_d() {  # vanilla ESM-2, long
+  local gpu="$1"
   watch_curve "$gpu" esm2_late_long "$RES/pilot_35m/scope"
-  train "$gpu" esm2_late_long Synthyra/ESM2-35M 10000 128 1000 --max_pairs_per_file 0 --string_max_pairs 6000000
+  train "$gpu" esm2_late_long Synthyra/ESM2-35M "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
   wait
+}
+
+queue_e() {  # ProtSent-V2, long
+  local gpu="$1"
   watch_curve "$gpu" protsent_late_long "$RES/pilot_35m/scope"
-  train "$gpu" protsent_late_long GrimSqueaker/ProtSent-V2-35M 10000 128 1000 --max_pairs_per_file 0 --string_max_pairs 6000000
+  train "$gpu" protsent_late_long GrimSqueaker/ProtSent-V2-35M "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
   wait
 }
 
 # ---------------------------------------------------------------- driver
 case "${1:-start}" in
   start)
-    for q in a b c; do
+    for q in ${QUEUES:-a b c}; do
       gpu_var="GPU_${q^^}"; gpu="${!gpu_var:-}"
-      [[ -z "$gpu" ]] && gpu=$(( $(printf '%s' "$q" | tr 'abc' '012') ))
+      [[ -z "$gpu" ]] && gpu=$(( $(printf '%s' "$q" | tr 'abcde' '01201') ))
       if pgrep -f "run_experiment_queue.sh __run $q" > /dev/null; then echo "queue $q already running"; continue; fi
       setsid nohup "$ROOT/run_experiment_queue.sh" __run "$q" "$gpu" >> "logs/queue_$q.log" 2>&1 < /dev/null &
       echo "queue $q -> gpu $gpu (log logs/queue_$q.log)"
