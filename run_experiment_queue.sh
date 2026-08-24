@@ -3,6 +3,7 @@
 #
 #   ./run_experiment_queue.sh start     # launch the three per-GPU queues (detached; survives SSH loss)
 #   ./run_experiment_queue.sh status    # one-line-per-job state
+#   ./run_experiment_queue.sh bench     # pooled benchmarks over every finished arm's dense view
 #   ./run_experiment_queue.sh stop      # stop everything (safe: rerun `start` to resume)
 #
 # Every job is idempotent: a finished job is skipped (done-marker = runtime.json / CSV rows), and an
@@ -19,14 +20,14 @@ FILES=("$DATA/pfam_sorted.parquet" "$DATA/afdb_sorted.parquet" "$DATA/stringdb_t
 mkdir -p logs "$MODELS" "$RES/pilot_150m/scope" "$RES/pilot_35m/scope"
 
 # ---------------------------------------------------------------- job helpers
-train() {  # train <gpu> <name> <model> <steps> <batch> <save_steps> <extra args...>
-  local gpu="$1" name="$2" model="$3" steps="$4" batch="$5" save="$6"; shift 6
+train() {  # train <gpu> <name> <model> <steps> <save_steps> <extra args...>
+  local gpu="$1" name="$2" model="$3" steps="$4" save="$5"; shift 5
   local dir="$MODELS/$name"
   if [[ -f "$dir/runtime.json" ]]; then echo "[skip] train $name"; return 0; fi
   echo "[run ] train $name (gpu $gpu, $steps steps)"
   CUDA_VISIBLE_DEVICES="$gpu" uv run --no-sync python train_late_interaction.py \
     --model "$model" --files "${FILES[@]}" --output_dir "$dir" \
-    --max_steps "$steps" --batch_size "$batch" --mini_batch_size 64 --score_mini_batch_size 32 \
+    --max_steps "$steps" --batch_size 128 --mini_batch_size 64 --score_mini_batch_size 32 \
     --save_steps "$save" --save_total_limit 1 --max_minutes 0 --resume \
     --dataloader_num_workers 4 --run_name "$name" "$@"
 }
@@ -41,46 +42,15 @@ watch_curve() {  # watch_curve <gpu> <name> <out_dir> — background, dies with 
     --follow_pid $$ --max_hours 24 &
 }
 
-scope_rows() {  # scope_rows <gpu> <out_dir> <reference|-> <specs...>
-  local gpu="$1" out="$2" ref="$3"; shift 3
+scope_rows() {  # scope_rows <gpu> <out_dir> <specs...>
+  local gpu="$1" out="$2"; shift 2
   local args=()
   for spec in "$@"; do args+=(--models "$spec"); done
-  [[ "$ref" != "-" ]] && args+=(--reference "$ref")
   CUDA_VISIBLE_DEVICES="$gpu" uv run --no-sync python late_interaction_eval.py scope \
     "${args[@]}" --n_boot 1000 --out_dir "$out"
 }
 
 # ---------------------------------------------------------------- queues
-queue_a() {  # GPU A: ProtSent-V2-150M late
-  local gpu="$1"
-  watch_curve "$gpu" protsent_late_150m "$RES/pilot_150m/scope"
-  train "$gpu" protsent_late_150m GrimSqueaker/ProtSent-V2-150M 5000 128 500
-  wait
-}
-
-queue_b() {  # GPU B: vanilla ESM2-150M late
-  local gpu="$1"
-  watch_curve "$gpu" esm2_late_150m "$RES/pilot_150m/scope"
-  train "$gpu" esm2_late_150m Synthyra/ESM2-150M 5000 128 500
-  wait
-}
-
-queue_c() {  # GPU C: cheap 35M ablations first, then the long runs
-  local gpu="$1"
-  # These run on ONE GPU, where a step consumes batch_size pairs; the pilot arms ran
-  # on two, where a step consumes 2 x batch_size. 4,000 single-GPU steps therefore match
-  # the pilot's 512,000-pair budget, and the in-batch negative count (128) is identical
-  # either way because gather_across_devices is off. Comparing at equal steps instead of
-  # equal pairs would confound the ablation with half the training data.
-  # C1 head size: 128-D projection vs the pilot's 64-D
-  train "$gpu" protsent_late_proj128 GrimSqueaker/ProtSent-V2-35M 4000 128 500 --proj_dim 128
-  # C1b symmetry: identical recipe, pair order randomly swapped
-  train "$gpu" protsent_late_swap GrimSqueaker/ProtSent-V2-35M 4000 128 500 --swap_pair_order
-  scope_rows "$gpu" "$RES/pilot_35m/scope" - \
-    "protsent_late_proj128=late:$MODELS/protsent_late_proj128/late" \
-    "protsent_late_swap=late:$MODELS/protsent_late_swap/late"
-}
-
 # The long runs live in their own queues so they can take the two GPUs the 150M arms
 # free up, rather than running back to back on one card.
 #
@@ -110,22 +80,22 @@ LONG_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 6000000 --se
 # cache entry simultaneously is still wasted work.
 queue_f() {  # matched-pool control for the long runs -- run first
   local gpu="$1"
-  train "$gpu" protsent_late_pool_control GrimSqueaker/ProtSent-V2-35M 4000 128 1000 "${LONG_ARGS[@]}"
-  scope_rows "$gpu" "$RES/pilot_35m/scope" - \
+  train "$gpu" protsent_late_pool_control GrimSqueaker/ProtSent-V2-35M 4000 1000 "${LONG_ARGS[@]}"
+  scope_rows "$gpu" "$RES/pilot_35m/scope" \
     "protsent_late_pool_control=late:$MODELS/protsent_late_pool_control/late"
 }
 
 queue_p() {  # ProtSent-V2 35M, long -- the priority arm
   local gpu="$1"
   watch_curve "$gpu" protsent_late_long "$RES/pilot_35m/scope"
-  train "$gpu" protsent_late_long GrimSqueaker/ProtSent-V2-35M "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
+  train "$gpu" protsent_late_long GrimSqueaker/ProtSent-V2-35M "$LONG_STEPS" 2000 "${LONG_ARGS[@]}"
   wait
 }
 
 queue_q() {  # ProtSent-V2 150M, long
   local gpu="$1"
   watch_curve "$gpu" protsent_late_150m_long "$RES/pilot_150m/scope"
-  train "$gpu" protsent_late_150m_long GrimSqueaker/ProtSent-V2-150M "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
+  train "$gpu" protsent_late_150m_long GrimSqueaker/ProtSent-V2-150M "$LONG_STEPS" 2000 "${LONG_ARGS[@]}"
   wait
 }
 
@@ -148,7 +118,7 @@ queue_g() {  # phase 2, proportional, continues from phase 1's weights
   # at exit (save_total_limit 1 plus cleanup), so "continue" has to mean "start from the
   # weights it exported", which is what late/ is.
   watch_curve "$gpu" "$name" "$RES/pilot_35m/scope"
-  train "$gpu" "$name" "$MODELS/$base/late" "$PHASE2_STEPS" 128 2000 \
+  train "$gpu" "$name" "$MODELS/$base/late" "$PHASE2_STEPS" 2000 \
     "${LONG_ARGS[@]}" --multi_dataset_sampler proportional
   wait
 }
@@ -163,24 +133,26 @@ queue_g() {  # phase 2, proportional, continues from phase 1's weights
 queue_d() {  # vanilla ESM-2 35M, long -- lowest priority, first to be dropped
   local gpu="$1"
   watch_curve "$gpu" esm2_late_long "$RES/pilot_35m/scope"
-  train "$gpu" esm2_late_long facebook/esm2_t12_35M_UR50D "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
+  train "$gpu" esm2_late_long facebook/esm2_t12_35M_UR50D "$LONG_STEPS" 2000 "${LONG_ARGS[@]}"
   wait
 }
 
 queue_v() {  # vanilla ESM-2 150M, long
   local gpu="$1"
   watch_curve "$gpu" esm2_late_150m_long "$RES/pilot_150m/scope"
-  train "$gpu" esm2_late_150m_long facebook/esm2_t30_150M_UR50D "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
+  train "$gpu" esm2_late_150m_long facebook/esm2_t30_150M_UR50D "$LONG_STEPS" 2000 "${LONG_ARGS[@]}"
   wait
 }
 
 
 # ---------------------------------------------------------------- driver
+# Default card per queue. Override any of them with GPU_P=3 etc.
+declare -A DEFAULT_GPU=( [f]=0 [p]=1 [q]=2 [d]=3 [g]=1 [v]=3 )
+
 case "${1:-start}" in
   start)
-    for q in ${QUEUES:-a b c}; do
-      gpu_var="GPU_${q^^}"; gpu="${!gpu_var:-}"
-      [[ -z "$gpu" ]] && gpu=$(( $(printf '%s' "$q" | tr 'abcdefgpqv' '0123012301') ))
+    for q in ${QUEUES:-f p q d}; do
+      gpu_var="GPU_${q^^}"; gpu="${!gpu_var:-${DEFAULT_GPU[$q]:-0}}"
       if pgrep -f "run_experiment_queue.sh __run $q" > /dev/null; then echo "queue $q already running"; continue; fi
       setsid nohup "$ROOT/run_experiment_queue.sh" __run "$q" "$gpu" >> "logs/queue_$q.log" 2>&1 < /dev/null &
       echo "queue $q -> gpu $gpu (log logs/queue_$q.log)"
@@ -193,7 +165,6 @@ case "${1:-start}" in
     echo "--- training jobs"
     for d in "$MODELS"/*/; do
       n=$(basename "$d")
-      [[ "$n" == sweep_* ]] && continue
       if [[ -f "$d/runtime.json" ]]; then
         python3 -c "import json;d=json.load(open('$d/runtime.json'));print(f'  done    $n  {d[\"steps\"]} steps, {d[\"wall_time_s\"]/3600:.1f}h, {d[\"pairs_seen\"]:,} pairs')"
       else
@@ -204,9 +175,15 @@ case "${1:-start}" in
     echo "--- result files"
     find "$RES" -name "*.csv" -newermt "-7 days" -printf "  %p (%s bytes)\n" 2>/dev/null | sort
     ;;
+  bench)
+    # Dense views only: the [L x d] late models cannot be fed to a pooled benchmark.
+    # TASKS=full for the 20-task set; default is ProtBench's curated very-fast subset.
+    shift
+    ./run_late_bench.sh "$@"
+    ;;
   stop)
     pkill -f "run_experiment_queue.sh __run"; pkill -f train_late_interaction.py; pkill -f late_interaction_eval.py
     echo "stopped (rerun 'start' to resume)"
     ;;
-  *) echo "usage: $0 {start|status|stop}"; exit 1 ;;
+  *) echo "usage: $0 {start|status|bench|stop}"; exit 1 ;;
 esac

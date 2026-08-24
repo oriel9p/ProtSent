@@ -4,12 +4,13 @@
 The pilot's first timings measured ``encode + score`` together, which understates the
 scoring ratio (a shared constant sits in both terms) and hides that pooled-cosine
 "scoring" of a 2.2k corpus is a single GEMM. This times the two phases apart on one
-GPU, then reuses the same matrices for two zero-extra-cost analyses:
+GPU, then reuses the same matrices for a zero-extra-cost analysis: two-stage retrieval,
+a pooled-cosine shortlist of the top-k with a MaxSim rerank inside it -- the standard way
+late interaction is deployed at scale.
 
-* symmetrised MaxSim, ``(S + S.T) / 2``: does the operator's query/document asymmetry
-  cost anything at evaluation time?
-* two-stage retrieval: pooled-cosine shortlist of the top-k, MaxSim rerank inside it —
-  the standard way late interaction is deployed at scale.
+(A symmetrised-MaxSim arm lived here too. Its answer is in SUMMARY.md and it is negative --
+raw ``(S + S.T) / 2`` biases toward long documents, and the scale-free MeanMaxSim variant
+cannot reorder a row at all -- so the code went rather than being carried forward.)
 
     uv run --no-sync python analyze_maxsim_cost.py --selfcheck
 """
@@ -92,7 +93,7 @@ def main() -> int:
     pairing = dict(pair.split("=", 1) for pair in args.rerank)
     seqs, families = li.load_scope40()
     fam = np.asarray(families)
-    cost_rows, rerank_rows, sym_rows = [], [], []
+    cost_rows, rerank_rows = [], []
     cosine_cache: dict[str, np.ndarray] = {}
 
     for spec in args.models:
@@ -124,6 +125,7 @@ def main() -> int:
             torch.cuda.synchronize()
             score_s = time.time() - t0
             sim = sim_t.float().cpu().numpy()
+            del sim_t
             dim = emb[0].shape[1]
             per_protein = float(np.mean([e.shape[0] for e in emb])) * dim
 
@@ -140,21 +142,6 @@ def main() -> int:
             cosine_cache[name] = sim  # keyed by the exact --models name that --rerank refers to
         else:
             base = metrics(li.ranking_from_similarity(sim), fam)
-            sym = metrics(li.ranking_from_similarity((sim + sim.T) / 2), fam)
-            # Raw MaxSim sums over query residues, so a row's scale is the query's
-            # length: averaging with the transpose mixes in a term that scales with
-            # the DOCUMENT's length and biases the ranking toward long documents.
-            # MeanMaxSim (divide each row by its query length) is scale-free, so its
-            # symmetrisation is the meaningful one.
-            lens = np.array([min(len(x), args.max_seq_length - 2) for x in seqs], dtype=float)
-            mean_sim = sim / lens[:, None]
-            # MeanMaxSim on its own is not reported: rescaling a row by a positive constant
-            # cannot reorder that row, so every ranking metric is identical to MaxSim's.
-            mean_sym = metrics(li.ranking_from_similarity((mean_sim + mean_sim.T) / 2), fam)
-            sym_rows.append({"arm": name,
-                             **{f"{k}_maxsim": v for k, v in base.items()},
-                             **{f"{k}_symmetrised_raw": v for k, v in sym.items()},
-                             **{f"{k}_symmetrised_meanmaxsim": v for k, v in mean_sym.items()}})
             partner = pairing.get(name)
             if partner is not None:
                 cos = cosine_cache.get(partner)
@@ -171,12 +158,11 @@ def main() -> int:
                                     "shortlist_k": "full", **base})
             else:
                 logger.info("no --rerank pairing for %s; skipping its two-stage rows", name)
-        del model, emb, sim, sim_t
+        del model, emb, sim
         torch.cuda.empty_cache()  # free before the next arm's encode is timed
 
     out = Path(args.out_dir)
     for rows, fname in ((cost_rows, "training/scoring_cost.csv"),
-                        (sym_rows, "scope/scope_symmetrised.csv"),
                         (rerank_rows, "scope/scope_two_stage_rerank.csv")):
         if not rows:
             continue

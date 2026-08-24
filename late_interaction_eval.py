@@ -17,11 +17,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import csv
+import itertools
 import logging
 import os
 import sys
 import time
 from collections import Counter
+from math import erfc, sqrt
 from pathlib import Path
 
 import numpy as np
@@ -30,6 +33,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import late_interaction as li  # noqa: E402
+from bootstrap_ci import boot_ci  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("late_interaction_eval")
@@ -48,7 +52,10 @@ def load_scorer(kind: str, path: str, *, max_seq_length: int, device):
     if kind == "dense":
         # Same loader as training (handles FastPLM/ESM alike, enforces max_seq_length).
         _, st = li.build_multivector_encoder(path, proj_dim=0, max_seq_length=max_seq_length, device=device)
-        return (lambda seqs, queries=None, bs=64: li.cosine_matrix(st, seqs, batch_size=bs, queries=queries)), "cosine"
+        # ce is accepted and ignored so both scorers share one signature; the caller should not
+        # have to know which kind it got in order to call it.
+        return (lambda seqs, queries=None, bs=64, ce=None: li.cosine_matrix(
+            st, seqs, batch_size=bs, queries=queries)), "cosine"
     if kind == "zeroshot":
         mve, _ = li.build_multivector_encoder(path, proj_dim=0, max_seq_length=max_seq_length, device=device)
     else:
@@ -60,6 +67,18 @@ def load_scorer(kind: str, path: str, *, max_seq_length: int, device):
         ),
         "maxsim",
     )
+
+
+def save_per_query(out: Path, name: str, pq: dict) -> Path:
+    """Write the per-query vectors that every paired test downstream reads.
+
+    This file is the interchange format between measurement and analysis (paired bootstrap,
+    identity strata, McNemar), so its name and key layout live here rather than being
+    restated at each call site -- they had already started to drift.
+    """
+    path = out / f"per_query_{name.replace('/', '_')}.npz"
+    np.savez_compressed(path, **{f"{lvl}_{k}": v for lvl, d in pq.items() for k, v in d.items()})
+    return path
 
 
 def append_csv(path: Path, rows: list[dict]) -> None:
@@ -111,9 +130,7 @@ def cmd_scope(args) -> None:
     for name, kind, path in specs:
         scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
         t0 = time.time()
-        sim = scorer(seqs, bs=args.batch_size) if scoring == "cosine" else scorer(
-            seqs, bs=args.batch_size, ce=args.chunk_elements
-        )
+        sim = scorer(seqs, bs=args.batch_size, ce=args.chunk_elements)
         runtime_s = time.time() - t0
         rows, pq = li.scope_rows(
             sim, families, model=name, scoring=scoring, n_boot=args.n_boot, seed=args.seed,
@@ -121,10 +138,7 @@ def cmd_scope(args) -> None:
         )
         all_rows += rows
         per_query_by_model[name] = pq
-        np.savez_compressed(
-            out / f"per_query_{name.replace('/', '_')}.npz",
-            **{f"{lvl}_{k}": v for lvl, d in pq.items() for k, v in d.items()},
-        )
+        save_per_query(out, name, pq)
         logger.info("%s (%s): %.1fs scoring; family eligible R@10=%.4f", name, scoring, runtime_s,
                     [r for r in rows if r["level"] == "family"][0].get("eligible_Recall@10", float("nan")))
         del scorer, sim
@@ -170,7 +184,7 @@ def cmd_fewshot_rh(args) -> None:
             gallery = [tr_seqs[i] for i in sub]
             gal_y = tr_y[sub]
             t0 = time.time()
-            sim = scorer(gallery, queries=te_seqs, bs=args.batch_size)
+            sim = scorer(gallery, queries=te_seqs, bs=args.batch_size, ce=args.chunk_elements)
             order = np.argsort(-sim, axis=1)[:, : args.knn_k]
             preds = []
             for r in order:
@@ -200,8 +214,6 @@ def cmd_watch_curve(args) -> None:
     save_total_limit=1 and still produce a training curve. Idempotent: already-scored steps are
     skipped, so restarting the watcher after a crash is safe.
     """
-    import time as _time
-
     run = Path(args.run_dir)
     out = Path(args.out_dir)
     curve = out / "scope_checkpoint_curve.csv"
@@ -210,34 +222,27 @@ def cmd_watch_curve(args) -> None:
     def already() -> set[str]:
         if not curve.exists():
             return set()
-        import csv as _csv
-
-        return {r["model"] for r in _csv.DictReader(curve.open())}
+        return {r["model"] for r in csv.DictReader(curve.open())}
 
     def score(name: str, path: str) -> None:
         try:
             mve = li.load_multivector_encoder(path, device=args.device)
             mve.max_seq_length = args.max_seq_length
-            t0 = _time.time()
+            t0 = time.time()
             sim = li.maxsim_matrix(mve, seqs, batch_size=args.batch_size, chunk_elements=args.chunk_elements)
             # Bootstrap and per-query vectors are computed HERE or never: the trainer keeps one
             # checkpoint on disk, so this point cannot be rescored once the next save rotates it out.
             rows, pq = li.scope_rows(sim, families, model=name, scoring="maxsim", n_boot=args.n_boot,
-                                     runtime_s=round(_time.time() - t0, 2))
+                                     runtime_s=round(time.time() - t0, 2))
             append_csv(curve, rows)
-            np.savez_compressed(
-                out / f"per_query_{name.replace('/', '_')}.npz",
-                **{f"{lvl}_{k}": v for lvl, d in pq.items() for k, v in d.items()},
-            )
+            save_per_query(out, name, pq)
             del mve, sim
-            import torch
-
             torch.cuda.empty_cache()
         except Exception as exc:  # a busy GPU or a half-written checkpoint must not kill the watcher
             logger.warning("curve point %s failed: %s", name, exc)
 
-    deadline = _time.time() + args.max_hours * 3600
-    while _time.time() < deadline:
+    deadline = time.time() + args.max_hours * 3600
+    while time.time() < deadline:
         done = already()
         if (run / "step0" / "late").exists() and f"{args.name}@0" not in done:
             score(f"{args.name}@0", str(run / "step0" / "late"))
@@ -264,7 +269,7 @@ def cmd_watch_curve(args) -> None:
                 score(f"{args.name}@final", str(run / "late"))
             logger.info("curve watcher done for %s", args.name)
             return
-        _time.sleep(args.poll_seconds)
+        time.sleep(args.poll_seconds)
     logger.warning("curve watcher timed out for %s", args.name)
 
 
@@ -286,20 +291,20 @@ def cmd_cath(args) -> None:
         name, kind, path = parse_model_spec(spec)
         scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
         t0 = time.time()
-        sim = scorer(gal_seqs, queries=q_seqs, bs=args.batch_size)
+        sim = scorer(gal_seqs, queries=q_seqs, bs=args.batch_size, ce=args.chunk_elements)
         pred = gal_y[np.argmax(sim, axis=1)]
         correct = (pred == q_y)
         acc = float(correct.mean())
         # test_h is 150 queries, so one query is 0.67 points and a 3-point gap is five
         # proteins. Save per-query correctness so arms can be compared with McNemar
         # rather than by eyeballing accuracies, and carry the marginal CI in the row.
-        half_width = 1.96 * float(np.sqrt(acc * (1 - acc) / len(q_y)))
+        _, lo, hi = boot_ci(correct.astype(float), n_boot=args.n_boot, seed=args.seed)
         Path(args.out_dir).mkdir(parents=True, exist_ok=True)  # before a 69k-sequence encode is thrown away
         np.savez_compressed(Path(args.out_dir) / f"cath_per_query_{name.replace('/', '_')}.npz",
                             correct=correct, labels=q_y)
         rows.append({
             "model": name, "scoring": scoring, "level": args.label_col, "test_split": args.test_split,
-            "accuracy": acc, "ci95_half_width": round(half_width, 4),
+            "accuracy": acc, "ci95": f"[{lo:.4f}, {hi:.4f}]",
             "n_queries": int(len(q_y)), "n_correct": int(correct.sum()),
             "n_lookup": int(len(gal_y)), "runtime_s": round(time.time() - t0, 2),
         })
@@ -307,6 +312,45 @@ def cmd_cath(args) -> None:
         del scorer, sim
         torch.cuda.empty_cache()
     append_csv(Path(args.out_dir) / "cath_eat.csv", rows)
+    if args.mcnemar:
+        cath_mcnemar(Path(args.out_dir))
+
+
+def cath_mcnemar(out: Path) -> None:
+    """Paired McNemar over every cath_per_query_*.npz in `out`, with an alignment guard.
+
+    A pair is only meaningful if both arms scored the same queries in the same order, so the
+    label vectors are compared before any test runs.
+    """
+    arms = {p.stem.replace("cath_per_query_", ""): np.load(p, allow_pickle=True)
+            for p in sorted(out.glob("cath_per_query_*.npz"))}
+    if not arms:
+        logger.warning("no cath_per_query_*.npz in %s", out)
+        return
+    labelled = {n: z["labels"] for n, z in arms.items() if "labels" in z}
+    ref_name, ref = next(iter(labelled.items()), (None, None))
+    for n, lab in labelled.items():
+        if not np.array_equal(ref, lab):
+            raise SystemExit(f"ABORT: {n} query order differs from {ref_name} -- pairing invalid")
+    if len(labelled) < len(arms):
+        logger.warning("%d arm(s) carry no labels vector; alignment unverified for those",
+                       len(arms) - len(labelled))
+    logger.info("%d arms, query alignment verified", len(arms))
+
+    for n, z in arms.items():
+        c = z["correct"].astype(bool)
+        logger.info("  %-24s %3d/%d  %5.2f%%", n, c.sum(), len(c), 100 * c.mean())
+    print(f"{'pair':52s} {'b':>3s} {'c':>3s} {'disc':>5s} {'chi2':>6s} {'p':>7s}")
+    for a, b_ in itertools.combinations(arms, 2):
+        x, y = arms[a]["correct"].astype(bool), arms[b_]["correct"].astype(bool)
+        b = int((x & ~y).sum()); c = int((~x & y).sum())
+        if b + c == 0:
+            print(f"{a + ' vs ' + b_:52s} identical")
+            continue
+        chi = (abs(b - c) - 1) ** 2 / (b + c)
+        pval = erfc(sqrt(chi / 2))
+        print(f"{a + ' vs ' + b_:52s} {b:3d} {c:3d} {b + c:5d} {chi:6.2f} {pval:7.3f}"
+              f"{' *' if pval < 0.05 else ''}")
 
 
 def main() -> None:
@@ -320,9 +364,10 @@ def main() -> None:
     common.add_argument("--device", default=None)
     common.add_argument("--seed", type=int, default=42)
     common.add_argument("--out_dir", default="results/late_interaction/pilot_35m/scope")
+    common.add_argument("--chunk_elements", type=int, default=50_000_000,
+                        help="MaxSim scoring budget; caps the score tensor built at once")
 
     ps = sub.add_parser("scope", parents=[common])
-    ps.add_argument("--chunk_elements", type=int, default=50_000_000)
     ps.add_argument("--n_boot", type=int, default=1000)
     ps.add_argument("--reference", default=None, help="Model NAME for paired bootstrap deltas")
     ps.add_argument("--checkpoints", default=None, help="Training run dir: evaluate step0 + checkpoint-* + final")
@@ -337,7 +382,6 @@ def main() -> None:
     pc = sub.add_parser("watch_curve", parents=[common])
     pc.add_argument("--run_dir", required=True)
     pc.add_argument("--name", required=True, help="Curve label, e.g. protsent_late_150m")
-    pc.add_argument("--chunk_elements", type=int, default=25_000_000)
     pc.add_argument("--poll_seconds", type=int, default=120)
     pc.add_argument("--max_hours", type=float, default=24.0)
     pc.add_argument("--n_boot", type=int, default=1000)
@@ -349,6 +393,9 @@ def main() -> None:
     pcath.add_argument("--test_split", default="test_h", choices=["test_h", "test219", "test300", "validation"])
     pcath.add_argument("--label_col", default="cath_h")
     pcath.add_argument("--max_lookup", type=int, default=0, help="Subsample the lookup set (0 = all 69,605)")
+    pcath.add_argument("--n_boot", type=int, default=1000)
+    pcath.add_argument("--mcnemar", action="store_true",
+                       help="After scoring, run paired McNemar over every cath_per_query_*.npz in --out_dir")
     pcath.set_defaults(fn=cmd_cath)
 
     args = p.parse_args()

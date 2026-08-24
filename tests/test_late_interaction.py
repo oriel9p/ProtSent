@@ -67,7 +67,7 @@ def test_scope_rows_hierarchy_and_eligibility():
     # q0,q1: same family; q2: same superfamily as q0/q1 only; q3: singleton fold.
     fam = ["a.1.1.1", "a.1.1.1", "a.1.1.2", "b.1.1.1"]
     sim = np.array([[9, 3, 2, 0], [3, 9, 2, 0], [2, 3, 9, 0], [0, 0, 0, 9]], dtype=float)
-    rows, pq = li.scope_rows(sim, fam, model="m", scoring="s", ks=(1, 2), n_boot=0)
+    rows, pq = li.scope_rows(sim, fam, model="m", scoring="s", n_boot=0)
     by = {r["level"]: r for r in rows}
     assert by["family"]["n_eligible_queries"] == 2 and by["family"]["eligible_Recall@1"] == 1.0
     assert by["family"]["Recall@1"] == pytest.approx(0.5)  # singletons count as misses

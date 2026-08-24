@@ -87,8 +87,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--compile", action="store_true",
                    help="torch.compile the model. Measured +3.6%% on Pfam but -13%% on the longer STRING "
                         "sequences plus ~250 s warmup, so it is off by default on a mixed corpus")
-    p.add_argument("--swap_pair_order", action="store_true",
-                   help="Randomly swap (sentence_0, sentence_1) per pair, seeded — symmetry ablation")
     return p.parse_args()
 
 
@@ -118,21 +116,8 @@ def build_datasets(args, world_size: int):
                     max_pairs=args.max_pairs_per_file,
                     max_seq_length=args.max_seq_length,
                 )
-            if args.swap_pair_order:
-                # symmetry ablation: seeded per-row swap of (sentence_0, sentence_1)
-                import numpy as np
-
-                flip = np.random.default_rng(args.seed).random(len(ds)) < 0.5
-
-                def _swap(row, idx, _flip=flip):
-                    if _flip[idx]:
-                        return {"sentence_0": row["sentence_1"], "sentence_1": row["sentence_0"]}
-                    return {}
-
-                ds = ds.map(_swap, with_indices=True)
             out[name] = ds.shuffle(seed=args.seed)
-            logger.info("dataset %s: %d pairs%s", name, len(ds),
-                        " (pair order swapped)" if args.swap_pair_order else "")
+            logger.info("dataset %s: %d pairs", name, len(ds))
         return out
 
     is_ddp = world_size > 1 and torch.distributed.is_initialized()
@@ -233,24 +218,24 @@ def main() -> None:
         callbacks=[TimeLimitCallback(args.max_minutes)] if args.max_minutes > 0 else [],
     )
 
-    has_ckpt = any(out.glob("checkpoint-*"))
-    # Step count this process starts from, so throughput can be reported over the work this
-    # process actually did rather than over every step the run has ever taken.
-    resumed_from = max((int(c.name.split("-")[1]) for c in out.glob("checkpoint-*")), default=0)
-    if not (args.resume and has_ckpt):
-        resumed_from = 0
+    # resumed_from is the step this process starts at, so throughput is reported over the work
+    # this process actually did rather than over every step the run has ever taken.
+    steps_on_disk = sorted(int(c.name.split("-")[1]) for c in out.glob("checkpoint-*"))
+    resuming = bool(args.resume and steps_on_disk)
+    resumed_from = steps_on_disk[-1] if resuming else 0
     t0 = time.time()
-    trainer.train(resume_from_checkpoint=bool(args.resume and has_ckpt))
+    trainer.train(resume_from_checkpoint=resuming)
     wall = time.time() - t0
 
     if is_main:
         li.save_late_and_dense(mve, pooling, str(out))
-        if True:  # checkpoints are crash-resume state, not artifacts
-            import shutil
+        # Checkpoints are crash-resume state, not artifacts. snapshot_checkpoints.sh preserves a
+        # weights-only copy of each one for the benchmark curve before this runs.
+        import shutil
 
-            for ckpt in sorted(out.glob("checkpoint-*")):
-                shutil.rmtree(ckpt)
-            logger.info("checkpoints cleaned up (final late/ + dense_view/ kept)")
+        for ckpt in sorted(out.glob("checkpoint-*")):
+            shutil.rmtree(ckpt)
+        logger.info("checkpoints cleaned up (final late/ + dense_view/ kept)")
 
         import sentence_transformers as st_pkg
         import transformers
