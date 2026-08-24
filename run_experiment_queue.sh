@@ -37,9 +37,8 @@ train_ddp() {  # train_ddp <cards> <port> <name> <model> <steps> <save_steps> <e
   local dir="$MODELS/$name"
   if [[ -f "$dir/runtime.json" ]]; then echo "[skip] train $name"; return 0; fi
   echo "[run ] train $name (cards $cards, $steps steps, 2-way DDP)"
-  # No --compile here, deliberately. Measured over 120 steps on this exact model: 2-way DDP runs
-  # at 1.083 steps/s (277.1 pairs/s) without compile and 0.354 steps/s (90.6 pairs/s) with it.
-  # compile wins on a single card (1.500 vs 1.329) and loses 3x on two.
+  # --compile comes from the callers. Fair A/B (both arms concurrent, one per card pair):
+  # 1.14x faster, 0.586 vs 0.516 steps/s. Unequal-load measurements said the opposite twice.
   CUDA_VISIBLE_DEVICES="$cards" uv run --no-sync accelerate launch \
     --num_processes 2 --mixed_precision bf16 --main_process_port "$port" \
     train_late_interaction.py \
@@ -69,36 +68,23 @@ scope_rows() {  # scope_rows <gpu> <out_dir> <specs...>
 
 # ---------------------------------------------------------------- queues
 # ---------------------------------------------------------------- phase 2: the 8-hour campaign
-#
-# Two arms, two cards each, both CONTINUING existing late-interaction training over a ProtSent-V2
-# base rather than restarting from it.
-#
-# Data is the ProtSent-V2 paper recipe: the whole dc40 corpus at k=8 pairs per cluster, uncapped
-# -- Pfam 777,306 + AFDB 18,987,468 + STRING 15,000,000 = 34.76M pairs, against V2's own 34.8M.
-# PROPORTIONAL sampling, as V2 used.
-#
-# Step budgets come from the measured 2-way DDP rate (1.083 steps/s on 35M, ~0.55 on 150M) so the
-# cosine schedule anneals inside the ~8 h rather than being cut off hot.
+# Two arms, two cards each, continuing existing late training. Data is the V2 paper recipe: whole
+# dc40 corpus, k=8, uncapped, PROPORTIONAL -- 34.76M pairs (Pfam 0.78M / AFDB 19.0M / STRING 15M).
+# Step budgets are set from measured rates so the cosine schedule anneals inside ~8 h.
 PHASE2_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 15000000 --seed 42
-             --multi_dataset_sampler proportional)
+             --multi_dataset_sampler proportional --compile)
 P2_STEPS="${P2_STEPS:-31000}"          # 35M:  x 256 pairs/step = 7.9M pairs, ~8.0 h
-P2_STEPS_150M="${P2_STEPS_150M:-15000}"  # 150M: x 256 = 3.8M pairs, ~8.7 h at the settled
-# 2.10 s/it. (An early reading of 3.35 s/it was warmup, not steady state -- worth waiting for the
-# rate to settle before resizing a budget from it.) Note 2-way DDP is a per-pair throughput LOSS
-# for the 150M, 122 pairs/s against 100 for one card with compile, because it forfeits compile;
-# the win here is wallclock, not efficiency.
+P2_STEPS_150M="${P2_STEPS_150M:-15000}"  # x 256 = 3.8M pairs, ~8.7 h at 2.10 s/it
 
-queue_a() {  # ProtSent 35M, cards 0+1. Continues the best validated 128-D model: 4,000 fp32
-             # steps, fully annealed, .7057 SCOPe superfamily eligible MAP -- head included.
+queue_a() {  # ProtSent 35M, cards 0+1
   watch_curve 0 protsent_late_35m_prop "$RES/pilot_35m/scope"
   train_ddp 0,1 29521 protsent_late_35m_prop "$MODELS/protsent_late_proj128/late" \
     "$P2_STEPS" 5000 "${PHASE2_ARGS[@]}"
   wait
 }
 
-queue_b() {  # ProtSent 150M, cards 2+3. Continues protsent_late_150m, whose backbone carries
-             # 5,000 late steps. Its head is 64-D, so at 128-D the backbone continues and the
-             # projection restarts -- _restore_saved_projection logs the shape mismatch.
+queue_b() {  # ProtSent 150M, cards 2+3. Continues a 64-D model, so backbone carries over but
+             # the projection restarts at 128-D (logged as a shape mismatch).
   watch_curve 2 protsent_late_150m_prop "$RES/pilot_150m/scope"
   train_ddp 2,3 29522 protsent_late_150m_prop "$MODELS/protsent_late_150m/late" \
     "$P2_STEPS_150M" 5000 "${PHASE2_ARGS[@]}"

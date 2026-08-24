@@ -903,100 +903,75 @@ sdpa, including runs whose logs claimed otherwise: transformers silently rejects
 this campaign's effects (deltas ≤ .0045 against a CI width of .011) — which is not the same as "no
 cost": a sub-.005 degradation is not excluded, and resolving that would take ~9 seeds/arm.
 
-## bf16 weights froze the backbone (found 2026-08-24)
+## bf16 weights froze the backbone (2026-08-24)
 
-Every late-interaction run between 2026-08-24 17:05 and 21:00 trained a **frozen backbone**. The
-flash-attention path loaded the model with `dtype=torch.bfloat16`, which put AdamW's *parameters*
-in bf16 rather than keeping fp32 masters. bf16 has an 8-bit mantissa, so near the median backbone
-weight (0.0606) representable values are ~2.4e-4 apart, while an AdamW step at the trainer's
-1e-5 backbone LR moves each weight by ~1e-5 — **1/24th of one representable step**. The addition
-rounds to a no-op.
+Every late run between 17:05 and 21:00 trained a **frozen backbone**. The flash path loaded with
+`dtype=torch.bfloat16`, putting AdamW's *parameters* in bf16 instead of fp32 masters. Near the
+median backbone weight (0.0606) bf16's spacing is ~2.4e-4 while a 1e-5 update is 1/24th of that,
+so the addition rounds to a no-op.
 
-Measured directly, one AdamW step at lr 1e-5, fraction of backbone *elements* that changed:
+One AdamW step at lr 1e-5, fraction of backbone **elements** that changed: fp32 **93.4%**, bf16
+**2.4%**. Scales as predicted: lr 1e-4 → 21.2%, 1e-3 → 88.8%. Regression test:
+`test_configured_learning_rate_actually_moves_the_backbone`.
 
-| params | elements moved |
-|---|---:|
-| fp32 | **93.4%** |
-| bf16 | **2.4%** |
+**It looked like a data problem.** An uncapped-pool arm scored .6244 SCOPe superfamily eligible
+MAP against a capped arm's .7057 — but those differed in pool *and* backend. Dense-view cosine
+against base ProtSent-V2-35M separates them:
 
-and it scales with the step size exactly as the mechanism predicts: lr 1e-4 → 21.2%, lr 1e-3 → 88.8%.
-Regression test: `tests/test_late_interaction.py::test_configured_learning_rate_actually_moves_the_backbone`.
-
-**Why it looked like a data problem.** The first symptom was `protsent_late_pool_control` scoring
-.6244 SCOPe superfamily eligible MAP against `protsent_late_proj128`'s .7057, and those two arms
-differed in both pair pool *and* backend. Mean cosine of each arm's dense view against the base
-ProtSent-V2-35M, over 400 SCOPe-40 sequences, settles it:
-
-| arm | pool | backend | cos vs base | SCOPe elig. MAP |
+| arm | pool | backend | cos vs base | MAP |
 |---|---|---|---:|---:|
-| `protsent_late_proj128` | capped 2M/2M | **fp32/sdpa** | **0.836** | **.7057** |
-| `protsent_late_pool_control_bf16bug` | uncapped 19M/6M | bf16/flash | 0.9976 | .6244 |
-| `protsent_late_capped_flash` | capped 2M/2M | bf16/flash | 0.9977 | .6214 |
+| `protsent_late_proj128` | capped | **fp32/sdpa** | **0.836** | .7057 |
+| `pool_control` | uncapped | bf16/flash | 0.9976 | .6244 |
+| `capped_flash` | capped | bf16/flash | 0.9977 | .6214 |
 
-The two bf16 arms trained on completely different pools and landed indistinguishable from each
-other *and* from the untrained base. The pool never mattered; the backbone never moved. What did
-change is the randomly-initialised 128-D head, which trained at lr 1e-4 (21% of elements able to
-move) against a frozen backbone — worse than the fully-trained pair, which is the .08 gap.
+Two arms on completely different pools, indistinguishable from each other and from the untrained
+base. The pool never mattered. The head kept training (it stays fp32, being built after the load),
+so the runs learned a 128-D subspace against a frozen encoder — worse than the random init it
+started from, which is the "below its own step0" signature.
 
-Vanilla ESM-2 appeared to improve on the same broken config (.4551 → .6090) because a vanilla
-backbone does not need to move: the head alone carries most of that gain. An arm improving is
-therefore **not** evidence that its backbone trained.
+Vanilla ESM-2 still "improved" (.4551 → .6090) on the same broken config, because a vanilla
+backbone need not move — the head carries it. **An arm improving is not evidence its backbone
+trained.**
 
-**Fix.** Drop the bf16 weight pin and keep flash. The kernel needs half-precision *activations*,
-which `bf16=True` autocast already supplies; transformers accepts a pinned flash backend on an
-fp32 model — verified by loading it, not assumed. TF32 is enabled for the fp32 matmuls
-(`torch.backends.cuda.matmul.allow_tf32`), which lowers mantissa precision *inside* a matmul
-without touching stored weights, so updates stay exact.
+**Fix.** Drop the dtype pin, keep flash: the kernel needs half-precision activations, which
+`bf16=True` autocast supplies, and transformers accepts pinned flash on an fp32 model. TF32 on for
+fp32 matmuls. Measured 170.0 pairs/s against the bf16 arm's 142.1 — faster as well as correct.
 
-**What this invalidates.** Every throughput number measured under the bf16 config, including the
-1.48–1.97x flash speedups and the compile verdict (+3.6% Pfam / −13% STRING) — all were taken with
-a model that was barely training. Re-measured under fp32. The earlier paired flash quality A/B is
-also void: it compared sdpa-fp32 against flash-bf16 and attributed the difference to the kernel.
-Runs archived as `*_bf16bug`, with their curve rows relabelled rather than deleted.
+**Invalidates** every throughput number and the paired flash A/B taken under bf16. Affected runs
+deleted; curve rows relabelled `*_bf16bug`.
 
-## torch.compile and flash attention fight each other (measured 2026-08-24)
+## torch.compile with flash attention: 1.14x faster (2026-08-24)
 
-compile helps on one card (1.500 vs 1.329 steps/s) and loses on two (0.582 vs 1.083 under 2-way
-DDP, measured over 400 steps so warmup is not dominant -- a 60-step first attempt was warmup-
-dominated and overstated the loss as 3x).
+Under 2-way DDP with `vllm-flash-attn3`, compile is **1.14x faster** — 0.586 vs 0.516 steps/s
+(150.1 vs 132.0 pairs/s), 400 steps, both arms concurrent on separate card pairs. On by default.
 
-The cause is not recompilation. `recompiles=0`, `frames ok=117/122`. It is a **graph break**: the
-flash kernel is a custom op dynamo cannot trace.
+Two earlier measurements said the opposite and both were wrong: 120 steps (warmup dominated), then
+400 steps but with the compile arm sharing cards with a live job while its baseline had been taken
+on free cards. **Measure both arms under the same load at the same time, or not at all.**
 
-    unsupported operator: _vllm_flash_attn3_cuda_....fwd.default
-    "Operator does not support running with fake tensors"
+Compile does break the graph, it just costs little. Graph breaks are contention-independent, so
+they are measurable while jobs run:
 
-Neither `optimize_ddp=python_reducer` (0.210 steps/s) nor `optimize_ddp=False` nor a 64-entry
-dynamo cache changes it, because graph splitting is not the problem.
-
-Graph breaks by backend, 35M compiled (a property of the code, so contention-independent):
-
-| backend | graph breaks | note |
+| backend | breaks | note |
 |---|---:|---|
-| `sdpa` | **0** | fully traceable, 2 frames |
-| `flex_attention` | 7 | breaks are in ST's own forward (`is_peft_available()`), not attention |
-| `kernels-community/vllm-flash-attn3` | 21 | untraceable custom op |
-| `flash_attention_2` (prebuilt pip wheel) | — | **crashes under compile**: dynamo `lift_tracked_freevar_to_input` assertion |
+| `sdpa` | 0 | fully traceable |
+| `flex_attention` | 7 | in ST's forward, not attention |
+| `vllm-flash-attn3` | 21 | untraceable custom op |
+| `flash_attention_2` (pip) | — | crashes under compile |
 
-So the only compile-friendly attention here is sdpa, and whether sdpa+compile beats flash+plain is
-still open -- it needs free cards and real variable-length batches to answer honestly.
+`recompiles=0`, so never cache thrash; no `optimize_ddp` setting matters.
 
-**Kernel choice, 2-way DDP, no compile:** `vllm-flash-attn3` 277.1 pairs/s against
-`kernels-community/flash-attn3` 128.0 -- the current default is the right one, 2.2x the
-alternative. `kernels-community/flash-attn` is not a kernels-hub kernel at all
-(`/api/kernels/.../refs` returns 404); it is a model repo. FlashAttention-3 proper needs Hopper
-(sm90) and these are A100s (sm80), so the vLLM kernel must already take an sm80 path.
+**Kernels.** `vllm-flash-attn3` is 2.2x `kernels-community/flash-attn3` (277 vs 128 pairs/s, DDP,
+no compile). `kernels-community/flash-attn` is not a kernels-hub kernel (404 on
+`/api/kernels/.../refs`). FA3 proper needs Hopper; these are A100s (sm80).
 
-**Prebuilt flash-attn 2.8.3** (`mjun0812/flash-attention-prebuild-wheels`, v0.9.47,
-`+cu130torch2.13-cp313-cp313-linux_x86_64`) is installed with `--no-deps` so it only adds a
-package; torch/transformers/kernels/sentence-transformers are unchanged. It loads and trains
-fine uncompiled. It is deliberately NOT in pyproject.toml: nothing yet shows it beats the vLLM
-kernel, and `uv sync` would drop it.
+Prebuilt flash-attn 2.8.3 installed `--no-deps` (torch/transformers/kernels unchanged). Trains
+uncompiled, crashes compiled. Not in pyproject: it does not beat the vLLM kernel and `uv sync`
+would drop it.
 
-**Numbers not to trust from this session.** Every sweep above shared cards with a live campaign,
-and the fixed-length microbenchmarks (16 identical sequences) remove the padding variance that
-flash unpadding exists to exploit -- on those, sdpa/FA2/vLLM land within 5% of each other, which
-says nothing about real batches. Re-measure on free cards before quoting any of it.
+**Not measured honestly yet:** sdpa+compile vs flash+compile. The fixed-length microbenchmarks
+here strip the padding variance flash unpadding exploits, so they rank all backends within 5% and
+mean nothing.
 
 ## Not overwriting things
 

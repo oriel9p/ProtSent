@@ -69,13 +69,11 @@ def build_multivector_encoder(
     ``attn_implementation`` pins an attention backend, e.g. :data:`FLASH_ATTENTION` for the ~2x
     throughput measured above. Two conditions come with it, and both change more than speed:
 
-    * Weights stay **fp32**. The kernel needs half-precision activations, which
-      ``bf16=True`` autocast already provides, and transformers accepts a pinned flash backend
-      on an fp32 model -- verified, not assumed. Loading in bf16 as well was a serious bug:
-      AdamW's parameters became bf16, and at the trainer's 1e-5 backbone LR an update is
-      ~1/24th of bf16's spacing near a typical weight, so **97.6% of backbone elements could
-      not move at all** (fp32: 93.4% move). A converged backbone was frozen while its head kept
-      training. See test_configured_learning_rate_actually_moves_the_backbone.
+    * Weights stay **fp32**. The kernel needs half-precision activations, which ``bf16=True``
+      autocast supplies; transformers accepts pinned flash on an fp32 model. Loading in bf16 too
+      was a serious bug: AdamW's params became bf16, and a 1e-5 update is ~1/24th of bf16's
+      spacing near a typical weight, so 97.6% of backbone elements could not move (fp32: 93.4%).
+      See test_configured_learning_rate_actually_moves_the_backbone.
     * It reaches ``models.Transformer`` through ``load_model_for_training``'s native-checkpoint
       branch, which is the only branch that can honour it. :func:`resolve_attention` gates on the
       same families, and the loader raises rather than silently ignoring the request.
@@ -97,10 +95,9 @@ def build_multivector_encoder(
 def _restore_saved_projection(mve: MultiVectorEncoder, path: str) -> bool:
     """Reuse a saved projection head when continuing from a late checkpoint.
 
-    A saved late model puts its backbone at the directory root (modules.json gives the
-    Transformer ``path: ""``) and its projection in ``1_Dense/``. The loader above reads only the
-    root, so without this a continuation pairs a fully trained backbone with a freshly randomised
-    head -- which runs, converges, and quietly discards everything the head had learned.
+    A saved model keeps its backbone at the root and its projection in ``1_Dense/``; the loader
+    above reads only the root. Without this, a continuation pairs a trained backbone with a fresh
+    random head -- which runs, converges, and silently discards what the head had learned.
     """
     dense = next((m for m in mve if isinstance(m, Dense)), None)
     saved = Path(path) / "1_Dense"
@@ -116,8 +113,7 @@ def _restore_saved_projection(mve: MultiVectorEncoder, path: str) -> bool:
         logger.warning("saved projection is %s but this run asks for %s; keeping the fresh head",
                        tuple(loaded.linear.weight.shape), tuple(dense.linear.weight.shape))
         return False
-    # Dense.load takes no device/dtype, so it lands on CPU in whatever dtype it was saved as --
-    # including bf16 for anything written during the master-weights bug. Match the live module.
+    # Dense.load takes no device/dtype: it lands on CPU in whatever it was saved as. Match here.
     target = dense.linear.weight
     loaded = loaded.to(device=target.device, dtype=target.dtype)
     dense.load_state_dict(loaded.state_dict())
@@ -157,11 +153,9 @@ def resolve_attention(requested: Optional[str], model_name_or_path: str) -> Opti
         return None
     if requested != "auto":
         return requested
-    # Family check first. Only load_model_for_training's native-checkpoint branch can honour a
-    # pinned backend; the FastPLM branch (FastPLMESM2Wrapper, native tokenizer,
-    # force_sdpa_backend) swaps the module's model out and would discard it. The loader raises
-    # rather than ignoring, so this gate is what keeps a Synthyra arm from erroring out --
-    # and it is why such an arm quietly trains on sdpa instead.
+    # Only the native-checkpoint branch can honour a pinned backend; the FastPLM branch swaps the
+    # module's model out and would discard it. The loader raises, so this gate is what keeps a
+    # Synthyra arm from erroring out -- and why it quietly trains on sdpa instead.
     from model_utils import detect_model_type
 
     family = detect_model_type(model_name_or_path)

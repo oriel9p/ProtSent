@@ -85,8 +85,9 @@ def parse_args() -> argparse.Namespace:
                    help="round_robin cycles sources until the smallest is exhausted; proportional samples in "
                         "proportion to source size, as ProtSent-V2's own run did")
     p.add_argument("--compile", action="store_true",
-                   help="torch.compile the model. Measured +3.6%% on Pfam but -13%% on the longer STRING "
-                        "sequences plus ~250 s warmup, so it is off by default on a mixed corpus")
+                   help="torch.compile the model. 1.14x faster under 2-way DDP with flash "
+                        "(0.586 vs 0.516 steps/s over 400 steps, both arms equally contended), "
+                        "~250 s warmup. Worth it for runs of a few thousand steps or more")
     return p.parse_args()
 
 
@@ -151,10 +152,8 @@ def main() -> None:
 
     device = f"cuda:{local_rank}" if torch.cuda.is_available() else None
 
-    # TF32 for the fp32 matmuls. Weights are fp32 so optimizer updates stay exact; TF32 only
-    # lowers the mantissa used *inside* a matmul, which is the tensor-core path an A100 wants.
-    # This is the safe half of what pinning bf16 weights was reaching for -- that froze 97.6% of
-    # the backbone at lr 1e-5, because a bf16 weight cannot represent an update that small.
+    # TF32 lowers mantissa precision inside a matmul only; stored weights stay fp32, so optimizer
+    # updates stay exact. The safe half of what pinning bf16 weights was reaching for.
     if torch.cuda.is_available():
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
@@ -185,9 +184,8 @@ def main() -> None:
         run_name=args.run_name,
     )
 
-    # The projection head is created below, before Trainer.__init__ runs set_seed, so without
-    # this --seed never reached it: every arm's step0 head was a different random draw and no
-    # cross-arm @0 comparison was controlled.
+    # The head is built before Trainer.__init__ runs set_seed, so without this --seed never
+    # reached it and every arm's step0 head was a different draw.
     from transformers import set_seed
 
     set_seed(args.seed)
@@ -244,8 +242,7 @@ def main() -> None:
 
     if is_main:
         li.save_late_and_dense(mve, pooling, str(out))
-        # Checkpoints are crash-resume state, not artifacts. snapshot_checkpoints.sh preserves a
-        # weights-only copy of each one for the benchmark curve before this runs.
+        # Crash-resume state, not artifacts; snapshot_checkpoints.sh keeps weights-only copies.
         import shutil
 
         for ckpt in sorted(out.glob("checkpoint-*")):

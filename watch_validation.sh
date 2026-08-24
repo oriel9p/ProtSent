@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# Run validate_run.py against each arm as soon as it has something to check, then once more at
-# the end. Exists because the bf16 bug ran for hours behind a healthy-looking progress bar; a
-# run is not "fine" because it is producing steps.
+# validate_run.py per arm at its first checkpoint and again at the end. A run producing steps is
+# not necessarily training: the bf16 bug ran for hours behind a healthy progress bar.
 set -uo pipefail
 cd "$(dirname "$0")"
 export HF_HOME="${HF_HOME:-/storage/models/hf_home}"
 GPU="${GPU:-0}"
 RUNS=("$@")
-[[ ${#RUNS[@]} -eq 0 ]] && RUNS=(protsent_late_long protsent_late_150m_long esm2_late_long protsent_late_pool_control)
+[[ ${#RUNS[@]} -eq 0 ]] && RUNS=(protsent_late_35m_prop protsent_late_150m_prop)
 deadline=$(( $(date +%s) + ${MAX_HOURS:-12} * 3600 ))
 declare -A done_once
 while [[ $(date +%s) -lt $deadline ]]; do
