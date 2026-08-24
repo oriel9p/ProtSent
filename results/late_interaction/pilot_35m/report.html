@@ -378,12 +378,19 @@
     same ProtSent-V2-35M training step measures <strong>240.9 pairs/s against 122.2 on sdpa (1.97×) on Pfam</strong>,
     and 135.6 against 91.4 (1.48×) on STRING, with peak VRAM <em>falling</em> 10.7 → 4.2 GB. Numerics check out
     (pooled cosine agreement ≥ .99974, MaxSim top-1 retrieval agreement 100%), though FA3-produced and sdpa-produced
-    eval numbers should not be mixed in one table. Two corollaries: the ~21% late-vs-dense training overhead above is
-    an sdpa-vs-sdpa figure and is <em>smaller than the attention backend choice in either direction</em>; and the
-    token-packing null result reported earlier has a better explanation than "sdpa" — with flash attention Sentence
-    Transformers already unpads inputs automatically, so packing has no padding left to reclaim (240.9 → 239.2 pairs/s)
-    and buys memory predictability instead. <code>torch.compile</code> measured a net loss at this scale
-    (−13% steady-state plus 266 s of warmup), consistent with the upstream note about small models on fast GPUs.</p>
+    eval numbers should not be mixed in one table — nothing in this report's results tables came from that environment.
+    Three corollaries. The ~21% late-vs-dense training overhead above is an sdpa-vs-sdpa figure and is
+    <em>smaller than the attention backend choice in either direction</em>. The win is mostly not the kernel: forcing
+    unpadding off under flash gives 104.0 pairs/s against 135.6 with it on, so the 1.48× splits into ~1.30× unpadding
+    and ~1.14× kernel — and since Sentence Transformers enables unpadding automatically whenever flash is active, the
+    earlier token-packing null result is explained (there is no padding left for packing to reclaim; what packing does
+    buy is memory predictability, 8.49 → 7.66 GB peak). Finally <code>torch.compile</code> is length-dependent rather
+    than uniformly bad — +3.6% on Pfam, −13% on the longer STRING sequences — but ~250 s of warmup needs ~13k steps to
+    break even either way, so it stays off at this scale. Untested at 150M.</p>
+    <p>One caveat before this reaches a training recipe: the current setup keeps fp32 master weights and autocasts,
+    while the flash path wants bf16 weights, which moves the optimiser states with it. fp16 is not an option at all
+    here — it fails outright with "Attempting to unscale FP16 gradients". Speed this large is worth having, but
+    retrieval quality on a real run should be checked before the recipe changes, not after.</p>
   </div>
 </section>
 
