@@ -903,6 +903,57 @@ sdpa, including runs whose logs claimed otherwise: transformers silently rejects
 this campaign's effects (deltas ≤ .0045 against a CI width of .011) — which is not the same as "no
 cost": a sub-.005 degradation is not excluded, and resolving that would take ~9 seeds/arm.
 
+## bf16 weights froze the backbone (found 2026-08-24)
+
+Every late-interaction run between 2026-08-24 17:05 and 21:00 trained a **frozen backbone**. The
+flash-attention path loaded the model with `dtype=torch.bfloat16`, which put AdamW's *parameters*
+in bf16 rather than keeping fp32 masters. bf16 has an 8-bit mantissa, so near the median backbone
+weight (0.0606) representable values are ~2.4e-4 apart, while an AdamW step at the trainer's
+1e-5 backbone LR moves each weight by ~1e-5 — **1/24th of one representable step**. The addition
+rounds to a no-op.
+
+Measured directly, one AdamW step at lr 1e-5, fraction of backbone *elements* that changed:
+
+| params | elements moved |
+|---|---:|
+| fp32 | **93.4%** |
+| bf16 | **2.4%** |
+
+and it scales with the step size exactly as the mechanism predicts: lr 1e-4 → 21.2%, lr 1e-3 → 88.8%.
+Regression test: `tests/test_late_interaction.py::test_configured_learning_rate_actually_moves_the_backbone`.
+
+**Why it looked like a data problem.** The first symptom was `protsent_late_pool_control` scoring
+.6244 SCOPe superfamily eligible MAP against `protsent_late_proj128`'s .7057, and those two arms
+differed in both pair pool *and* backend. Mean cosine of each arm's dense view against the base
+ProtSent-V2-35M, over 400 SCOPe-40 sequences, settles it:
+
+| arm | pool | backend | cos vs base | SCOPe elig. MAP |
+|---|---|---|---:|---:|
+| `protsent_late_proj128` | capped 2M/2M | **fp32/sdpa** | **0.836** | **.7057** |
+| `protsent_late_pool_control_bf16bug` | uncapped 19M/6M | bf16/flash | 0.9976 | .6244 |
+| `protsent_late_capped_flash` | capped 2M/2M | bf16/flash | 0.9977 | .6214 |
+
+The two bf16 arms trained on completely different pools and landed indistinguishable from each
+other *and* from the untrained base. The pool never mattered; the backbone never moved. What did
+change is the randomly-initialised 128-D head, which trained at lr 1e-4 (21% of elements able to
+move) against a frozen backbone — worse than the fully-trained pair, which is the .08 gap.
+
+Vanilla ESM-2 appeared to improve on the same broken config (.4551 → .6090) because a vanilla
+backbone does not need to move: the head alone carries most of that gain. An arm improving is
+therefore **not** evidence that its backbone trained.
+
+**Fix.** Drop the bf16 weight pin and keep flash. The kernel needs half-precision *activations*,
+which `bf16=True` autocast already supplies; transformers accepts a pinned flash backend on an
+fp32 model — verified by loading it, not assumed. TF32 is enabled for the fp32 matmuls
+(`torch.backends.cuda.matmul.allow_tf32`), which lowers mantissa precision *inside* a matmul
+without touching stored weights, so updates stay exact.
+
+**What this invalidates.** Every throughput number measured under the bf16 config, including the
+1.48–1.97x flash speedups and the compile verdict (+3.6% Pfam / −13% STRING) — all were taken with
+a model that was barely training. Re-measured under fp32. The earlier paired flash quality A/B is
+also void: it compared sdpa-fp32 against flash-bf16 and attributed the difference to the kernel.
+Runs archived as `*_bf16bug`, with their curve rows relabelled rather than deleted.
+
 ## Not overwriting things
 
 - Each run has its own `RUN_NAME`, so its output is `models/$RUN_NAME` and its

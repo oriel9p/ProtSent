@@ -151,6 +151,14 @@ def main() -> None:
 
     device = f"cuda:{local_rank}" if torch.cuda.is_available() else None
 
+    # TF32 for the fp32 matmuls. Weights are fp32 so optimizer updates stay exact; TF32 only
+    # lowers the mantissa used *inside* a matmul, which is the tensor-core path an A100 wants.
+    # This is the safe half of what pinning bf16 weights was reaching for -- that froze 97.6% of
+    # the backbone at lr 1e-5, because a bf16 weight cannot represent an update that small.
+    if torch.cuda.is_available():
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+
     # Creating TrainingArguments first initializes the accelerate/torch.distributed
     # state, which build_datasets relies on for its rank-0-first barrier.
     train_args = MultiVectorEncoderTrainingArguments(
@@ -176,6 +184,13 @@ def main() -> None:
         report_to=args.report_to,
         run_name=args.run_name,
     )
+
+    # The projection head is created below, before Trainer.__init__ runs set_seed, so without
+    # this --seed never reached it: every arm's step0 head was a different random draw and no
+    # cross-arm @0 comparison was controlled.
+    from transformers import set_seed
+
+    set_seed(args.seed)
 
     attn = li.resolve_attention(args.attn_implementation, args.model)
     mve, dense_st = li.build_multivector_encoder(

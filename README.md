@@ -185,6 +185,10 @@ plus `runtime.json` and `train_log.csv`.
 **Defaults worth knowing.** `--proj_dim 128` (measured better than 64-D and better
 than no projection at all); `--attn_implementation auto` tries flash attention and
 falls back to sdpa, logging which it got and recording it in `runtime.json`.
+**Weights stay fp32** — flash needs half-precision activations, which bf16 autocast
+supplies, not half-precision weights. Loading in bf16 puts AdamW's parameters in bf16,
+where an update at lr 1e-5 is below the representable spacing and rounds away; that
+froze 97.6% of the backbone before it was caught. TF32 is on for the fp32 matmuls.
 Flash needs `0.15.2 <= kernels < 0.16` — outside that window transformers rejects the
 kernel and the run silently trains on sdpa, so check the logged backend after any
 environment change. `--compile` is off by default (it helps short Pfam pairs and

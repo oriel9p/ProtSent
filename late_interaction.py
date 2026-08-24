@@ -69,9 +69,13 @@ def build_multivector_encoder(
     ``attn_implementation`` pins an attention backend, e.g. :data:`FLASH_ATTENTION` for the ~2x
     throughput measured above. Two conditions come with it, and both change more than speed:
 
-    * Flash attention requires **bf16/fp16 weights**; transformers refuses it on an fp32 model.
-      The default recipe loads fp32 and autocasts, keeping fp32 master weights for the
-      optimizer, so pinning flash moves the optimizer to bf16 states. That is a numerics change.
+    * Weights stay **fp32**. The kernel needs half-precision activations, which
+      ``bf16=True`` autocast already provides, and transformers accepts a pinned flash backend
+      on an fp32 model -- verified, not assumed. Loading in bf16 as well was a serious bug:
+      AdamW's parameters became bf16, and at the trainer's 1e-5 backbone LR an update is
+      ~1/24th of bf16's spacing near a typical weight, so **97.6% of backbone elements could
+      not move at all** (fp32: 93.4% move). A converged backbone was frozen while its head kept
+      training. See test_configured_learning_rate_actually_moves_the_backbone.
     * It reaches ``models.Transformer`` through ``load_model_for_training``'s native-checkpoint
       branch, which is the only branch that can honour it. :func:`resolve_attention` gates on the
       same families, and the loader raises rather than silently ignoring the request.
@@ -80,7 +84,7 @@ def build_multivector_encoder(
 
     dense_st = load_model_for_training(
         model_name_or_path, max_seq_length=max_seq_length, device=device, pooling_mode="mean",
-        model_kwargs=({"attn_implementation": attn_implementation, "dtype": torch.bfloat16}
+        model_kwargs=({"attn_implementation": attn_implementation}
                       if attn_implementation else None),
     )
     # One Transformer instance, two views of it: max_seq_length set on either reaches the same

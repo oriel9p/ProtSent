@@ -64,7 +64,12 @@ scope_rows() {  # scope_rows <gpu> <out_dir> <specs...>
 # clear of zero, so the 64-D head these runs originally inherited is the wrong one to
 # spend 8 GPU-h on.
 LONG_STEPS="${LONG_STEPS:-18219}"
-LONG_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 6000000 --seed 42)
+# --compile: the 250 s warmup is 1.5% of an 18,219-step run, and a 300-step probe puts steady
+# state at ~1.66 steps/s against 1.329 without, with peak VRAM 6.1 GB against 9.3. Every arm
+# carries it so the arms stay comparable; validated against the 170 pairs/s fp32 baseline at the
+# first checkpoint. The earlier "+3.6% Pfam / -13% STRING" verdict was measured under the bf16
+# bug and is void.
+LONG_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 6000000 --seed 42 --compile)
 
 # The long runs draw from an uncapped pair pool, while protsent_late_proj128 -- the only
 # other 128-D arm -- was built with the default 2M-per-file caps. Comparing them directly

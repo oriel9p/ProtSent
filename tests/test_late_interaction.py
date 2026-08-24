@@ -99,3 +99,47 @@ def test_flash_attention_path_builds_the_same_module_stack(tiny_models):
     assert default == rebuilt
     assert isinstance(mve[0], Transformer)
     assert li.FLASH_ATTENTION.startswith("kernels-community/")
+
+
+def _fraction_of_params_moved(mve, lr):
+    """One AdamW step at `lr` on the backbone; returns the fraction of ELEMENTS that changed.
+
+    AdamW's first step moves every weight by very close to `lr` regardless of gradient
+    magnitude (m_hat / sqrt(v_hat) is ~1 elementwise), which is what makes this a clean
+    probe of whether an update of that size can be represented at all.
+
+    Counting elements rather than tensors is the whole point. A tensor counts as "moved" if a
+    single one of its millions of elements did, which on real 35M weights reads 24/24 tensors
+    moved at 4.6% element movement -- a proxy that saturates exactly where the bug lives.
+    """
+    import torch
+
+    backbone, _ = li.backbone_and_projection_params(mve)
+    before = [p.detach().clone() for p in backbone]
+    opt = torch.optim.AdamW(backbone, lr=lr)
+    feats = mve.tokenize(SEQS)
+    mve(feats)["token_embeddings"].float().pow(2).mean().backward()
+    opt.step()
+    moved = sum(int((b != p.detach()).sum()) for b, p in zip(before, backbone))
+    return moved / sum(p.numel() for p in backbone)
+
+
+def test_configured_learning_rate_actually_moves_the_backbone(tiny_models):
+    """A step at the trainer's own backbone LR must change the weights it is applied to.
+
+    bf16 carries an 8-bit mantissa, so representable values near magnitude 0.05 are spaced
+    ~2**-8 * 0.05 = 2e-4 apart. train_late_interaction.py's default backbone LR is 1e-5, so
+    an AdamW step asks each weight to move ~1/20th of that spacing. If the parameters
+    themselves are bf16 rather than fp32 masters, the addition rounds to a no-op and the
+    backbone cannot train at all. The spacing is a property of the bf16 format, not
+    something this codebase computes.
+    """
+    mve, _ = tiny_models
+    assert _fraction_of_params_moved(mve, lr=1e-5) > 0.9, "fp32 baseline must move"
+
+    # The flash path pins dtype=bfloat16; attn_implementation="sdpa" reaches it without a GPU.
+    bf16_mve, _ = li.build_multivector_encoder(
+        TINY, proj_dim=16, max_seq_length=64, device="cpu", attn_implementation="sdpa"
+    )
+    moved = _fraction_of_params_moved(bf16_mve, lr=1e-5)
+    assert moved > 0.9, f"bf16 backbone lost updates at lr 1e-5: only {moved:.1%} of elements moved"
