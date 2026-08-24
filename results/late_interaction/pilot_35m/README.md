@@ -2,7 +2,7 @@
 
 Branch `LateInteractions`; plan and definitions in the repo root scripts:
 `late_interaction.py`, `train_late_interaction.py`, `late_interaction_eval.py`,
-`run_late_pilot_train.sh`, `run_late_pilot_bench.sh`.
+`run_experiment_queue.sh` (training queue), `run_late_bench.sh` (pooled benchmarks).
 
 Layout (files appear as stages run):
 

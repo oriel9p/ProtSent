@@ -859,6 +859,50 @@ pure "more of the same" pass. Training at 1024 instead would match the evaluatio
 cap; it was not attempted because attention cost is quadratic in length and the
 512 configuration already peaks at 110 GiB of a 267 GiB card.
 
+## Late interaction (ColBERT/MaxSim) — campaign started 2026-08-23
+
+A second scoring mode, trained with `train_late_interaction.py` rather than `protein_pipeline.py`:
+one vector per residue, scored by MaxSim, on the same dc40 pair corpus. Every arm exports both a
+`late/` multi-vector model and a `dense_view/` mean-pooled equivalent, so the pooled benchmarks can
+score it unchanged. Outputs under `models/late_interaction/$NAME`, results under
+`results/late_interaction/`.
+
+| name | backbone | steps × pairs/step | head | pool | status |
+|---|---|---|---|---|---|
+| `protsent_late` | ProtSent-V2-35M | 2,000 × 256 (2 GPU) | 64-D | capped 2M/file | done, pilot |
+| `esm2_late` | Synthyra/ESM2-35M | 2,000 × 256 (2 GPU) | 64-D | capped 2M/file | done, pilot |
+| `protsent_late_150m` / `esm2_late_150m` | V2-150M / Synthyra-150M | 5,000 × 128 | 64-D | capped | done |
+| `protsent_late_proj128` | ProtSent-V2-35M | 4,000 × 128 | **128-D** | capped | done — head-size ablation |
+| `protsent_late_swap` | ProtSent-V2-35M | 4,000 × 128 | 128-D | capped | done — symmetry ablation |
+| `protsent_late_pool_control` | ProtSent-V2-35M | 4,000 × 128 | 128-D | **uncapped** | matched-pool control |
+| **`protsent_late_long`** | ProtSent-V2-35M | 18,219 × 128 | 128-D | uncapped | phase 1, running |
+| **`protsent_late_150m_long`** | ProtSent-V2-150M | 18,219 × 128 | 128-D | uncapped | phase 1, running |
+| `esm2_late_long` | facebook/esm2_t12_35M | 18,219 × 128 | 128-D | uncapped | phase 1, running |
+| `*_prop` | continues the above | proportional sampler | 128-D | uncapped | phase 2, queued |
+
+**Two controls make the long runs interpretable.** `long` vs `pool_control` isolates *steps* (both
+uncapped, 18,219 vs 4,000); `pool_control` vs `proj128` isolates *pool diversity* (both 4,000 steps,
+uncapped vs capped at 2M pairs/file). Without both, "the long run is better" cannot be attributed.
+
+**"One round-robin pass" is a pass over Pfam, not over the data.** The built pool is Pfam 777,306 +
+AFDB 18,987,468 + STRING 6,000,000 = 25.76M pairs, and ROUND_ROBIN cycles the three sources until the
+smallest is exhausted. 18,219 steps × 128 therefore consumes 100% of Pfam, 13% of STRING and **4.1%
+of AFDB** — 9.1% of the pool. A real epoch is ~201k steps (~50 h/card). Phase 2 switches to
+PROPORTIONAL for that reason, not for more steps: on SCOPe the pilot curve is flat from ~1,500 steps
+(ProtSent +.0002 over the last 500; ESM-2 peaks at 1,500 and drifts down), so mixture, not step
+count, is the variable still worth moving.
+
+Checkpoints are deleted at exit (`--save_total_limit 1` plus cleanup), so `snapshot_checkpoints.sh`
+keeps a weights-only copy of each one under `$RUN/snapshots/step-N/`. Two points (step0 and final)
+cannot tell "still improving" from "peaked early and drifted", which is exactly what ESM-2 did.
+
+**Attention backend is recorded per run** in `runtime.json`. Everything before 2026-08-24 ran on
+sdpa, including runs whose logs claimed otherwise: transformers silently rejects `kernels` outside
+`[0.15.2, 0.16)` and falls back. The phase-1 long arms are the first to actually train under flash
+(1.48–1.97× faster, peak VRAM 11.9 → 9.0 GB). A paired A/B found no quality cost at the scale of
+this campaign's effects (deltas ≤ .0045 against a CI width of .011) — which is not the same as "no
+cost": a sub-.005 degradation is not excluded, and resolving that would take ~9 seeds/arm.
+
 ## Not overwriting things
 
 - Each run has its own `RUN_NAME`, so its output is `models/$RUN_NAME` and its

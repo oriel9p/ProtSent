@@ -153,6 +153,47 @@ python protein_benchmark_suite.py \
   -t remote_homology fluorescence ec_classification
 ```
 
+## Late interaction (ColBERT-style MaxSim)
+
+An experimental second scoring mode: instead of comparing two mean-pooled vectors,
+keep one vector per residue and score a pair by MaxSim — for each query residue take
+its best match in the document, then sum. Built on Sentence Transformers v6
+(`MultiVectorEncoder`), sharing the same backbone and the same dc40 pair corpus as
+ordinary ProtSent training, so any late-trained model also exports a normal
+mean-pooled "dense view" that every existing benchmark can consume unchanged.
+
+```bash
+# Continue an existing ProtSent model with a residue-level contrastive objective
+python train_late_interaction.py \
+  --model GrimSqueaker/ProtSent-V2-35M \
+  --files /storage/users/ddofer/data/protsent-data-dc40/{pfam_sorted,afdb_sorted,stringdb_train_15M}.parquet \
+  --output_dir models/late_interaction/protsent_late \
+  --proj_dim 128 --max_steps 18219
+
+# SCOPe-40 all-vs-all: dense cosine vs zero-shot MaxSim vs trained MaxSim
+python late_interaction_eval.py scope --models models/late_interaction/protsent_late/late
+
+# The long-run queue (survives disconnect; idempotent; --resume)
+QUEUES="p q" ./run_experiment_queue.sh start
+./run_experiment_queue.sh status
+```
+
+Outputs land in `--output_dir` as `late/` (the multi-vector model), `dense_view/`
+(its mean-pooled equivalent), `step0/` (both, before training, as a parity control),
+plus `runtime.json` and `train_log.csv`.
+
+**Defaults worth knowing.** `--proj_dim 128` (measured better than 64-D and better
+than no projection at all); `--attn_implementation auto` tries flash attention and
+falls back to sdpa, logging which it got and recording it in `runtime.json`.
+Flash needs `0.15.2 <= kernels < 0.16` — outside that window transformers rejects the
+kernel and the run silently trains on sdpa, so check the logged backend after any
+environment change. `--compile` is off by default (it helps short Pfam pairs and
+hurts longer STRING ones). FastPLM checkpoints (`Synthyra/*`) always take sdpa,
+because the flash path loads a plain `EsmModel` instead of the FastPLM wrapper.
+
+Results, method notes and the caveats that go with them:
+[`results/late_interaction/pilot_35m/SUMMARY.md`](results/late_interaction/pilot_35m/SUMMARY.md).
+
 ## Tests
 
 ```bash
@@ -177,6 +218,12 @@ benchmark_plotting.py        # Shared plot helpers
 umap_visualization.py        # UMAP embedding visualization
 ablation_optuna_search.py    # Hyperparameter search
 static_guide.py              # Static embedding guide helpers
+late_interaction.py          # ColBERT/MaxSim encoder, scoring and SCOPe metrics
+train_late_interaction.py    # Late-interaction contrastive training
+late_interaction_eval.py     # SCOPe / CATH / few-shot evaluation for late models
+run_experiment_queue.sh      # Resumable, disconnect-proof training queue
+run_late_bench.sh            # Pooled benchmarks over each arm's dense view
+snapshot_checkpoints.sh      # Keeps weights-only checkpoint copies for the curve
 pyproject.toml               # Dependencies and project config
 tests/                       # Unit and integration tests
 data/                        # Small metadata files (large data is generated)
