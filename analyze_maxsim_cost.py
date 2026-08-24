@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
+import logging
 import sys
 import time
 from pathlib import Path
@@ -33,31 +33,46 @@ from bootstrap_ci import per_query_metrics  # noqa: E402
 
 RERANK_K = (10, 30, 100)
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("maxsim_cost")
+
 
 def metrics(ranking: np.ndarray, labels: np.ndarray) -> dict:
     pq = per_query_metrics(ranking, labels)
     elig = pq["eligible"]
-    return {"R@1": float(pq["hit1"][elig].mean()), "R@10": float(pq["hit10"][elig].mean()),
-            "MAP": float(pq["ap"][elig].mean()), "n_eligible": int(elig.sum())}
+    # Spelled eligible_* to match scope_hierarchy.csv: these are means over queries that
+    # have at least one reachable positive, NOT plain Recall over all queries (which is
+    # ~2 points lower and would join wrongly against the other tables on a bare "R@1").
+    return {"eligible_Recall@1": float(pq["hit1"][elig].mean()),
+            "eligible_Recall@10": float(pq["hit10"][elig].mean()),
+            "eligible_MAP": float(pq["ap"][elig].mean()), "n_eligible": int(elig.sum())}
+
+
+def rerank_from(shortlist: np.ndarray, maxsim: np.ndarray, k: int) -> np.ndarray:
+    """Reorder the first k of a precomputed cosine ranking by MaxSim; keep the tail as is."""
+    m = maxsim.copy()
+    np.fill_diagonal(m, -np.inf)
+    out = shortlist.copy()
+    for q in range(len(shortlist)):
+        head = shortlist[q, :k]
+        out[q, :k] = head[np.argsort(-m[q, head], kind="stable")]
+    return out
 
 
 def rerank(cos: np.ndarray, maxsim: np.ndarray, k: int) -> np.ndarray:
-    """Ranking from a cosine top-k shortlist reordered by MaxSim, tail kept by cosine."""
-    n = len(cos)
-    c, m = cos.copy(), maxsim.copy()
+    """Convenience wrapper: build the cosine shortlist, then rerank its head."""
+    c = cos.copy()
     np.fill_diagonal(c, -np.inf)
-    np.fill_diagonal(m, -np.inf)
-    base = np.argsort(-c, axis=1, kind="stable")[:, : n - 1]
-    out = base.copy()
-    for q in range(n):
-        head = base[q, :k]
-        out[q, :k] = head[np.argsort(-m[q, head], kind="stable")]
-    return out
+    shortlist = np.argsort(-c, axis=1, kind="stable")[:, : len(cos) - 1]
+    return rerank_from(shortlist, maxsim, k)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--models", action="append", default=[], metavar="NAME=KIND:PATH")
+    ap.add_argument("--rerank", action="append", default=[], metavar="MAXSIM_ARM=DENSE_ARM",
+                    help="Two-stage pairing: score MAXSIM_ARM's rerank over DENSE_ARM's cosine "
+                         "shortlist. Repeatable; both names must appear in --models.")
     ap.add_argument("--out_dir", default="results/late_interaction/pilot_35m")
     ap.add_argument("--batch_size", type=int, default=64)
     ap.add_argument("--chunk_elements", type=int, default=50_000_000)
@@ -81,6 +96,7 @@ def main() -> int:
         print("selfcheck ok")
         return 0
 
+    pairing = dict(pair.split("=", 1) for pair in args.rerank)
     seqs, families = li.load_scope40()
     fam = np.asarray(families)
     cost_rows, rerank_rows, sym_rows = [], [], []
@@ -128,7 +144,7 @@ def main() -> int:
         print(f"{name}: encode {encode_s:.1f}s  score {score_s:.3f}s  ({per_protein:.0f} numbers/protein)")
 
         if kind == "dense":
-            cosine_cache[name.replace("_dense", "")] = sim
+            cosine_cache[name] = sim  # keyed by the exact --models name that --rerank refers to
         else:
             base = metrics(li.ranking_from_similarity(sim), fam)
             sym = metrics(li.ranking_from_similarity((sim + sim.T) / 2), fam)
@@ -146,15 +162,25 @@ def main() -> int:
                              **{f"{k}_maxsim": v for k, v in base.items()},
                              **{f"{k}_symmetrised_raw": v for k, v in sym.items()},
                              **{f"{k}_symmetrised_meanmaxsim": v for k, v in mean_sym.items()}})
-            stem = name.replace("_zeroshot", "").replace("_late", "")
-            cos = cosine_cache.get(stem)
-            if cos is not None:
+            partner = pairing.get(name)
+            if partner is not None:
+                cos = cosine_cache.get(partner)
+                if cos is None:
+                    raise SystemExit(
+                        f"--rerank {name}={partner} but {partner} produced no cosine matrix; "
+                        "list it in --models as a dense arm before this one"
+                    )
+                shortlist = np.argsort(-np.where(np.eye(len(cos), dtype=bool), -np.inf, cos),
+                                       axis=1, kind="stable")[:, : len(cos) - 1]
                 for k in RERANK_K:
-                    rerank_rows.append({"arm": name, "shortlist_k": k,
-                                        **metrics(rerank(cos, sim, k), fam)})
-                rerank_rows.append({"arm": name, "shortlist_k": "full", **base})
+                    rerank_rows.append({"arm": name, "shortlist_from": partner, "shortlist_k": k,
+                                        **metrics(rerank_from(shortlist, sim, k), fam)})
+                rerank_rows.append({"arm": name, "shortlist_from": partner,
+                                    "shortlist_k": "full", **base})
+            else:
+                logger.info("no --rerank pairing for %s; skipping its two-stage rows", name)
         del model, emb, sim
-        torch.cuda.empty_cache()
+        torch.cuda.empty_cache()  # free before the next arm's encode is timed
 
     out = Path(args.out_dir)
     for rows, fname in ((cost_rows, "training/scoring_cost.csv"),

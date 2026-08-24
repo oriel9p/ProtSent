@@ -1,0 +1,27 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,EmbeddingNorm,BenchmarkSeed,Accuracy,F1_Weighted,F1_Macro,BalancedAccuracy,MCC,F1,AUC,AP,Spearman,Pearson,MSE,MAE,R2,F1_Micro,Error,Recall@1,Recall@10,Recall@30,MAP,eligible_Recall@1,eligible_Recall@10,eligible_Recall@30,eligible_MAP,n_queries,n_eligible_queries
+Synthyra/ESM2-35M,Remote Homology (Fold),20000,2026-08-24,linear,standard,test,test_split,none,42,0.64766,0.6352,0.36446,0.42773,0.64344,,,,,,,,,,,,,,,,,,,,
+Synthyra/ESM2-35M,Solubility (DeepSol),20000,2026-08-24,linear,standard,test,test_split,none,42,0.61269,,0.6009,0.61261,0.23979,0.53229,0.68032,0.65117,,,,,,,,,,,,,,,,,
+Synthyra/ESM2-35M,Signal Peptide Prediction (SignalP/ProteinBERT),20000,2026-08-24,linear,standard,test,test_split,none,42,0.98507,,0.97241,0.97015,0.94485,0.95373,0.99415,0.98124,,,,,,,,,,,,,,,,,
+Synthyra/ESM2-35M,Neuropeptide Precursor Prediction (ProFET/NeuroPID),20000,2026-08-24,linear,standard,test,test_split,none,42,0.93472,,0.92542,0.93434,0.85219,0.95175,0.97471,0.97953,,,,,,,,,,,,,,,,,
+Synthyra/ESM2-35M,beta-lactamase-PEER,20000,2026-08-24,linear,standard,test,test_split_column,none,42,,,,,,,,,0.73457,0.80559,0.03627,0.14727,0.64843,,,,,,,,,,,,
+Synthyra/ESM2-35M,Peptide-HLA Binding,20000,2026-08-24,linear,standard,test,test_split,none,42,0.7817,,0.7817,0.78196,0.56398,0.7822,0.85216,0.82208,,,,,,,,,,,,,,,,,
+Synthyra/ESM2-35M,Metal Ion Binding,20000,2026-08-24,linear,standard,test,test_split,none,42,0.71697,,0.71694,0.71697,0.43402,0.71418,0.79065,0.79306,,,,,,,,,,,,,,,,,
+Synthyra/ESM2-35M,Subcellular Localisation,20000,2026-08-24,linear,standard,test,test_split,none,42,0.70955,0.70445,0.5608,0.55227,0.64016,,0.91171,,,,,,,,,,,,,,,,,,
+Synthyra/ESM2-35M,EC Classification,20000,2026-08-24,linear,standard,test,test_split,none,42,0.59227,,0.59639,,,,,,,,,,,0.79074,,,,,,,,,,,
+Synthyra/ESM2-35M,Variant Effect (GB1),20000,2026-08-24,linear,standard,test,test_split,none,42,,,,,,,,,0.8437,0.81154,0.49657,0.53386,0.65829,,,,,,,,,,,,
+Synthyra/ESM2-35M,Fluorescence (TAPE),20000,2026-08-24,linear,standard,test,test_split,none,42,,,,,,,,,0.58805,0.62417,0.99322,0.75099,-0.04636,,,,,,,,,,,,
+Synthyra/ESM2-35M,Stability (Biomap),20000,2026-08-24,linear,standard,test,test_split,none,42,,,,,,,,,0.43712,0.39383,0.25701,0.43306,-0.53855,,,,,,,,,,,,
+Synthyra/ESM2-35M,Enzyme Catalytic Efficiency,20000,2026-08-24,linear,standard,test,test_split,none,42,,,,,,,,,0.54544,0.5404,17.74554,3.19615,0.28728,,,,,,,,,,,,
+Synthyra/ESM2-35M,PPI (Bernett Gold Standard),20000,2026-08-24,linear,standard,test,test_split,none,42,0.51035,,0.50124,0.51002,0.02079,0.43383,0.51059,0.503,,,,,,,,,,,,,,,,,
+Synthyra/ESM2-35M,Secondary Structure 3 (NetSurfP-SS3),20000,2026-08-24,linear,standard,test,test_split,none,42,0.78485,,0.77818,,0.66247,,,,,,,,,,,,,,,,,,,,
+Synthyra/ESM2-35M,Residue Conservation (FLIP),20000,2026-08-24,linear,standard,test,task_exception,none,42,,,,,,,,,,,,,,,"Local dataset 'data/conservation_flip' is not present. It is built from source rather than downloaded, so a fresh clone does not have it.
+Build it first:
+    python scripts/prep_conservation.py
+See docs/DATASETS.md.",,,,,,,,,,
+Synthyra/ESM2-35M,Intrinsic Disorder (DisProt),20000,2026-08-24,linear,standard,test,task_exception,none,42,,,,,,,,,,,,,,,"Local dataset 'data/disprot' is not present. It is built from source rather than downloaded, so a fresh clone does not have it.
+Build it first:
+    python scripts/prep_disprot.py
+See docs/DATASETS.md.",,,,,,,,,,
+Synthyra/ESM2-35M,SCOPe-40 Structural Retrieval,20000,2026-08-24,linear,standard,test,retrieval_unchanged,none,42,,,,,,,,,,,,,,,,0.38333,0.58405,0.64024,0.32354,0.4997,0.76137,0.83461,0.42177,2207.0,1693.0
+Synthyra/ESM2-35M,SCOPe-40 Structural Retrieval (fold),20000,2026-08-24,linear,standard,test,retrieval_unchanged,none,42,,,,,,,,,,,,,,,,0.69642,0.83552,0.88718,0.34385,0.72637,0.87146,0.92533,0.35864,2207.0,2116.0
+Synthyra/ESM2-35M,SCOPe-40 Structural Retrieval (superfamily),20000,2026-08-24,linear,standard,test,retrieval_unchanged,none,42,,,,,,,,,,,,,,,,0.63978,0.77526,0.82646,0.36482,0.69901,0.84703,0.90297,0.3986,2207.0,2020.0

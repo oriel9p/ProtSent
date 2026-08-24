@@ -1,0 +1,5 @@
+accuracy,level,model,n_lookup,n_queries,runtime_s,scoring,test_split
+0.58,cath_h,protsent_late,69605,150,127.79,maxsim,test_h
+0.5933333333333334,cath_h,esm2_late,69605,150,127.23,maxsim,test_h
+0.6133333333333333,cath_h,protsent_v2_zeroshot,69605,150,180.17,maxsim,test_h
+0.5466666666666666,cath_h,esm2_zeroshot,69605,150,210.29,maxsim,test_h

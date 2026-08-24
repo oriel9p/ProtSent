@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from collections import Counter
@@ -61,16 +62,32 @@ def load_scorer(kind: str, path: str, *, max_seq_length: int, device):
 
 
 def append_csv(path: Path, rows: list[dict]) -> None:
+    """Append rows, reusing the file's existing header so columns cannot shift.
+
+    A run that emits more columns than the file already has (bootstrap CIs, say) would
+    otherwise write its own wider header order into the middle of the file and silently
+    offset every value; that file is rewritten in full instead.
+    """
     import csv
 
     path.parent.mkdir(parents=True, exist_ok=True)
     keys = sorted({k for r in rows for k in r})
-    exists = path.exists()
-    with path.open("a", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=keys)
-        if not exists:
-            w.writeheader()
-        w.writerows(rows)
+    old_rows: list[dict] = []
+    if path.exists():
+        with path.open() as fh:
+            reader = csv.DictReader(fh)
+            header = reader.fieldnames or []
+            if set(keys) <= set(header):
+                with path.open("a", newline="") as out:
+                    csv.DictWriter(out, fieldnames=header).writerows(rows)
+                logger.info("wrote %d rows -> %s", len(rows), path)
+                return
+            old_rows = list(reader)
+            keys = sorted(set(keys) | set(header))
+    with path.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=keys, restval="")
+        w.writeheader()
+        w.writerows(old_rows + rows)
     logger.info("wrote %d rows -> %s", len(rows), path)
 
 
@@ -198,9 +215,15 @@ def cmd_watch_curve(args) -> None:
             mve.max_seq_length = args.max_seq_length
             t0 = _time.time()
             sim = li.maxsim_matrix(mve, seqs, batch_size=args.batch_size, chunk_elements=args.chunk_elements)
-            rows, _ = li.scope_rows(sim, families, model=name, scoring="maxsim", n_boot=0,
-                                   runtime_s=round(_time.time() - t0, 2))
+            # Bootstrap and per-query vectors are computed HERE or never: the trainer keeps one
+            # checkpoint on disk, so this point cannot be rescored once the next save rotates it out.
+            rows, pq = li.scope_rows(sim, families, model=name, scoring="maxsim", n_boot=args.n_boot,
+                                     runtime_s=round(_time.time() - t0, 2))
             append_csv(curve, rows)
+            np.savez_compressed(
+                out / f"per_query_{name.replace('/', '_')}.npz",
+                **{f"{lvl}_{k}": v for lvl, d in pq.items() for k, v in d.items()},
+            )
             del mve, sim
             import torch
 
@@ -217,6 +240,14 @@ def cmd_watch_curve(args) -> None:
             tag = f"{args.name}@{ckpt.name.split('-')[1]}"
             if tag not in done and (ckpt / "modules.json").exists():
                 score(tag, str(ckpt))
+        if args.follow_pid:
+            try:
+                os.kill(args.follow_pid, 0)
+            except (ProcessLookupError, PermissionError):
+                if not (run / "late").exists():
+                    logger.warning("trainer %d exited without exporting %s; watcher stopping",
+                                   args.follow_pid, run)
+                    return
         if (run / "late").exists():  # training finished and exported
             if f"{args.name}@final" not in already():
                 score(f"{args.name}@final", str(run / "late"))
@@ -287,6 +318,9 @@ def main() -> None:
     pc.add_argument("--chunk_elements", type=int, default=25_000_000)
     pc.add_argument("--poll_seconds", type=int, default=120)
     pc.add_argument("--max_hours", type=float, default=24.0)
+    pc.add_argument("--n_boot", type=int, default=1000)
+    pc.add_argument("--follow_pid", type=int, default=0,
+                    help="Exit when this PID (the trainer) is gone, so a dead run cannot hold the GPU")
     pc.set_defaults(fn=cmd_watch_curve)
 
     pcath = sub.add_parser("cath", parents=[common])
