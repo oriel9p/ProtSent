@@ -98,33 +98,60 @@ LONG_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 6000000 --se
 # would not be attributable to either. queue_f trains the missing cell: same 512k pairs as
 # proj128, same head and batch, drawn from the long runs' pool. long vs f isolates steps;
 # f vs proj128 isolates pool diversity.
-queue_f() {  # matched-pool control for the long runs
+# Run this BEFORE the long runs, not alongside them: _build_pair_dataset samples clusters
+# with the unseeded global `random`, so two concurrent cold builds of the same flags produce
+# different pair sets and the control stops being a control. Running it first leaves a warm
+# Arrow cache the long runs reuse.
+queue_f() {  # matched-pool control for the long runs -- run first
   local gpu="$1"
   train "$gpu" protsent_late_pool_control GrimSqueaker/ProtSent-V2-35M 4000 128 1000 "${LONG_ARGS[@]}"
   scope_rows "$gpu" "$RES/pilot_35m/scope" - \
     "protsent_late_pool_control=late:$MODELS/protsent_late_pool_control/late"
 }
 
-queue_d() {  # vanilla ESM-2, long
-  local gpu="$1"
-  watch_curve "$gpu" esm2_late_long "$RES/pilot_35m/scope"
-  train "$gpu" esm2_late_long Synthyra/ESM2-35M "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
-  wait
-}
-
-queue_e() {  # ProtSent-V2, long
+queue_p() {  # ProtSent-V2 35M, long -- the priority arm
   local gpu="$1"
   watch_curve "$gpu" protsent_late_long "$RES/pilot_35m/scope"
   train "$gpu" protsent_late_long GrimSqueaker/ProtSent-V2-35M "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
   wait
 }
 
+queue_q() {  # ProtSent-V2 150M, long
+  local gpu="$1"
+  watch_curve "$gpu" protsent_late_150m_long "$RES/pilot_150m/scope"
+  train "$gpu" protsent_late_150m_long GrimSqueaker/ProtSent-V2-150M "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
+  wait
+}
+
+# Phase 2: continue phase 1's checkpoint under PROPORTIONAL sampling, where AFDB dominates
+# in proportion to its size the way ProtSent-V2's own 34.8M-pair run did, rather than being
+# rationed to Pfam's size by round-robin. Resumable, so it can be stopped for other users and
+# restarted without losing progress. PHASE2_STEPS is deliberately large; stop it when the
+# curve flattens rather than when a step counter runs out.
+PHASE2_STEPS="${PHASE2_STEPS:-100000}"
+queue_g() {  # phase 2, proportional, continues from phase 1
+  local gpu="$1"
+  local name="${PHASE2_ARM:-protsent_late_long}"
+  watch_curve "$gpu" "$name" "$RES/pilot_35m/scope"
+  train "$gpu" "$name" GrimSqueaker/ProtSent-V2-35M "$PHASE2_STEPS" 128 2000 \
+    "${LONG_ARGS[@]}" --multi_dataset_sampler proportional
+  wait
+}
+
+queue_d() {  # vanilla ESM-2, long -- lowest priority, first to be dropped
+  local gpu="$1"
+  watch_curve "$gpu" esm2_late_long "$RES/pilot_35m/scope"
+  train "$gpu" esm2_late_long Synthyra/ESM2-35M "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
+  wait
+}
+
+
 # ---------------------------------------------------------------- driver
 case "${1:-start}" in
   start)
     for q in ${QUEUES:-a b c}; do
       gpu_var="GPU_${q^^}"; gpu="${!gpu_var:-}"
-      [[ -z "$gpu" ]] && gpu=$(( $(printf '%s' "$q" | tr 'abcdef' '012012') ))
+      [[ -z "$gpu" ]] && gpu=$(( $(printf '%s' "$q" | tr 'abcdefgpq' '012012012') ))
       if pgrep -f "run_experiment_queue.sh __run $q" > /dev/null; then echo "queue $q already running"; continue; fi
       setsid nohup "$ROOT/run_experiment_queue.sh" __run "$q" "$gpu" >> "logs/queue_$q.log" 2>&1 < /dev/null &
       echo "queue $q -> gpu $gpu (log logs/queue_$q.log)"
