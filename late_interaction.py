@@ -20,6 +20,8 @@ import time
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+import logging
+
 import numpy as np
 import torch
 
@@ -29,6 +31,8 @@ from bootstrap_ci import boot_ci, per_query_metrics  # noqa: E402
 from sentence_transformers import MultiVectorEncoder, SentenceTransformer  # noqa: E402
 from sentence_transformers.base.modules import Dense, Normalize  # noqa: E402
 from sentence_transformers.multi_vector_encoder.modules import MultiVectorMask  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 SPECIAL_TOKENS = ("<cls>", "<eos>")  # ESM-2 / FastPLM tokenizers; <pad> is already masked
 SCOPE_LEVELS: Dict[str, int] = {"fold": 2, "superfamily": 3, "family": 4}
@@ -62,6 +66,11 @@ def build_multivector_encoder(
     ``dense_st`` is the ordinary ``[Transformer, mean Pooling]`` SentenceTransformer
     from ``protein_pipeline.load_model_for_training`` (max_seq_length enforced,
     ESM/FastPLM patches applied). ``mve`` reuses ``dense_st[0]`` in place.
+
+    Note the environment gate: transformers accepts ``kernels`` only in
+    ``[0.15.2, 0.16)``. Outside that window the kernel fails to load and
+    :func:`resolve_attention` falls back to sdpa with a warning rather than
+    training silently slower than the caller thinks.
 
     ``attn_implementation`` opts into a specific attention backend, e.g.
     ``FLASH_ATTENTION`` for the ~2x throughput above. It is off by default and
@@ -118,10 +127,20 @@ def _build_with_attention(model_name_or_path, proj_dim, max_seq_length, device, 
     from sentence_transformers.base.modules import Transformer
     from sentence_transformers.sentence_transformer.modules import Pooling
 
+    from model_utils import patch_unknown_residue_tokens
+    from protein_pipeline import _ensure_trainable_rotary_caches
+
     transformer = Transformer(
         model_name_or_path,
         model_kwargs={"attn_implementation": attn, "dtype": torch.bfloat16},
     )
+    # This path does not go through load_model_for_training, so the post-load fixes it
+    # applies have to be applied here too. Both have bitten this project already: an
+    # out-of-vocabulary residue killed a DDP run at step 134, and ESM2 rotary caches
+    # created under inference_mode crash the first backward that reuses them.
+    patch_unknown_residue_tokens(transformer.tokenizer)
+    _ensure_trainable_rotary_caches(transformer.auto_model)
+
     dim = transformer.get_embedding_dimension()
     dense_st = SentenceTransformer(
         modules=[transformer, Pooling(dim, pooling_mode="mean")], device=device
@@ -130,6 +149,35 @@ def _build_with_attention(model_name_or_path, proj_dim, max_seq_length, device, 
     mve = MultiVectorEncoder(modules=_late_modules(transformer, proj_dim), device=device)
     mve.max_seq_length = max_seq_length
     return mve, dense_st
+
+
+def resolve_attention(requested: Optional[str], model_name_or_path: str) -> Optional[str]:
+    """Pick an attention backend: ``auto`` tries flash and falls back to sdpa.
+
+    Returns the implementation string to pass to ``build_multivector_encoder``, or None
+    for the standard fp32 + autocast path. A backend is only reported as available after
+    the model actually loads under it, because a kernels version below the floor fails at
+    load time rather than at import time.
+    """
+    if requested and requested != "auto":
+        return None if requested == "sdpa" else requested
+    if requested is None:
+        return None
+    try:
+        from sentence_transformers.base.modules import Transformer
+
+        Transformer(
+            model_name_or_path,
+            model_kwargs={"attn_implementation": FLASH_ATTENTION, "dtype": torch.bfloat16,
+                          "trust_remote_code": True},
+            processor_kwargs={"trust_remote_code": True},
+        )
+        logger.info("attention backend: %s", FLASH_ATTENTION)
+        return FLASH_ATTENTION
+    except Exception as exc:
+        logger.warning("flash attention unavailable (%s: %s); falling back to sdpa",
+                       type(exc).__name__, str(exc)[:120])
+        return None
 
 
 def load_multivector_encoder(path: str, device: Optional[str] = None) -> MultiVectorEncoder:

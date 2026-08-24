@@ -10,7 +10,7 @@ dependencies = [
         "datasets>=4.6.1",
         "einops>=0.8.2",
         "huggingface-hub>=1.5.0",
-        "kernels>=0.15.2,<0.16",  # flash-attn kernels need >=0.15.2; below that they fail to load and fall back to sdpa
+        "kernels>=0.15.2,<0.16",  # transformers requires 0.15.2 <= kernels < 0.16; outside that flash silently falls back to sdpa
         "matplotlib>=3.10.0",
         "numpy>=2.4.3",
         "optuna>=4.4.0",

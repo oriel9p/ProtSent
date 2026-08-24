@@ -79,6 +79,16 @@ def parse_args() -> argparse.Namespace:
                    help="Checkpoints kept on disk (1 = crash-resume only; curve sampling reads them live)")
     p.add_argument("--keep_checkpoints", action="store_true",
                    help="Skip the end-of-run checkpoint-* cleanup")
+    p.add_argument("--attn_implementation", default="auto",
+                   help="auto (try flash, fall back to sdpa), sdpa, or an explicit kernel repo id. "
+                        "Flash measured 1.48-1.97x faster with peak VRAM 11.9->9.0 GB, and a paired quality "
+                        "A/B found no cost at the scale of this pilot's effects (see report)")
+    p.add_argument("--multi_dataset_sampler", default="round_robin", choices=["round_robin", "proportional"],
+                   help="round_robin cycles sources until the smallest is exhausted; proportional samples in "
+                        "proportion to source size, as ProtSent-V2's own run did")
+    p.add_argument("--compile", action="store_true",
+                   help="torch.compile the model. Measured +3.6%% on Pfam but -13%% on the longer STRING "
+                        "sequences plus ~250 s warmup, so it is off by default on a mixed corpus")
     p.add_argument("--swap_pair_order", action="store_true",
                    help="Randomly swap (sentence_0, sentence_1) per pair, seeded — symmetry ablation")
     return p.parse_args()
@@ -89,6 +99,12 @@ def build_datasets(args, world_size: int):
     from datasets import Dataset
 
     def _build() -> dict:
+        # _build_pair_dataset samples clusters with the global `random` module, so without
+        # this the same flags produce a different pair set on every cold cache and no run is
+        # reproducible - which also means a control and the run it controls for could differ.
+        import random as _random
+
+        _random.seed(args.seed)
         out: dict[str, Dataset] = {}
         for f in args.files:
             name = os.path.splitext(os.path.basename(f))[0]
@@ -163,7 +179,9 @@ def main() -> None:
         warmup_steps=args.warmup_steps,
         lr_scheduler_type="cosine",
         batch_sampler=BatchSamplers.BATCH_SAMPLER,  # NO_DUPLICATES hangs on cluster-sorted corpora
-        multi_dataset_batch_sampler=MultiDatasetBatchSamplers.ROUND_ROBIN,
+        multi_dataset_batch_sampler=(MultiDatasetBatchSamplers.PROPORTIONAL
+                                     if args.multi_dataset_sampler == "proportional"
+                                     else MultiDatasetBatchSamplers.ROUND_ROBIN),
         save_strategy="steps" if args.save_steps > 0 else "no",
         save_steps=args.save_steps if args.save_steps > 0 else 500,
         save_total_limit=args.save_total_limit if args.save_total_limit > 0 else None,
@@ -176,9 +194,14 @@ def main() -> None:
         run_name=args.run_name,
     )
 
+    attn = li.resolve_attention(args.attn_implementation, args.model)
     mve, dense_st = li.build_multivector_encoder(
-        args.model, proj_dim=args.proj_dim, max_seq_length=args.max_seq_length, device=device
+        args.model, proj_dim=args.proj_dim, max_seq_length=args.max_seq_length, device=device,
+        attn_implementation=attn,
     )
+    if args.compile:
+        mve.compile(dynamic=True)
+        logger.info("torch.compile enabled (dynamic=True); expect ~250 s of warmup")
     pooling = dense_st[1]
     frozen = li.freeze_unused_heads(mve)
     if frozen:
@@ -250,7 +273,9 @@ def main() -> None:
             "lr": args.lr,
             "proj_lr": args.proj_lr,
             "warmup_steps": args.warmup_steps,
-            "sampler": "round_robin",
+            "sampler": args.multi_dataset_sampler,
+            "attn_implementation": attn or "sdpa",
+            "compiled": bool(args.compile),
             "datasets": {k: len(v) for k, v in train_dataset.items()},
             "sentence_transformers": st_pkg.__version__,
             "torch": torch.__version__,
