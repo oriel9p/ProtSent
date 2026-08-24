@@ -47,12 +47,16 @@ stage_cath() {    # CATH v4.3 midnight zone, with the paired McNemar over arms
     "${args[@]}" --mcnemar --out_dir "$out"
 }
 
-stage_proteingym() {  # MaxSim(mutant, WT); the pooled cosine arm comes from `bench`
+stage_proteingym() {  # MaxSim(mutant, WT) for the late view, pooled cosine for the dense view
+  # Substitutions only; indels are where raw MaxSim would be a length artifact. The cap is left at
+  # the 500 default deliberately: measured at 28.2M residues, that is ~23 min for the 35M pair and
+  # ~59 min for the 150M pair on a contended card, roughly half that on free ones. Passing 2000
+  # here (as this did) would have made it ~4.7 h to buy ~0.002 on the mean.
   local out="$1"
   local args=()
   for a in $ARMS; do for s in $(specs_for "$a"); do args+=(--models "$s"); done; done
   CUDA_VISIBLE_DEVICES=2 uv run --no-sync python late_interaction_eval.py proteingym \
-    "${args[@]}" --variant dms_substitutions --max_variants_per_assay 2000 --out_dir "$out"
+    "${args[@]}" --variant dms_substitutions --out_dir "$out"
 }
 
 bench_pairs() {
