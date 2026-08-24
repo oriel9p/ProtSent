@@ -106,11 +106,20 @@ def _restore_saved_projection(mve: MultiVectorEncoder, path: str) -> bool:
     saved = Path(path) / "1_Dense"
     if dense is None or not saved.is_dir():
         return False
-    loaded = Dense.load(str(saved))
+    try:
+        loaded = Dense.load(str(saved))
+    except Exception as exc:  # a malformed dir must not kill an 8-hour run at minute one
+        logger.warning("could not read the saved projection at %s (%s); keeping the fresh head",
+                       saved, exc)
+        return False
     if loaded.linear.weight.shape != dense.linear.weight.shape:
         logger.warning("saved projection is %s but this run asks for %s; keeping the fresh head",
                        tuple(loaded.linear.weight.shape), tuple(dense.linear.weight.shape))
         return False
+    # Dense.load takes no device/dtype, so it lands on CPU in whatever dtype it was saved as --
+    # including bf16 for anything written during the master-weights bug. Match the live module.
+    target = dense.linear.weight
+    loaded = loaded.to(device=target.device, dtype=target.dtype)
     dense.load_state_dict(loaded.state_dict())
     logger.info("continuing from the saved %d-D projection head in %s",
                 dense.linear.weight.shape[0], saved)

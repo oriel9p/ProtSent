@@ -14,7 +14,9 @@ while [[ $(date +%s) -lt $deadline ]]; do
   pending=0
   for name in "${RUNS[@]}"; do
     dir="models/late_interaction/$name"
-    [[ -d "$dir" ]] || continue
+    # A run whose directory does not exist yet has not started; treating that as "finished"
+    # would end the watcher before it ever checked anything.
+    [[ -d "$dir" ]] || { pending=1; continue; }
     [[ -f "$dir/runtime.json" ]] || pending=1
     # Re-check after the run finishes, since the final export is what gets reported.
     key="$name:$([[ -f "$dir/runtime.json" ]] && echo final || echo live)"
