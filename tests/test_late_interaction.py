@@ -82,3 +82,20 @@ def test_ranking_excludes_self():
     sim = np.random.default_rng(0).random((5, 5))
     r = li.ranking_from_similarity(sim)
     assert r.shape == (5, 4) and all(i not in r[i] for i in range(5))
+
+
+def test_flash_attention_path_builds_the_same_module_stack(tiny_models):
+    """The opt-in backend path must produce the same stack as the default one.
+
+    Only the stack shape is asserted here: loading the flash kernel needs a GPU
+    and kernels>=0.15.2, so the backend itself is exercised by the throughput
+    probe rather than in a unit test.
+    """
+    mve, _ = tiny_models
+    default = [type(m).__name__ for m in mve]
+    from sentence_transformers.base.modules import Transformer
+
+    rebuilt = [type(m).__name__ for m in li._late_modules(mve[0], proj_dim=16)]
+    assert default == rebuilt
+    assert isinstance(mve[0], Transformer)
+    assert li.FLASH_ATTENTION.startswith("kernels-community/")

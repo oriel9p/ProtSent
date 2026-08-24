@@ -36,25 +36,66 @@ KS: Tuple[int, ...] = (1, 10, 30)
 
 
 # --------------------------------------------------------------------------- models
+# Flash-attention kernel that ships prebuilt via the `kernels` package, so no
+# flash-attn build is needed. Measured on an A100 against sdpa, ProtSent-V2-35M,
+# bs128/mini64, steady state over 20 post-warmup steps:
+#     Pfam pairs    122.2 -> 240.9 pairs/s (1.97x), peak 10.67 -> 4.16 GB
+#     STRING pairs   91.4 -> 135.6 pairs/s (1.48x), peak 11.88 -> 8.49 GB
+# Most of that is input unpadding, which Sentence Transformers enables
+# automatically whenever flash attention is active (1.30x of the STRING gain;
+# the kernel itself is the other 1.14x). That is also why mini_batch_num_tokens
+# does not help here: unpadding has already removed the padding work that token
+# packing exists to reclaim.
+FLASH_ATTENTION = "kernels-community/vllm-flash-attn3"
+
+
 def build_multivector_encoder(
     model_name_or_path: str,
     *,
     proj_dim: int = 64,
     max_seq_length: int = 512,
     device: Optional[str] = None,
+    attn_implementation: Optional[str] = None,
 ) -> Tuple[MultiVectorEncoder, SentenceTransformer]:
     """Return ``(mve, dense_st)`` sharing one backbone Transformer module.
 
     ``dense_st`` is the ordinary ``[Transformer, mean Pooling]`` SentenceTransformer
     from ``protein_pipeline.load_model_for_training`` (max_seq_length enforced,
     ESM/FastPLM patches applied). ``mve`` reuses ``dense_st[0]`` in place.
+
+    ``attn_implementation`` opts into a specific attention backend, e.g.
+    ``FLASH_ATTENTION`` for the ~2x throughput above. It is off by default and
+    carries two conditions, both of which change more than speed:
+
+    * Flash attention requires **bf16/fp16 weights**; transformers refuses it on
+      an fp32 model. The default recipe here loads fp32 and autocasts to bf16,
+      keeping fp32 master weights for the optimizer, so turning this on moves the
+      optimizer to bf16 states. That is a numerics change: validate retrieval
+      quality on a real run before adopting it, do not assume speed is free.
+    * It builds the Transformer module directly rather than through
+      ``load_model_for_training``, so it applies to native ESM checkpoints only.
+      FastPLM backbones (Synthyra/*) reject flash kernels and must stay on sdpa.
+
+    Requires ``kernels>=0.15.2``; older versions fail the load and silently fall
+    back to sdpa.
     """
+    if attn_implementation:
+        return _build_with_attention(
+            model_name_or_path, proj_dim, max_seq_length, device, attn_implementation
+        )
+
     from protein_pipeline import load_model_for_training
 
     dense_st = load_model_for_training(
         model_name_or_path, max_seq_length=max_seq_length, device=device, pooling_mode="mean"
     )
     transformer = dense_st[0]
+    mve = MultiVectorEncoder(modules=_late_modules(transformer, proj_dim), device=device)
+    return mve, dense_st
+
+
+def _late_modules(transformer, proj_dim: int) -> List[torch.nn.Module]:
+    """Transformer -> (Dense proj) -> MultiVectorMask -> Normalize."""
     modules: List[torch.nn.Module] = [transformer]
     if proj_dim:
         modules.append(
@@ -66,11 +107,28 @@ def build_multivector_encoder(
                 module_input_name="token_embeddings",
             )
         )
-    modules += [
+    return modules + [
         MultiVectorMask(skiplist_words=list(SPECIAL_TOKENS), skiplist_tasks=["query", "document"]),
         Normalize(module_input_name="token_embeddings"),
     ]
-    mve = MultiVectorEncoder(modules=modules, device=device)
+
+
+def _build_with_attention(model_name_or_path, proj_dim, max_seq_length, device, attn):
+    """Native-ESM path that pins the attention backend. See build_multivector_encoder."""
+    from sentence_transformers.base.modules import Transformer
+    from sentence_transformers.sentence_transformer.modules import Pooling
+
+    transformer = Transformer(
+        model_name_or_path,
+        model_kwargs={"attn_implementation": attn, "dtype": torch.bfloat16},
+    )
+    dim = transformer.get_embedding_dimension()
+    dense_st = SentenceTransformer(
+        modules=[transformer, Pooling(dim, pooling_mode="mean")], device=device
+    )
+    dense_st.max_seq_length = max_seq_length
+    mve = MultiVectorEncoder(modules=_late_modules(transformer, proj_dim), device=device)
+    mve.max_seq_length = max_seq_length
     return mve, dense_st
 
 

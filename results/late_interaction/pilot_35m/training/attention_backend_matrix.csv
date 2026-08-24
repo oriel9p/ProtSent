@@ -1,0 +1,15 @@
+tag,source,attn,mini_batch_size,mini_batch_num_tokens,unpad,compile,pairs_per_s,blended_pairs_per_s,peak_vram_gb,warmup_s,measured_steps,steady,outlier_steps,batch_size,model
+string_sdpa_nopack,string,sdpa,64,0,,False,91.43665837182685,88.36697468716852,11.88,15.457624822156504,20,True,0,128,GrimSqueaker/ProtSent-V2-35M
+string_sdpa_pack,string,sdpa,64,21440,,False,89.22460635073853,86.09091097064861,13.87,15.91237488691695,20,True,0,128,GrimSqueaker/ProtSent-V2-35M
+string_fa3_nopack,string,kernels-community/vllm-flash-attn3,64,0,,False,135.56305438399602,128.8176876704156,8.49,10.925369706004858,20,True,0,128,GrimSqueaker/ProtSent-V2-35M
+string_fa3_pack,string,kernels-community/vllm-flash-attn3,64,21440,,False,130.13374026300912,123.59270269222904,7.66,11.397725884104148,20,True,0,128,GrimSqueaker/ProtSent-V2-35M
+pfam_sdpa_nopack,pfam,sdpa,64,0,,False,122.15169175527637,116.00379241151163,10.67,12.144817588850856,20,True,0,128,GrimSqueaker/ProtSent-V2-35M
+pfam_sdpa_pack,pfam,sdpa,64,10784,,False,122.61575437881159,116.55835156887693,12.99,12.066641592071392,20,True,0,128,GrimSqueaker/ProtSent-V2-35M
+pfam_fa3_nopack,pfam,kernels-community/vllm-flash-attn3,64,0,,False,240.9096846224043,223.86481154381815,4.16,6.526820540078916,20,True,0,128,GrimSqueaker/ProtSent-V2-35M
+pfam_fa3_pack,pfam,kernels-community/vllm-flash-attn3,64,10784,,False,239.19645196938373,218.5904688099951,4.02,6.864597256178968,20,True,0,128,GrimSqueaker/ProtSent-V2-35M
+string_fa3_nopack_compile,string,kernels-community/vllm-flash-attn3,64,0,,True,135.53776974259634,130.21055387357907,8.49,10.60297297325451,20,True,0,128,GrimSqueaker/ProtSent-V2-35M
+string_sdpa_nopack_compile,string,sdpa,64,0,,True,91.12837747963374,88.07879570526677,11.88,15.505089094047435,20,True,0,128,GrimSqueaker/ProtSent-V2-35M
+string_fa3_compileAPI,string,kernels-community/vllm-flash-attn3,64,0,auto,True,117.78743943614045,16.146921485308695,4.96,266.1391014608089,25,True,0,128,GrimSqueaker/ProtSent-V2-35M
+pfam_fa3_compileAPI,pfam,kernels-community/vllm-flash-attn3,64,0,auto,True,249.6120187992183,18.487273928599716,2.44,243.35632702126168,25,True,0,128,GrimSqueaker/ProtSent-V2-35M
+string_fa3_unpadoff,string,kernels-community/vllm-flash-attn3,64,0,off,False,104.01677931371101,100.9474108275425,11.45,16.15125003317371,25,True,0,128,GrimSqueaker/ProtSent-V2-35M
+string_fa3_pack_big,string,kernels-community/vllm-flash-attn3,64,43000,auto,False,133.78471515256012,129.78441354070557,15.0,12.5722594212275,25,True,0,128,GrimSqueaker/ProtSent-V2-35M
