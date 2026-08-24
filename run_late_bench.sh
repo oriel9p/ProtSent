@@ -11,7 +11,12 @@
 #   ./run_late_bench.sh                          # the long-run arms, cheap task set
 #   ./run_late_bench.sh name=path [name=path ...]
 #   TASKS=full ./run_late_bench.sh               # everything --fast covers
+#   TASKS=proteingym ./run_late_bench.sh          # the 8 ProteinGym tasks (slow)
 #   TASKS="remote_homology ec_classification" ./run_late_bench.sh
+#
+# ProteinGym here scores the DENSE VIEW, so its zero-shot arm is cosine(mutant, WT). For the
+# MaxSim equivalent on the multi-vector model itself:
+#   late_interaction_eval.py proteingym --models NAME=late:PATH --variant dms_substitutions
 #   PROBES=knn ./run_late_bench.sh
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -30,9 +35,10 @@ export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 # by `late_interaction_eval.py watch_curve` (MaxSim) and `scope` (dense cosine), which score the
 # multi-vector model itself rather than its pooled view.
 case "${TASKS:-cheap}" in
-  cheap) TASK_ARGS=(--very-fast) ;;
-  full)  TASK_ARGS=(--fast) ;;
-  *)     TASK_ARGS=(-t ${TASKS}) ;;
+  cheap)      TASK_ARGS=(--very-fast) ;;
+  full)       TASK_ARGS=(--fast) ;;
+  proteingym) TASK_ARGS=(--proteingym) ;;   # the 8 ProteinGym tasks; large and slow
+  *)          TASK_ARGS=(-t ${TASKS}) ;;
 esac
 
 ARMS=("$@")

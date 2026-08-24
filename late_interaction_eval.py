@@ -38,6 +38,14 @@ from bootstrap_ci import boot_ci  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("late_interaction_eval")
 
+# Mirrors ProtBench's _PROTEINGYM_VARIANTS so the two report on identical data and grouping.
+PROTEINGYM_VARIANTS = {
+    "dms_substitutions": {"data_dir": "DMS_substitutions", "label": "DMS_score",
+                          "group_by": "DMS_id", "mutant": "mutated_sequence", "wt": "target_seq"},
+    "dms_indels": {"data_dir": "DMS_indels", "label": "DMS_score",
+                   "group_by": "DMS_id", "mutant": "mutated_sequence", "wt": "target_seq"},
+}
+
 
 def parse_model_spec(spec: str):
     name, rest = spec.split("=", 1)
@@ -233,6 +241,72 @@ def cmd_fewshot_rh(args) -> None:
     append_csv(Path(args.out_dir) / "late_fewshot_knn.csv", rows)
 
 
+def cmd_proteingym(args) -> None:
+    """Zero-shot ProteinGym with MaxSim: score each variant by its similarity to the wild type.
+
+    ProtBench scores an embedding model here as cosine(mutant, WT). The late-interaction analogue
+    is MaxSim(mutant, WT), which is what this measures -- same data, same metric, same grouping,
+    so the two are directly comparable.
+
+    Scores are MEAN MaxSim (divided by query length), not the raw sum. Raw MaxSim sums over query
+    residues, so it scales with mutant length: harmless for substitutions, where every variant in
+    an assay is the same length, but a pure length artifact for indels. Dividing is a per-assay
+    monotone transform when lengths are equal, so it cannot change the substitution numbers.
+    """
+    from datasets import load_dataset
+    from scipy.stats import spearmanr
+
+    out = Path(args.out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    cfg = PROTEINGYM_VARIANTS[args.variant]
+    ds = load_dataset("OATML-Markslab/ProteinGym_v1", data_dir=cfg["data_dir"], split="train")
+    logger.info("%s: %d rows", args.variant, len(ds))
+
+    groups: dict = {}
+    for i, g in enumerate(ds[cfg["group_by"]]):
+        groups.setdefault(g, []).append(i)
+    assays = sorted(groups)
+    if args.max_assays:
+        assays = assays[: args.max_assays]
+    logger.info("%d assays (of %d)", len(assays), len(groups))
+
+    rows = []
+    for spec in args.models:
+        name, kind, path = parse_model_spec(spec)
+        scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
+        t0 = time.time()
+        per_assay = []
+        for a in assays:
+            idx = groups[a]
+            if args.max_variants_per_assay and len(idx) > args.max_variants_per_assay:
+                idx = list(np.random.default_rng(args.seed).choice(idx, args.max_variants_per_assay, replace=False))
+            mut = [ds[int(i)][cfg["mutant"]] for i in idx]
+            y = np.asarray([ds[int(i)][cfg["label"]] for i in idx], dtype=float)
+            if len(set(y.tolist())) < 2:
+                continue  # a constant label has no rank correlation to report
+            wt = ds[int(idx[0])][cfg["wt"]]
+            sim = scorer([wt], queries=mut, bs=args.batch_size, ce=args.chunk_elements)[:, 0]
+            lens = np.array([min(len(s), args.max_seq_length - 2) for s in mut], dtype=float)
+            rho = spearmanr(sim / lens, y).statistic
+            if np.isfinite(rho):
+                per_assay.append({"assay": a, "spearman": float(rho), "n": len(idx)})
+        del scorer
+        torch.cuda.empty_cache()
+        if not per_assay:
+            logger.warning("%s: no scoreable assay", name)
+            continue
+        rhos = np.array([r["spearman"] for r in per_assay])
+        _, lo, hi = boot_ci(rhos, n_boot=args.n_boot, seed=args.seed)
+        rows.append({"model": name, "scoring": scoring, "variant": args.variant,
+                     "mean_spearman": float(rhos.mean()), "ci95": f"[{lo:.4f}, {hi:.4f}]",
+                     "n_assays": len(per_assay), "runtime_s": round(time.time() - t0, 1)})
+        logger.info("%s %s: mean Spearman %.4f over %d assays", name, args.variant,
+                    rhos.mean(), len(per_assay))
+        np.savez_compressed(out / f"proteingym_{args.variant}_{name.replace('/', '_')}.npz",
+                            assay=np.array([r["assay"] for r in per_assay]), spearman=rhos)
+    append_csv(out / "proteingym_maxsim.csv", rows)
+
+
 def cmd_watch_curve(args) -> None:
     """Poll a training run for new checkpoint-* dirs and score SCOPe before they are deleted.
 
@@ -399,6 +473,14 @@ def main() -> None:
     pc.add_argument("--follow_pid", type=int, default=0,
                     help="Exit when this PID (the trainer) is gone, so a dead run cannot hold the GPU")
     pc.set_defaults(fn=cmd_watch_curve)
+
+    pg = sub.add_parser("proteingym", parents=[common])
+    pg.add_argument("--variant", default="dms_substitutions", choices=sorted(PROTEINGYM_VARIANTS))
+    pg.add_argument("--max_assays", type=int, default=0, help="0 = all")
+    pg.add_argument("--max_variants_per_assay", type=int, default=2000,
+                    help="Seeded subsample per assay; Spearman is stable well below the full set")
+    pg.add_argument("--n_boot", type=int, default=1000)
+    pg.set_defaults(fn=cmd_proteingym)
 
     pcath = sub.add_parser("cath", parents=[common])
     pcath.add_argument("--test_split", default="test_h", choices=["test_h", "test219", "test300", "validation"])
