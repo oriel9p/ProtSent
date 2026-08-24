@@ -954,6 +954,50 @@ a model that was barely training. Re-measured under fp32. The earlier paired fla
 also void: it compared sdpa-fp32 against flash-bf16 and attributed the difference to the kernel.
 Runs archived as `*_bf16bug`, with their curve rows relabelled rather than deleted.
 
+## torch.compile and flash attention fight each other (measured 2026-08-24)
+
+compile helps on one card (1.500 vs 1.329 steps/s) and loses on two (0.582 vs 1.083 under 2-way
+DDP, measured over 400 steps so warmup is not dominant -- a 60-step first attempt was warmup-
+dominated and overstated the loss as 3x).
+
+The cause is not recompilation. `recompiles=0`, `frames ok=117/122`. It is a **graph break**: the
+flash kernel is a custom op dynamo cannot trace.
+
+    unsupported operator: _vllm_flash_attn3_cuda_....fwd.default
+    "Operator does not support running with fake tensors"
+
+Neither `optimize_ddp=python_reducer` (0.210 steps/s) nor `optimize_ddp=False` nor a 64-entry
+dynamo cache changes it, because graph splitting is not the problem.
+
+Graph breaks by backend, 35M compiled (a property of the code, so contention-independent):
+
+| backend | graph breaks | note |
+|---|---:|---|
+| `sdpa` | **0** | fully traceable, 2 frames |
+| `flex_attention` | 7 | breaks are in ST's own forward (`is_peft_available()`), not attention |
+| `kernels-community/vllm-flash-attn3` | 21 | untraceable custom op |
+| `flash_attention_2` (prebuilt pip wheel) | — | **crashes under compile**: dynamo `lift_tracked_freevar_to_input` assertion |
+
+So the only compile-friendly attention here is sdpa, and whether sdpa+compile beats flash+plain is
+still open -- it needs free cards and real variable-length batches to answer honestly.
+
+**Kernel choice, 2-way DDP, no compile:** `vllm-flash-attn3` 277.1 pairs/s against
+`kernels-community/flash-attn3` 128.0 -- the current default is the right one, 2.2x the
+alternative. `kernels-community/flash-attn` is not a kernels-hub kernel at all
+(`/api/kernels/.../refs` returns 404); it is a model repo. FlashAttention-3 proper needs Hopper
+(sm90) and these are A100s (sm80), so the vLLM kernel must already take an sm80 path.
+
+**Prebuilt flash-attn 2.8.3** (`mjun0812/flash-attention-prebuild-wheels`, v0.9.47,
+`+cu130torch2.13-cp313-cp313-linux_x86_64`) is installed with `--no-deps` so it only adds a
+package; torch/transformers/kernels/sentence-transformers are unchanged. It loads and trains
+fine uncompiled. It is deliberately NOT in pyproject.toml: nothing yet shows it beats the vLLM
+kernel, and `uv sync` would drop it.
+
+**Numbers not to trust from this session.** Every sweep above shared cards with a live campaign,
+and the fixed-length microbenchmarks (16 identical sequences) remove the padding variance that
+flash unpadding exists to exploit -- on those, sdpa/FA2/vLLM land within 5% of each other, which
+says nothing about real batches. Re-measure on free cards before quoting any of it.
+
 ## Not overwriting things
 
 - Each run has its own `RUN_NAME`, so its output is `models/$RUN_NAME` and its
