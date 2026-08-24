@@ -236,6 +236,11 @@ def main() -> None:
     )
 
     has_ckpt = any(out.glob("checkpoint-*"))
+    # Step count this process starts from, so throughput can be reported over the work this
+    # process actually did rather than over every step the run has ever taken.
+    resumed_from = max((int(c.name.split("-")[1]) for c in out.glob("checkpoint-*")), default=0)
+    if not (args.resume and has_ckpt):
+        resumed_from = 0
     t0 = time.time()
     trainer.train(resume_from_checkpoint=bool(args.resume and has_ckpt))
     wall = time.time() - t0
@@ -253,6 +258,7 @@ def main() -> None:
         import transformers
 
         steps_done = int(trainer.state.global_step)
+        steps_this_process = steps_done - resumed_from
         runtime = {
             "model": args.model,
             "proj_dim": args.proj_dim,
@@ -265,8 +271,12 @@ def main() -> None:
             "steps": steps_done,
             "pairs_seen": steps_done * args.batch_size * world_size,
             "wall_time_s": round(wall, 1),
-            "steps_per_s": round(steps_done / wall, 4) if wall else None,
-            "pairs_per_s": round(steps_done * args.batch_size * world_size / wall, 2) if wall else None,
+            # Rates use steps completed in THIS process, not cumulative global_step: a resumed
+            # run divides all prior steps by only the resumed wall time and reports a throughput
+            # it never achieved.
+            "steps_this_process": steps_this_process,
+            "steps_per_s": round(steps_this_process / wall, 4) if wall else None,
+            "pairs_per_s": round(steps_this_process * args.batch_size * world_size / wall, 2) if wall else None,
             "peak_vram_bytes": torch.cuda.max_memory_allocated() if torch.cuda.is_available() else None,
             "gpus": [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())],
             "seed": args.seed,

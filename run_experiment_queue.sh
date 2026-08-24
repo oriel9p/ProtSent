@@ -31,10 +31,14 @@ train() {  # train <gpu> <name> <model> <steps> <batch> <save_steps> <extra args
     --dataloader_num_workers 4 --run_name "$name" "$@"
 }
 
-watch_curve() {  # watch_curve <gpu> <name> <out_dir> — background, follows a training job's checkpoints
-  local gpu="$1" name="$2" out="$3"
+watch_curve() {  # watch_curve <gpu> <name> <out_dir> [curve_name] — background, dies with its trainer
+  local gpu="$1" name="$2" out="$3" curve="${4:-$name}"
+  # --follow_pid was added so a crashed trainer cannot leave this polling for 24 h with the
+  # queue blocked on `wait`; it has to actually be passed. $$ is the queue driver, which
+  # exits when its jobs do.
   CUDA_VISIBLE_DEVICES="$gpu" uv run --no-sync python late_interaction_eval.py watch_curve \
-    --run_dir "$MODELS/$name" --name "$name" --out_dir "$out" --batch_size 32 --max_hours 24 &
+    --run_dir "$MODELS/$name" --name "$curve" --out_dir "$out" --batch_size 32 \
+    --follow_pid $$ --max_hours 24 &
 }
 
 scope_rows() {  # scope_rows <gpu> <out_dir> <reference|-> <specs...>
@@ -129,11 +133,20 @@ queue_q() {  # ProtSent-V2 150M, long
 # restarted without losing progress. PHASE2_STEPS is deliberately large; stop it when the
 # curve flattens rather than when a step counter runs out.
 PHASE2_STEPS="${PHASE2_STEPS:-100000}"
-queue_g() {  # phase 2, proportional, continues from phase 1
+queue_g() {  # phase 2, proportional, continues from phase 1's weights
   local gpu="$1"
-  local name="${PHASE2_ARM:-protsent_late_long}"
-  watch_curve "$gpu" "$name" "$RES/pilot_35m/scope"
-  train "$gpu" "$name" GrimSqueaker/ProtSent-V2-35M "$PHASE2_STEPS" 128 2000 \
+  local base="${PHASE2_BASE:-protsent_late_long}"
+  local name="${base}_prop"
+  # Distinct output dir: train() skips any job whose $dir/runtime.json exists, so reusing
+  # phase 1's directory would make this a permanent no-op. Distinct curve name for the same
+  # reason on the eval side -- the watcher dedups on name, so phase 2 points sharing phase 1's
+  # name would all be discarded as already scored.
+  #
+  # --model is phase 1's exported model, not the base HF id: phase 1 deletes its checkpoints
+  # at exit (save_total_limit 1 plus cleanup), so "continue" has to mean "start from the
+  # weights it exported", which is what late/ is.
+  watch_curve "$gpu" "$name" "$RES/pilot_35m/scope" "$name"
+  train "$gpu" "$name" "$MODELS/$base/late" "$PHASE2_STEPS" 128 2000 \
     "${LONG_ARGS[@]}" --multi_dataset_sampler proportional
   wait
 }
@@ -151,7 +164,7 @@ case "${1:-start}" in
   start)
     for q in ${QUEUES:-a b c}; do
       gpu_var="GPU_${q^^}"; gpu="${!gpu_var:-}"
-      [[ -z "$gpu" ]] && gpu=$(( $(printf '%s' "$q" | tr 'abcdefgpq' '012012012') ))
+      [[ -z "$gpu" ]] && gpu=$(( $(printf '%s' "$q" | tr 'abcdefgpq' '012301230') ))
       if pgrep -f "run_experiment_queue.sh __run $q" > /dev/null; then echo "queue $q already running"; continue; fi
       setsid nohup "$ROOT/run_experiment_queue.sh" __run "$q" "$gpu" >> "logs/queue_$q.log" 2>&1 < /dev/null &
       echo "queue $q -> gpu $gpu (log logs/queue_$q.log)"

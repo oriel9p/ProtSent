@@ -163,21 +163,27 @@ def resolve_attention(requested: Optional[str], model_name_or_path: str) -> Opti
         return None if requested == "sdpa" else requested
     if requested is None:
         return None
+    # Ask the environment, not a trial model load. The old probe built the full model with
+    # trust_remote_code kwargs that _build_with_attention does not pass, so its verdict did
+    # not predict the build; worse, on custom-code repos (Synthyra/*) transformers prompts
+    # interactively rather than raising, which blocks on a TTY and otherwise reports "flash
+    # unavailable" -- silently giving the ProtSent arms flash and the ESM-2 control arms sdpa,
+    # i.e. different optimizer numerics between the two arms being compared.
     try:
-        from sentence_transformers.base.modules import Transformer
-
-        Transformer(
-            model_name_or_path,
-            model_kwargs={"attn_implementation": FLASH_ATTENTION, "dtype": torch.bfloat16,
-                          "trust_remote_code": True},
-            processor_kwargs={"trust_remote_code": True},
-        )
-        logger.info("attention backend: %s", FLASH_ATTENTION)
-        return FLASH_ATTENTION
-    except Exception as exc:
-        logger.warning("flash attention unavailable (%s: %s); falling back to sdpa",
-                       type(exc).__name__, str(exc)[:120])
+        from transformers.integrations.hub_kernels import is_kernel  # noqa: F401
+        import kernels
+    except ImportError as exc:
+        logger.warning("flash attention unavailable (%s); falling back to sdpa", exc)
         return None
+    version = tuple(int(x) for x in kernels.__version__.split(".")[:2])
+    if not ((0, 15) <= version < (0, 16)):
+        logger.warning(
+            "flash attention needs kernels >=0.15.2,<0.16 but %s is installed; falling back "
+            "to sdpa. Run `uv sync` -- note every queue job uses `uv run --no-sync`, so a "
+            "corrected lock does not reach the venv on its own.", kernels.__version__)
+        return None
+    logger.info("attention backend: %s", FLASH_ATTENTION)
+    return FLASH_ATTENTION
 
 
 def load_multivector_encoder(path: str, device: Optional[str] = None) -> MultiVectorEncoder:

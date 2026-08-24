@@ -289,6 +289,7 @@ def cmd_cath(args) -> None:
         # proteins. Save per-query correctness so arms can be compared with McNemar
         # rather than by eyeballing accuracies, and carry the marginal CI in the row.
         half_width = 1.96 * float(np.sqrt(acc * (1 - acc) / len(q_y)))
+        Path(args.out_dir).mkdir(parents=True, exist_ok=True)  # before a 69k-sequence encode is thrown away
         np.savez_compressed(Path(args.out_dir) / f"cath_per_query_{name.replace('/', '_')}.npz",
                             correct=correct, labels=q_y)
         rows.append({
