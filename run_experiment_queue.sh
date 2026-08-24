@@ -31,13 +31,13 @@ train() {  # train <gpu> <name> <model> <steps> <batch> <save_steps> <extra args
     --dataloader_num_workers 4 --run_name "$name" "$@"
 }
 
-watch_curve() {  # watch_curve <gpu> <name> <out_dir> [curve_name] — background, dies with its trainer
-  local gpu="$1" name="$2" out="$3" curve="${4:-$name}"
+watch_curve() {  # watch_curve <gpu> <name> <out_dir> — background, dies with its trainer
+  local gpu="$1" name="$2" out="$3"
   # --follow_pid was added so a crashed trainer cannot leave this polling for 24 h with the
   # queue blocked on `wait`; it has to actually be passed. $$ is the queue driver, which
   # exits when its jobs do.
   CUDA_VISIBLE_DEVICES="$gpu" uv run --no-sync python late_interaction_eval.py watch_curve \
-    --run_dir "$MODELS/$name" --name "$curve" --out_dir "$out" --batch_size 32 \
+    --run_dir "$MODELS/$name" --name "$name" --out_dir "$out" --batch_size 32 \
     --follow_pid $$ --max_hours 24 &
 }
 
@@ -102,10 +102,12 @@ LONG_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 6000000 --se
 # would not be attributable to either. queue_f trains the missing cell: same 512k pairs as
 # proj128, same head and batch, drawn from the long runs' pool. long vs f isolates steps;
 # f vs proj128 isolates pool diversity.
-# Run this BEFORE the long runs, not alongside them: _build_pair_dataset samples clusters
-# with the unseeded global `random`, so two concurrent cold builds of the same flags produce
-# different pair sets and the control stops being a control. Running it first leaves a warm
-# Arrow cache the long runs reuse.
+# Run this before the long runs when the Arrow cache is cold. The original reason -- that
+# _build_pair_dataset sampled with the unseeded global `random`, so concurrent cold builds
+# produced different pair sets and the control stopped controlling for anything -- no longer
+# holds now that the trainer seeds it. What remains is cheaper: whoever runs first pays the
+# ~19M-pair AFDB build once and the rest reuse the cache, and two processes building the same
+# cache entry simultaneously is still wasted work.
 queue_f() {  # matched-pool control for the long runs -- run first
   local gpu="$1"
   train "$gpu" protsent_late_pool_control GrimSqueaker/ProtSent-V2-35M 4000 128 1000 "${LONG_ARGS[@]}"
@@ -145,7 +147,7 @@ queue_g() {  # phase 2, proportional, continues from phase 1's weights
   # --model is phase 1's exported model, not the base HF id: phase 1 deletes its checkpoints
   # at exit (save_total_limit 1 plus cleanup), so "continue" has to mean "start from the
   # weights it exported", which is what late/ is.
-  watch_curve "$gpu" "$name" "$RES/pilot_35m/scope" "$name"
+  watch_curve "$gpu" "$name" "$RES/pilot_35m/scope"
   train "$gpu" "$name" "$MODELS/$base/late" "$PHASE2_STEPS" 128 2000 \
     "${LONG_ARGS[@]}" --multi_dataset_sampler proportional
   wait

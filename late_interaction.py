@@ -271,10 +271,18 @@ def maxsim_matrix(
     queries: Optional[Sequence[str]] = None,
 ) -> np.ndarray:
     """Exact all-vs-all MaxSim scores (queries x seqs; queries default to seqs)."""
-    docs = mve.encode_document(list(seqs), batch_size=batch_size, show_progress_bar=False)
-    qs = docs if queries is None else mve.encode_query(list(queries), batch_size=batch_size, show_progress_bar=False)
+    # convert_to_numpy keeps the corpus on the host: ST's default leaves every sequence as a
+    # separate CUDA allocation, which for CATH's 69,605-domain lookup set is 5.4 GB at 128-D
+    # and 20-26 GB at native 480/640-D -- to produce a 40 MB score matrix. similarity(device=)
+    # then moves one budget-sized document chunk at a time instead of the whole corpus.
+    # Measured: bit-identical scores (max|diff| = 0.0), peak allocation 0.37 GB, and no slower.
+    docs = mve.encode_document(list(seqs), batch_size=batch_size, show_progress_bar=False,
+                               convert_to_numpy=True)
+    qs = docs if queries is None else mve.encode_query(list(queries), batch_size=batch_size,
+                                                       show_progress_bar=False, convert_to_numpy=True)
+    device = str(mve.device)
     with torch.no_grad():
-        scores = mve.similarity(qs, docs, chunk_elements=chunk_elements)
+        scores = mve.similarity(qs, docs, chunk_elements=chunk_elements, device=device)
     return scores.float().cpu().numpy()
 
 

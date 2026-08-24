@@ -171,7 +171,7 @@ def main() -> int:
                                     "shortlist_k": "full", **base})
             else:
                 logger.info("no --rerank pairing for %s; skipping its two-stage rows", name)
-        del model, emb, sim
+        del model, emb, sim, sim_t
         torch.cuda.empty_cache()  # free before the next arm's encode is timed
 
     out = Path(args.out_dir)

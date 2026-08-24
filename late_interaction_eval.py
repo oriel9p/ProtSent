@@ -25,6 +25,7 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
+import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -160,9 +161,12 @@ def cmd_fewshot_rh(args) -> None:
     for spec in args.models:
         name, kind, path = parse_model_spec(spec)
         scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
+        # One permutation, sliced per budget, so the budgets are nested and the query side is
+        # encoded once instead of once per budget. rng.choice per budget gave three unrelated
+        # galleries, which meant re-encoding all 3,244 test sequences for each one.
+        perm = np.random.default_rng(args.seed).permutation(len(tr_seqs))
         for budget in args.budgets:
-            rng = np.random.default_rng(args.seed)  # same draw for every model
-            sub = rng.choice(len(tr_seqs), min(budget, len(tr_seqs)), replace=False)
+            sub = perm[: min(budget, len(tr_seqs))]
             gallery = [tr_seqs[i] for i in sub]
             gal_y = tr_y[sub]
             t0 = time.time()
@@ -185,6 +189,7 @@ def cmd_fewshot_rh(args) -> None:
             })
             logger.info("%s N=%d: acc=%.4f", name, budget, rows[-1]["accuracy"])
         del scorer
+        torch.cuda.empty_cache()  # 8 arms in one invocation, each holding a corpus
     append_csv(Path(args.out_dir) / "late_fewshot_knn.csv", rows)
 
 
@@ -300,6 +305,7 @@ def cmd_cath(args) -> None:
         })
         logger.info("%s cath %s: acc=%.4f", name, args.test_split, rows[-1]["accuracy"])
         del scorer, sim
+        torch.cuda.empty_cache()
     append_csv(Path(args.out_dir) / "cath_eat.csv", rows)
 
 
