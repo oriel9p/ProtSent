@@ -90,7 +90,20 @@ queue_c() {  # GPU C: cheap 35M ablations first, then the long runs
 # clear of zero, so the 64-D head these runs originally inherited is the wrong one to
 # spend 8 GPU-h on.
 LONG_STEPS="${LONG_STEPS:-18219}"
-LONG_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 6000000)
+LONG_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 6000000 --seed 42)
+
+# The long runs draw from an uncapped pair pool, while protsent_late_proj128 -- the only
+# other 128-D arm -- was built with the default 2M-per-file caps. Comparing them directly
+# would vary step count AND pool diversity together, and in the same direction, so a gain
+# would not be attributable to either. queue_f trains the missing cell: same 512k pairs as
+# proj128, same head and batch, drawn from the long runs' pool. long vs f isolates steps;
+# f vs proj128 isolates pool diversity.
+queue_f() {  # matched-pool control for the long runs
+  local gpu="$1"
+  train "$gpu" protsent_late_pool_control GrimSqueaker/ProtSent-V2-35M 4000 128 1000 "${LONG_ARGS[@]}"
+  scope_rows "$gpu" "$RES/pilot_35m/scope" - \
+    "protsent_late_pool_control=late:$MODELS/protsent_late_pool_control/late"
+}
 
 queue_d() {  # vanilla ESM-2, long
   local gpu="$1"
@@ -111,7 +124,7 @@ case "${1:-start}" in
   start)
     for q in ${QUEUES:-a b c}; do
       gpu_var="GPU_${q^^}"; gpu="${!gpu_var:-}"
-      [[ -z "$gpu" ]] && gpu=$(( $(printf '%s' "$q" | tr 'abcde' '01201') ))
+      [[ -z "$gpu" ]] && gpu=$(( $(printf '%s' "$q" | tr 'abcdef' '012012') ))
       if pgrep -f "run_experiment_queue.sh __run $q" > /dev/null; then echo "queue $q already running"; continue; fi
       setsid nohup "$ROOT/run_experiment_queue.sh" __run "$q" "$gpu" >> "logs/queue_$q.log" 2>&1 < /dev/null &
       echo "queue $q -> gpu $gpu (log logs/queue_$q.log)"
