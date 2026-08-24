@@ -1,7 +1,9 @@
-accuracy,level,model,n_lookup,n_queries,runtime_s,scoring,test_split
-0.58,cath_h,protsent_late,69605,150,127.79,maxsim,test_h
-0.5933333333333334,cath_h,esm2_late,69605,150,127.23,maxsim,test_h
-0.6133333333333333,cath_h,protsent_v2_zeroshot,69605,150,180.17,maxsim,test_h
-0.5466666666666666,cath_h,esm2_zeroshot,69605,150,210.29,maxsim,test_h
-0.6,cath_h,protsent_late_480,69605,150,178.55,maxsim,test_h
-0.5933333333333334,cath_h,esm2_late_480,69605,150,202.59,maxsim,test_h
+accuracy,ci95_half_width,level,model,n_correct,n_lookup,n_queries,runtime_s,scoring,test_split
+0.43333333333333335,0.0793,cath_h,esm2_dense,65,69605,150,90.04,cosine,test_h
+0.5466666666666666,0.0797,cath_h,esm2_maxsim_480,82,69605,150,172.3,maxsim,test_h
+0.5933333333333334,0.0786,cath_h,esm2_late_64,89,69605,150,128.77,maxsim,test_h
+0.5933333333333334,0.0786,cath_h,esm2_late_480,89,69605,150,177.39,maxsim,test_h
+0.5666666666666667,0.0793,cath_h,protsent_v2_dense,85,69605,150,94.74,cosine,test_h
+0.6133333333333333,0.0779,cath_h,protsent_v2_maxsim_480,92,69605,150,175.56,maxsim,test_h
+0.58,0.079,cath_h,protsent_late_64,87,69605,150,127.13,maxsim,test_h
+0.6,0.0784,cath_h,protsent_late_480,90,69605,150,175.7,maxsim,test_h

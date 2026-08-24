@@ -40,8 +40,9 @@ MAP .698, against .683 for the untouched backbone and .672 for the 64-D arm.
 ## A. Does MaxSim help without any training? Yes, on both backbones
 
 Eligible family MAP, pooled cosine → MaxSim over native residues: ESM-2 .421 → .545; ProtSent-V2 .646 → .684.
-Same direction at superfamily and fold, and on CATH (ProtSent-V2 56.7 dense → 61.3 MaxSim). Cost is scoring
-time and index size, not model changes.
+Same direction at superfamily and fold. On CATH, rescored in one pipeline so every pair is McNemar-testable, the
+gain is significant for ESM-2 (43.3 → 54.7, +11.3, p=.002) and directional but not significant for ProtSent-V2
+(56.7 → 61.3, +4.7, p=.10) on that benchmark's 150 queries. Cost is scoring time and index size, not model changes.
 
 ## B. Does late training help beyond that? Yes for both — but read it at 480-D
 
@@ -90,16 +91,20 @@ See D. KNN and linear are reported side by side and never averaged.
   splits only; median SCOPe domain sits at 0.91 max identity to training data). Restricting to <40% identity
   queries (n=164) preserves the ordering: ESM-2-Late .676 > ProtSent-V2 + MaxSim .663 > ProtSent-V2 cosine
   .619 > ESM-2 cosine .333.
-- **Alignment baselines** (family level only; re-levelling needs a phmmer/MMseqs2 rerun): phmmer max-sensitivity
-  .753 / .898 / .607 beats every arm here at R@1 while losing on depth and MAP. On CATH, published CATH-Gene3D
-  HMMER (77) and ProtTucker (76) are far above our best arm (61.3) — that table compares small ESM-2 models,
-  it is not a claim against alignment.
+- **Alignment baselines** (SCOPe: family level only; re-levelling needs a phmmer/MMseqs2 rerun): phmmer
+  max-sensitivity .753 / .898 / .607 beats every arm here at R@1 while losing on depth and MAP. On CATH, published
+  CATH-Gene3D HMMER (77) and ProtTucker (76) are far above our best arm (61.3) — that table compares small ESM-2
+  models, it is not a claim against alignment.
+- **CATH protocol effect, measured.** Rescoring ESM-2's dense arm in our own pipeline gives 43.3 against the
+  published EAT number's 40.7, so 2.6 points of the old "+14.0 dense → MaxSim" headline was pure cosine-vs-euclidean
+  and the real paired gain is +11.3. On ProtSent-V2 the two rules agree to a hundredth of a point.
 
 ## Caveats
 
-Single seed, single run per arm; transfer tables have no CIs. CATH's test_h is 150 queries (one protein =
-0.67 points), and its dense rows are published EAT numbers on a different scoring rule, so its
-dense → MaxSim deltas are cross-protocol upper bounds — an eight-arm single-pipeline rerun is in progress.
+Single seed, single run per arm; transfer tables have no CIs. CATH's test_h is 150 queries (one protein = 0.67 points); the
+cross-protocol problem is now fixed by a single-pipeline eight-arm rerun, but at that sample size only comparisons
+involving the ESM-2 dense arm reach significance — every trained-vs-untrained and every head-size pair sits between
+p=.23 and p=1.00, so CATH corroborates SCOPe rather than testing anything independently.
 No hard-negative mining. AFDB/STRING pairs come from the group-sorted prefix, so 2,000 steps saw a narrow
 slice of clusters. Built on V2, not the shipped V2.5. No PROTOCOL-benchmark comparison.
 

@@ -131,7 +131,9 @@
   <div class="sec-head"><span class="tick"></span><h2>The short version</h2></div>
   <div class="verdict prose">
     <h3>Late interaction is worth having. Whether you need to train for it depends entirely on the backbone.</h3>
-    <p>Swapping pooled cosine for residue MaxSim improves retrieval on both backbones with <strong>zero training</strong>.
+    <p>Swapping pooled cosine for residue MaxSim improves retrieval on both backbones with <strong>zero training</strong>
+    — significantly on SCOPe for both, and on CATH significantly for ESM-2 (+11.3, p=.002) while only directional for
+    ProtSent-V2 (+4.7, p=.10) on that benchmark's 150 queries.
     Late training then helps both backbones too — but the 64-D projection it trains through is not always where the
     gain lives. On vanilla ESM-2 the head <em>is</em> the trained space and beats the backbone's own residues by
     +.077 MAP. On ProtSent-V2, whose residues were already contrastively trained by its 34.8M-pair run, the same head
@@ -442,32 +444,34 @@
   </div>
   <div class="tablewrap">
     <table>
-      <thead><tr><th>Arm</th><th>Scoring</th><th class="num">H-level accuracy <span class="dim">(±7.8–8.0)</span></th><th class="num">vs its dense row <span class="dim">(cross-protocol)</span></th><th class="num">Scoring runtime</th></tr></thead>
+      <thead><tr><th>Arm</th><th>Scoring</th><th class="num">H accuracy</th><th class="num">Correct / 150</th><th class="num">vs its own dense arm</th></tr></thead>
       <tbody>
-        <tr class="baseline"><td>HMMER, CATH-Gene3D profile HMMs <span class="dim">(published)</span></td><td>profile alignment</td><td class="num">77</td><td class="num dim">—</td><td class="num dim">CPU</td></tr>
+        <tr class="baseline"><td>HMMER, CATH-Gene3D profile HMMs <span class="dim">(published)</span></td><td>profile alignment</td><td class="num">77</td><td class="num dim">—</td><td class="num dim">—</td></tr>
         <tr class="baseline"><td>ProtTucker <span class="dim">(published, ProtT5-based)</span></td><td>contrastive embedding, EAT</td><td class="num">76</td><td class="num dim">—</td><td class="num dim">—</td></tr>
-        <tr class="baseline"><td>MMseqs2</td><td>alignment</td><td class="num">34.7</td><td class="num dim">—</td><td class="num dim">CPU</td></tr>
-        <tr><td>ESM-2</td><td>pooled, EAT 1-NN</td><td class="num">40.7</td><td class="num dim">—</td><td class="num dim">—</td></tr>
-        <tr><td>ESM-2 + MaxSim</td><td>MaxSim 480-D</td><td class="num">54.7</td><td class="num pos">+14.0</td><td class="num">210 s</td></tr>
-        <tr><td>ESM-2-Late (64-D)</td><td>MaxSim 64-D</td><td class="num">59.3</td><td class="num pos">+18.6</td><td class="num">127 s</td></tr>
-        <tr><td>ESM-2-Late (480-D)</td><td>MaxSim 480-D</td><td class="num">59.3</td><td class="num pos">+18.6</td><td class="num">203 s</td></tr>
-        <tr><td>ProtSent-V2</td><td>pooled, EAT 1-NN</td><td class="num">56.7</td><td class="num dim">—</td><td class="num dim">—</td></tr>
-        <tr><td><strong>ProtSent-V2 + MaxSim</strong></td><td><strong>MaxSim 480-D</strong></td><td class="num best">61.3</td><td class="num pos">+4.6</td><td class="num">180 s</td></tr>
-        <tr><td>ProtSent-Late (64-D)</td><td>MaxSim 64-D</td><td class="num">58.0</td><td class="num dim">−3.3 <span class="dim">(5 proteins, n.s.)</span></td><td class="num">127 s</td></tr>
-        <tr><td>ProtSent-Late (480-D)</td><td>MaxSim 480-D</td><td class="num">60.0</td><td class="num dim">−1.3 <span class="dim">(2 proteins, n.s.)</span></td><td class="num">179 s</td></tr>
-        <tr class="baseline"><td>ProtSent-V2-<strong>150M</strong> (4× the parameters)</td><td>pooled, EAT 1-NN</td><td class="num">62.7</td><td class="num dim">—</td><td class="num dim">—</td></tr>
+        <tr class="baseline"><td>MMseqs2 <span class="dim">(published; 34.7 measured here)</span></td><td>alignment</td><td class="num">35</td><td class="num dim">—</td><td class="num dim">—</td></tr>
+        <tr class="group"><td colspan="5">One pipeline, one invocation, identical query order — every pair below is McNemar-testable</td></tr>
+        <tr><td>ESM-2</td><td>pooled cosine</td><td class="num">43.3</td><td class="num">65</td><td class="num dim">—</td></tr>
+        <tr><td>ESM-2 + MaxSim</td><td>MaxSim 480-D</td><td class="num">54.7</td><td class="num">82</td><td class="num pos">+11.3 <span class="dim">p=.002</span></td></tr>
+        <tr><td>ESM-2-Late (64-D)</td><td>MaxSim 64-D</td><td class="num">59.3</td><td class="num">89</td><td class="num pos">+16.0 <span class="dim">p&lt;.001</span></td></tr>
+        <tr><td>ESM-2-Late (480-D)</td><td>MaxSim 480-D</td><td class="num">59.3</td><td class="num">89</td><td class="num pos">+16.0 <span class="dim">p&lt;.001</span></td></tr>
+        <tr><td>ProtSent-V2</td><td>pooled cosine</td><td class="num">56.7</td><td class="num">85</td><td class="num dim">—</td></tr>
+        <tr><td><strong>ProtSent-V2 + MaxSim</strong></td><td>MaxSim 480-D</td><td class="num best">61.3</td><td class="num">92</td><td class="num dim">+4.7 <span class="dim">p=.10, n.s.</span></td></tr>
+        <tr><td>ProtSent-Late (64-D)</td><td>MaxSim 64-D</td><td class="num">58.0</td><td class="num">87</td><td class="num dim">+1.3 <span class="dim">n.s.</span></td></tr>
+        <tr><td>ProtSent-Late (480-D)</td><td>MaxSim 480-D</td><td class="num">60.0</td><td class="num">90</td><td class="num dim">+3.3 <span class="dim">n.s.</span></td></tr>
       </tbody>
-      <caption>Two results worth separating. <strong>Zero-shot MaxSim on ProtSent-V2-35M is the best 35M configuration
-      here</strong> — 61.3, within 1.4 points of the four-times-larger 150M dense model, for no training at all.
-      And the trained 64-D head, which looked flat on SCOPe, sits 3.3 points <em>below</em> the untrained 480-D
-      residues it projects from — consistent with the projection being lossy compression on an already-contrastive
-      backbone. Read that gap carefully: <strong>test_h holds 150 queries, so one protein is 0.67 points and 3.3 points
-      is five proteins</strong>. Each arm's own 95% interval is ±8 points, and even the most favourable paired
-      (McNemar) assumption — that the two arms disagree on exactly those five queries and no others — gives p = 0.07.
-      The direction is worth chasing; the magnitude is not yet established. Dense rows use the published EAT protocol (euclidean 1-NN
-      on unnormalised embeddings); MaxSim rows use cosine-space MaxSim, so the two groups are labelled separately
-      rather than merged. Note CATH is encode-dominated — 69,755 sequences to embed against 150 queries' worth of scoring —
-      which is why 64-D is only 1.6× faster than 480-D here against 5× on SCOPe.</caption>
+      <caption><strong>Read the top three rows first: every arm here is far below the published state of the art.</strong>
+      CATH-Gene3D profile HMMER scores 77 and ProtTucker 76 at H; our best is 61.3. This table compares small
+      ESM-2-based models; it is not a claim against alignment.
+      <br><br>All eight arms were rescored in one invocation so the query order is identical by construction and every
+      comparison is paired (McNemar, <code>cath_mcnemar.txt</code>). That replaced an earlier cross-protocol
+      comparison, and it cost the headline 2.6 points: ESM-2's published EAT number (euclidean 1-NN, 40.7) versus the
+      same pipeline's cosine (43.3) is <em>pure protocol</em>, so the old "+14.0" is really <strong>+2.6 protocol and
+      +11.3 real</strong>. On ProtSent-V2 the two scoring rules agree to a hundredth of a point — a well-conditioned
+      embedding space is indifferent to cosine-versus-euclidean, a raw one is not.
+      <br><br><strong>Only comparisons involving the ESM-2 dense arm reach significance.</strong> At n=150 every
+      trained-vs-untrained and every head-size pair lands between p=.23 and p=1.00 — including 64-D vs 480-D, which
+      differ on 8 queries here (p=.72) while SCOPe measures that same gap at +.077 MAP with ten times the queries.
+      CATH corroborates; SCOPe carries the inference.</caption>
     </table>
   </div>
 </section>
@@ -658,11 +662,13 @@
     <li><strong>Neither retrieval benchmark is decontaminated against the pretraining corpus.</strong> The identity
     stratification above is the mitigation, not a clean split — the median SCOPe domain sits at 0.91 max identity to
     training data.</li>
-    <li><strong>The CATH table has two independent problems.</strong> Its 150 queries make one protein worth 0.67
-    points, so the small trained-vs-untrained gaps there are not resolvable; and its dense rows are published EAT
-    numbers on a different scoring rule, so the large dense → MaxSim deltas are cross-protocol upper bounds. A
-    single-pipeline rerun that makes every pair McNemar-testable is running. Alignment baselines also exist only at
-    the family level, not at superfamily, which is the level declared primary here.</li>
+    <li><strong>CATH is underpowered, and that is now measured rather than suspected.</strong> The cross-protocol
+    problem is fixed — all eight arms were rescored in one pipeline — but at 150 queries only comparisons involving the
+    ESM-2 dense arm reach significance. Every trained-vs-untrained and every head-size pair sits between p=.23 and
+    p=1.00, so CATH corroborates SCOPe rather than testing anything independently. Reporting its other levels (C/A/T,
+    ~219 answerable queries) would add breadth but not power at H, which is the level anyone cares about.
+    Separately, the SCOPe alignment baselines exist only at family level, not at the superfamily level declared primary
+    here.</li>
     <li><strong>No hard-negative mining, one head size, one scale, one training corpus slice.</strong> In-batch
     negatives only; 64-D and 128-D but nothing larger; 35M with 150M still training; and AFDB/STRING pairs drawn from
     the group-sorted prefix of the corpus rather than sampled across it, so 2,000 steps saw a narrow slice of clusters.
