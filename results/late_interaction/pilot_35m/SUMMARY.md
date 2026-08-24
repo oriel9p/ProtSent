@@ -1,80 +1,115 @@
 # Late-interaction pilot (35M) — SUMMARY
 
-**Setup.** Two arms trained with the identical recipe: `Synthyra/ESM2-35M` (vanilla) and
-`GrimSqueaker/ProtSent-V2-35M`, each + fresh 64-D residue projection, `<cls>`/`<eos>` masked,
-per-residue L2 + MaxSim, CachedMultiVectorMNRL (scale 1.0), round-robin over decontaminated
-Pfam / AFDB / STRING-15M pairs, 2,000 steps @ 128/device on 2×A100 = **512k pairs, ~46 min per arm**
-(bs sweep: 80.6 pairs/s single-GPU, 155–190 on 2 GPUs; peak 12.4 GB). Backbone LR 1e-5,
-projection LR 1e-4, bf16, max_seq_length 512, seed 42. Step-0 dense-view parity: **exact (0.0)** both arms.
-All numbers below: SCOPe-40 (`tattabio/scope40_test`, n=2,207), **eligible-query** metrics
-(labels with ≥1 non-self gallery member; n=1,693 / 2,020 / 2,116 at family / superfamily / fold).
-Full tables: `scope/scope_hierarchy.csv`, curves `scope/scope_checkpoint_curve.csv`,
-paired bootstrap `scope/scope_pairwise_bootstrap.json`, pooled `benchmarks/knn/`.
+Rendered report (same content, readable): `report.html`, published at
+https://claude.ai/code/artifact/17bbc760-13fd-492c-a9c7-06682e47eaa6
 
-## A. Does zero-shot late interaction help? — Yes, on both bases
+**Setup.** Two arms trained with an identical recipe from different starting points: `Synthyra/ESM2-35M`
+(vanilla) and `GrimSqueaker/ProtSent-V2-35M` (already contrastively post-trained on 34.8M pairs), each plus a
+fresh 64-D residue projection (30,720 weights), `<cls>`/`<eos>` masked on both sides, per-residue L2 +
+MaxSim, `CachedMultiVectorMultipleNegativesRankingLoss` (scale 1.0), round-robin over decontaminated
+Pfam / AFDB / STRING-15M pairs, **2,000 steps = 512k pairs, ~46 min on 2×A100 each**. Backbone LR 1e-5,
+projection LR 1e-4, bf16, max_seq_length 512, seed 42. Optimiser sees 256 pairs/step (2×128); in-batch
+negatives are 128 (`gather_across_devices` off). Step-0 dense-view parity: **exact (0.0)** on both backbones.
 
-MaxSim over native 480-D residue states vs pooled cosine, no training at all:
+SCOPe-40 numbers below are **eligible-query** metrics (labels with ≥1 non-self gallery member;
+n = 1,693 / 2,020 / 2,116 at family / superfamily / fold).
 
-| eligible | ESM2 cos | ESM2 MaxSim | ProtSent cos | ProtSent MaxSim |
-|---|---|---|---|---|
-| family R@1 / MAP | .499 / .421 | **.601 / .545** | .685 / .646 | **.726 / .684** |
-| superfamily R@1 / MAP | .698 / .398 | **.719 / .474** | .857 / .654 | **.878 / .683** |
-| fold MAP | .358 | **.404** | .582 | **.601** |
+## The finding: the head and the backbone are different things
 
-Cost: ~30 s vs ~3 s scoring for the full 2,207² matrix (480-D, exact, one A100).
+Scoring each *trained* backbone twice — through its 64-D head, and over its own native 480-D residues —
+separates two effects that earlier revisions of this summary confounded. Paired bootstrap, superfamily
+eligible AP, n = 2,020, every interval excluding zero:
 
-## B. Does late training help beyond MaxSim alone? — Depends entirely on the init
+| Comparison | Δ | 95% CI |
+|---|---|---|
+| ProtSent-Late (480-D) − ProtSent-V2 + MaxSim | +.0152 | [+.0117, +.0187] |
+| ProtSent-Late (480-D) − ProtSent-Late (64-D) | +.0262 | [+.0221, +.0306] |
+| ProtSent-Late (64-D) − ProtSent-V2 + MaxSim | −.0110 | [−.0155, −.0067] |
+| ESM-2-Late (480-D) − ESM-2 + MaxSim | +.1204 | [+.1102, +.1306] |
+| ESM-2-Late (64-D) − ESM-2-Late (480-D) | +.0766 | [+.0690, +.0841] |
 
-- **ESM2:** hugely. Family eligible R@1 .601 → **.742**, MAP .545 → **.698**; superfamily R@1
-  .719 → **.896**; fold MAP .404 → **.600**. 2,000 steps turn vanilla ESM-2 into the best or
-  near-best retrieval arm in the pilot.
-- **ProtSent:** essentially no. Trained 64-D MaxSim lands at / slightly under its own zero-shot
-  480-D MaxSim (superfamily eligible MAP .672 vs .683; paired Δap −0.011 [−0.015, −0.007];
-  family Δ ≈ 0 n.s.). What training buys here is **compression**: 64-D vs 480-D residue vectors
-  (7.5× smaller) and ~3× faster scoring (11 s vs 30 s) at equal quality. Note the random 64-D
-  projection at step 0 costs ~0.08 MAP; training recovers it and stops.
+**Late training improved both backbones and degraded neither.** The 64-D projection is *load-bearing* when
+the backbone's residues have never been contrastively trained — it is the space the objective optimised — and
+*lossy* when they have, because it bottlenecks representations 34.8M pairs already shaped. Family level agrees
+on every sign; the only comparison that loses significance there is ProtSent-Late (64-D) − ProtSent-V2 +
+MaxSim, at −.0036 [−.0099, +.0030].
 
-## C. Does ProtSent provide a better initialization? — For the late model itself, no
+**Best configuration measured: ProtSent-V2 + late training, scored at native 480-D** — superfamily eligible
+MAP .698, against .683 for the untouched backbone and .672 for the 64-D arm.
 
-Both arms converge to the same place; ESM2-Late even edges ahead on eligible R@1
-(family .742 vs .719, superfamily .896 vs .880, fold .901 vs .898), ProtSent-Late marginally
-ahead on fold MAP. Curves (superfamily eligible MAP): ESM2 .44 → .67, ProtSent .61 → .67, both
-plateau by ~step 1,500. The contrastive signal, not the init, sets the late-model ceiling —
-ProtSent's advantage is that it needs **zero** training to get there.
+## A. Does MaxSim help without any training? Yes, on both backbones
 
-## D. Did late training damage the foundation embedding? — ProtSent: no; ESM2: mixed
+Eligible family MAP, pooled cosine → MaxSim over native residues: ESM-2 .421 → .545; ProtSent-V2 .646 → .684.
+Same direction at superfamily and fold, and on CATH (ProtSent-V2 56.7 dense → 61.3 MaxSim). Cost is scoring
+time and index size, not model changes.
 
-Pooled 480-D mean-pool dense views, ProtBench `--fast --eval_split test -p knn --knn_k 3
---seed 42 -n 20000`, 18 usable tasks (conservation_flip / disprot lack local data in every arm —
-dropped symmetrically; ties = |Δ| < 0.005):
+## B. Does late training help beyond that? Yes for both — but read it at 480-D
 
-- **ProtSent-Late dense view vs ProtSent-V2: 5 win / 8 tie / 5 loss** — preserved. Worst:
-  Stability −.046, GB1 −.021; best: SS3 +.034, Solubility +.012, PPI +.011.
-- **ESM2-Late dense view vs ESM2: 10 win / 1 tie / 7 loss** — net positive and
-  retrieval-flavoured (pooled SCOPe R@10 +.04…+.06, Fluorescence +.054, GB1 +.053,
-  Peptide-HLA +.046, Remote Homology +.028) but with real fitness/stability regressions
-  (Stability −.162, β-lactamase −.054).
+At 64-D the ProtSent arm looks flat (.684 → .681 family) because the head's loss cancels the training's gain.
+At 480-D the training gain is visible and significant on both backbones (table above).
 
-Few-shot Remote Homology (3-NN vote, shared seeded draws, N=1000): ESM2 .406 (cos) → .440
-(zero-shot MaxSim) → **.548** (trained MaxSim); ProtSent .512 → .546 → .537.
+## C. Which init is better? For the late model itself, they converge
 
-## E. Probe-type dependence
+ESM-2-Late (64-D) and ProtSent-Late (64-D) land within .002 MAP of each other at superfamily. ProtSent's
+advantage is that it needs **zero** training to reach .683. Curves plateau by ~step 1,500 from both inits.
 
-Linear probes not run in the 3-hour window (KNN is the paper-style primary). `run_late_pilot_bench.sh`
-runs the matching linear pass; keep it a separate table if run.
+## D. Did late training damage the foundation embedding? Depends on the probe
 
-## Go / no-go
+ProtBench transfer suite, test split, seed 42, 20k cap, 13 comparable tasks (5 excluded because ProtBench
+forces linear for them in both passes: EC, the three scope40 rows, SS3). Ties are |Δ| < 0.005:
 
-**GO, with a reframed target.** The pilot's strongest, bootstrap-supported findings:
+| Probe | ESM-2-Late vs ESM-2 | ProtSent-Late vs ProtSent-V2 |
+|---|---|---|
+| KNN (k=3) | 7 W / 1 T / 5 L | 4 W / 5 T / 4 L |
+| Linear | 7 W / 2 T / 4 L | **10 W / 2 T / 1 L** |
 
-1. **Zero-shot residue MaxSim is a free upgrade on ProtSent** (Δ vs pooled cosine at every level;
-   e.g. family eligible ap +.038 with CI well clear of 0). Ship it as a scoring option — no training.
-2. **The late head is a cheap retrieval specializer for vanilla ESM-2** (~45 GPU-minutes to match a
-   34.8M-pair contrastive model on SCOPe retrieval) — a strong "capability per FLOP" result, with the
-   known cost that pooled fitness/stability tasks suffer (partial-GO pattern: lower backbone LR or
-   freeze lower layers next time).
-3. **Training the head on top of ProtSent buys compression, not accuracy** (64-D ≈ native 480-D).
-   A follow-up could freeze the backbone and train only the projection — likely enough, even cheaper.
+The Stability task carries the disagreement: KNN −.162 (ESM-2) / −.045 (ProtSent) becomes linear −.020 /
+**+.072**. "Late training costs fitness and stability tasks" was largely a KNN-probe artefact. The consistent
+reading across probes: neighbourhood geometry roughly unchanged, more information linearly decodable.
 
-Caveats: single seed, one run per arm, 2,000 steps, AFDB/STRING pair caps take the group-sorted
-prefix (~500k AFDB clusters), family-level legacy numbers kept only for continuity with the paper.
+## E. Probe dependence
+
+See D. KNN and linear are reported side by side and never averaged.
+
+## Other measured results
+
+- **Two-stage retrieval.** On ProtSent-V2's cosine shortlist, MaxSim reranking the top 10 recovers MAP .675 of
+  the .684 full value — 1/220th of the scoring work. On ESM-2's weaker shortlist, rerank@100 reaches only .593
+  of .698. Fixes scoring cost, **not** storage.
+- **Cost.** Scoring the 2,207² SCOPe matrix: cosine 0.03 s, 64-D MaxSim 8.1 s, native 480-D MaxSim 41 s, on a
+  shared 3–8 s encode. Storage per protein (mean domain ~154 residues): 480 numbers dense, 9,878 at 64-D
+  (20.6×), 74,088 at 480-D (154×). Training is ~21% slower than dense (sdpa both).
+- **Flash attention was never enabled** — `kernels` 0.12.3 is below the 0.15.2 floor and `flash-attn` is
+  absent, so every run silently used sdpa. FA3 measures 1.97× on Pfam, 1.48× on STRING (≈1.30× unpadding ×
+  1.14× kernel), peak VRAM 10.7 → 4.2 GB. A paired quality A/B is running before any recipe change; the PR is
+  held because it bundles a dependency floor with an optimiser-precision change.
+- **Symmetrisation is a trap.** Raw ½(S+Sᵀ) collapses (MaxSim rows scale with query length). Length-normalised
+  symmetrisation still costs every arm except the untouched ProtSent-V2: −.275 and −.128 MAP for the trained
+  arms, −.078 for untrained ESM-2, +.003 for ProtSent-V2.
+- **Contamination.** SCOPe-40 is *not* decontaminated (corpus filtered against remote-homology and PPI test
+  splits only; median SCOPe domain sits at 0.91 max identity to training data). Restricting to <40% identity
+  queries (n=164) preserves the ordering: ESM-2-Late .676 > ProtSent-V2 + MaxSim .663 > ProtSent-V2 cosine
+  .619 > ESM-2 cosine .333.
+- **Alignment baselines** (family level only; re-levelling needs a phmmer/MMseqs2 rerun): phmmer max-sensitivity
+  .753 / .898 / .607 beats every arm here at R@1 while losing on depth and MAP. On CATH, published CATH-Gene3D
+  HMMER (77) and ProtTucker (76) are far above our best arm (61.3) — that table compares small ESM-2 models,
+  it is not a claim against alignment.
+
+## Caveats
+
+Single seed, single run per arm; transfer tables have no CIs. CATH's test_h is 150 queries (one protein =
+0.67 points), and its dense rows are published EAT numbers on a different scoring rule, so its
+dense → MaxSim deltas are cross-protocol upper bounds — an eight-arm single-pipeline rerun is in progress.
+No hard-negative mining. AFDB/STRING pairs come from the group-sorted prefix, so 2,000 steps saw a narrow
+slice of clusters. Built on V2, not the shipped V2.5. No PROTOCOL-benchmark comparison.
+
+## Go / no-go: GO, with the recommendation changed
+
+1. **Ship ProtSent-V2 + late training scored at 480-D.** Best configuration measured, no new training needed
+   beyond the 1.5 GPU-h already spent, cost is index size.
+2. **The head-size ablation now has a sharp hypothesis:** 128-D should recover part of the .026 the 64-D head
+   discards on a ProtSent backbone and should matter far less on ESM-2. Running.
+3. **Hard-negative mining** is the largest untouched lever.
+
+Dropped from earlier versions of this summary: "lower the backbone LR to avoid the stability regression" (a
+KNN-probe artefact) and "the projection is lossy, use none" (true only for an already-contrastive backbone).
