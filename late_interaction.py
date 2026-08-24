@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import os
 import sys
-import time
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -159,18 +158,24 @@ def resolve_attention(requested: Optional[str], model_name_or_path: str) -> Opti
     the model actually loads under it, because a kernels version below the floor fails at
     load time rather than at import time.
     """
-    if requested and requested != "auto":
-        return None if requested == "sdpa" else requested
-    if requested is None:
+    if requested in (None, "", "sdpa"):
         return None
-    # Ask the environment, not a trial model load. The old probe built the full model with
-    # trust_remote_code kwargs that _build_with_attention does not pass, so its verdict did
-    # not predict the build; worse, on custom-code repos (Synthyra/*) transformers prompts
-    # interactively rather than raising, which blocks on a TTY and otherwise reports "flash
-    # unavailable" -- silently giving the ProtSent arms flash and the ESM-2 control arms sdpa,
-    # i.e. different optimizer numerics between the two arms being compared.
+    if requested != "auto":
+        return requested
+    # Family check first. _build_with_attention loads the checkpoint as a plain Transformer,
+    # which is right for native ESM but bypasses the FastPLM branch of load_model_for_training
+    # (FastPLMESM2Wrapper, native tokenizer, force_sdpa_backend) that every other consumer of a
+    # Synthyra/* checkpoint goes through. Handing those arms flash would not just change the
+    # attention kernel, it would build a different model than the rest of the project does --
+    # and when a Synthyra arm is the control for a native-ESM arm, that is the comparison.
+    from model_utils import detect_model_type
+
+    family = detect_model_type(model_name_or_path)
+    if family != "standard":
+        logger.info("attention backend: sdpa (%s is %s; flash needs the native-ESM load path)",
+                    model_name_or_path, family)
+        return None
     try:
-        from transformers.integrations.hub_kernels import is_kernel  # noqa: F401
         import kernels
     except ImportError as exc:
         logger.warning("flash attention unavailable (%s); falling back to sdpa", exc)
@@ -179,8 +184,8 @@ def resolve_attention(requested: Optional[str], model_name_or_path: str) -> Opti
     if not ((0, 15) <= version < (0, 16)):
         logger.warning(
             "flash attention needs kernels >=0.15.2,<0.16 but %s is installed; falling back "
-            "to sdpa. Run `uv sync` -- note every queue job uses `uv run --no-sync`, so a "
-            "corrected lock does not reach the venv on its own.", kernels.__version__)
+            "to sdpa. Run `uv sync` -- every queue job uses `uv run --no-sync`, so a corrected "
+            "lock does not reach the venv on its own.", kernels.__version__)
         return None
     logger.info("attention backend: %s", FLASH_ATTENTION)
     return FLASH_ATTENTION
@@ -314,17 +319,21 @@ def scope_rows(
     rows, per_query = [], {}
     for level in SCOPE_LEVELS:
         labels = scope_labels(families, level)
+        # per_query_metrics already returns hit1/hit10/hit30, computed the same way
+        # (rel[:k].any()), so for the default ks there is nothing to recompute -- doing it
+        # anyway built three more n x (n-1) label matrices per model and then overwrote pq
+        # with identical values. Only a non-default k needs the matrix.
         pq = per_query_metrics(ranking, labels)
         elig = pq["eligible"]
-        rel = labels[ranking] == labels[:, None]
+        rel = labels[ranking] == labels[:, None] if any(f"hit{k}" not in pq for k in ks) else None
         row = {"model": model, "scoring": scoring, "level": level,
                "n_queries": int(len(labels)), "n_eligible_queries": int(elig.sum()),
                "runtime_s": runtime_s}
         for k in ks:
-            hit = rel[:, :k].any(axis=1)
+            hit = pq[f"hit{k}"] if f"hit{k}" in pq else rel[:, :k].any(axis=1).astype(float)
+            pq.setdefault(f"hit{k}", hit)
             row[f"Recall@{k}"] = float(hit.mean())
             row[f"eligible_Recall@{k}"] = float(hit[elig].mean()) if elig.any() else float("nan")
-            pq[f"hit{k}"] = hit.astype(float)
         row["MAP"] = float(pq["ap"].mean())
         row["eligible_MAP"] = float(pq["ap"][elig].mean()) if elig.any() else float("nan")
         if n_boot and elig.any():
@@ -354,12 +363,3 @@ def load_scope40() -> Tuple[List[str], List[str]]:
 
     ds = load_dataset("tattabio/scope40_test", split="train")
     return list(ds["sequence"]), list(ds["family"])
-
-
-class Timer:
-    def __enter__(self):
-        self.t0 = time.time()
-        return self
-
-    def __exit__(self, *exc):
-        self.seconds = time.time() - self.t0

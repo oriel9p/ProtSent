@@ -77,8 +77,6 @@ def parse_args() -> argparse.Namespace:
                    help="Resume from the latest checkpoint-* in --output_dir if present")
     p.add_argument("--save_total_limit", type=int, default=1,
                    help="Checkpoints kept on disk (1 = crash-resume only; curve sampling reads them live)")
-    p.add_argument("--keep_checkpoints", action="store_true",
-                   help="Skip the end-of-run checkpoint-* cleanup")
     p.add_argument("--attn_implementation", default="auto",
                    help="auto (try flash, fall back to sdpa), sdpa, or an explicit kernel repo id. "
                         "Flash measured 1.48-1.97x faster with peak VRAM 11.9->9.0 GB, and a paired quality "
@@ -247,7 +245,7 @@ def main() -> None:
 
     if is_main:
         li.save_late_and_dense(mve, pooling, str(out))
-        if not args.keep_checkpoints:
+        if True:  # checkpoints are crash-resume state, not artifacts
             import shutil
 
             for ckpt in sorted(out.glob("checkpoint-*")):

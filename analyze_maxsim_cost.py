@@ -28,7 +28,8 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import late_interaction as li  # noqa: E402
+import late_interaction as li
+from late_interaction_eval import parse_model_spec  # noqa: E402
 from bootstrap_ci import per_query_metrics  # noqa: E402
 
 RERANK_K = (10, 30, 100)
@@ -59,14 +60,6 @@ def rerank_from(shortlist: np.ndarray, maxsim: np.ndarray, k: int) -> np.ndarray
     return out
 
 
-def rerank(cos: np.ndarray, maxsim: np.ndarray, k: int) -> np.ndarray:
-    """Convenience wrapper: build the cosine shortlist, then rerank its head."""
-    c = cos.copy()
-    np.fill_diagonal(c, -np.inf)
-    shortlist = np.argsort(-c, axis=1, kind="stable")[:, : len(cos) - 1]
-    return rerank_from(shortlist, maxsim, k)
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--models", action="append", default=[], metavar="NAME=KIND:PATH")
@@ -87,8 +80,8 @@ def main() -> int:
         # cosine alone ranks doc1 first for query0; MaxSim prefers doc2, and a k=2
         # rerank must surface that while leaving the tail alone.
         assert li.ranking_from_similarity(cos)[0].tolist() == [1, 2]
-        assert rerank(cos, maxsim, 2)[0].tolist() == [2, 1]
-        assert rerank(cos, maxsim, 1)[0].tolist() == [1, 2]
+        assert rerank_from(li.ranking_from_similarity(cos), maxsim, 2)[0].tolist() == [2, 1]
+        assert rerank_from(li.ranking_from_similarity(cos), maxsim, 1)[0].tolist() == [1, 2]
         # a positive per-row rescale leaves every row's ranking untouched
         lens = np.array([2.0, 5.0, 11.0])
         assert (li.ranking_from_similarity(maxsim / lens[:, None])
@@ -103,7 +96,7 @@ def main() -> int:
     cosine_cache: dict[str, np.ndarray] = {}
 
     for spec in args.models:
-        name, kind, path = spec.split("=", 1)[0], *spec.split("=", 1)[1].split(":", 1)
+        name, kind, path = parse_model_spec(spec)
         if kind == "dense":
             _, model = li.build_multivector_encoder(path, proj_dim=0, max_seq_length=args.max_seq_length,
                                                     device=args.device)
@@ -170,8 +163,7 @@ def main() -> int:
                         f"--rerank {name}={partner} but {partner} produced no cosine matrix; "
                         "list it in --models as a dense arm before this one"
                     )
-                shortlist = np.argsort(-np.where(np.eye(len(cos), dtype=bool), -np.inf, cos),
-                                       axis=1, kind="stable")[:, : len(cos) - 1]
+                shortlist = li.ranking_from_similarity(cos)
                 for k in RERANK_K:
                     rerank_rows.append({"arm": name, "shortlist_from": partner, "shortlist_k": k,
                                         **metrics(rerank_from(shortlist, sim, k), fam)})

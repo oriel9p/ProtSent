@@ -151,10 +151,24 @@ queue_g() {  # phase 2, proportional, continues from phase 1's weights
   wait
 }
 
-queue_d() {  # vanilla ESM-2, long -- lowest priority, first to be dropped
+# facebook/* rather than Synthyra/* for the long runs. Same weights -- Synthyra/ESM2-35M
+# packages facebook/esm2_t12_35M_UR50D -- but the Synthyra repos are FastPLM custom-code, and
+# resolve_attention keeps those on sdpa so they load through the FastPLM branch rather than the
+# plain Transformer the flash path uses. Left as Synthyra, the vanilla control would train in
+# fp32/sdpa while the ProtSent arm it controls for trains in bf16/flash, so the comparison would
+# carry an optimizer-numerics difference on top of the initialization difference it is meant to
+# isolate. The native checkpoints let both arms take the same path.
+queue_d() {  # vanilla ESM-2 35M, long -- lowest priority, first to be dropped
   local gpu="$1"
   watch_curve "$gpu" esm2_late_long "$RES/pilot_35m/scope"
-  train "$gpu" esm2_late_long Synthyra/ESM2-35M "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
+  train "$gpu" esm2_late_long facebook/esm2_t12_35M_UR50D "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
+  wait
+}
+
+queue_v() {  # vanilla ESM-2 150M, long
+  local gpu="$1"
+  watch_curve "$gpu" esm2_late_150m_long "$RES/pilot_150m/scope"
+  train "$gpu" esm2_late_150m_long facebook/esm2_t30_150M_UR50D "$LONG_STEPS" 128 2000 "${LONG_ARGS[@]}"
   wait
 }
 
@@ -164,7 +178,7 @@ case "${1:-start}" in
   start)
     for q in ${QUEUES:-a b c}; do
       gpu_var="GPU_${q^^}"; gpu="${!gpu_var:-}"
-      [[ -z "$gpu" ]] && gpu=$(( $(printf '%s' "$q" | tr 'abcdefgpq' '012301230') ))
+      [[ -z "$gpu" ]] && gpu=$(( $(printf '%s' "$q" | tr 'abcdefgpqv' '0123012301') ))
       if pgrep -f "run_experiment_queue.sh __run $q" > /dev/null; then echo "queue $q already running"; continue; fi
       setsid nohup "$ROOT/run_experiment_queue.sh" __run "$q" "$gpu" >> "logs/queue_$q.log" 2>&1 < /dev/null &
       echo "queue $q -> gpu $gpu (log logs/queue_$q.log)"
