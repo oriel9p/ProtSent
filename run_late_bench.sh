@@ -21,6 +21,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Branch scope-hierarchy-main = ProtBench origin/main + our SCOPe hierarchy commit. The older
+# scope-hierarchy branch forked off a squashed export with an unrelated root and lacked ~115
+# upstream commits. Needs skorch + tabulate in the venv.
 PROTBENCH_DIR="${PROTBENCH_DIR:-/opt/hpc/ddofer/ProtBench}"
 OUT="${OUT:-$(pwd)/results/late_interaction/pilot_35m/benchmarks}"
 PY="$(pwd)/.venv/bin/python"
