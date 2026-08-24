@@ -340,7 +340,7 @@
   </div>
   <div class="tablewrap">
     <table>
-      <thead><tr><th>Arm</th><th>Scoring</th><th class="num">H-level accuracy <span class="dim">(±7.8–8.0)</span></th><th class="num">vs its own dense</th><th class="num">Scoring runtime</th></tr></thead>
+      <thead><tr><th>Arm</th><th>Scoring</th><th class="num">H-level accuracy <span class="dim">(±7.8–8.0)</span></th><th class="num">vs its dense row <span class="dim">(cross-protocol)</span></th><th class="num">Scoring runtime</th></tr></thead>
       <tbody>
         <tr class="baseline"><td>MMseqs2</td><td>alignment</td><td class="num">34.7</td><td class="num dim">—</td><td class="num dim">CPU</td></tr>
         <tr><td>ESM-2 35M</td><td>pooled, EAT 1-NN</td><td class="num">40.7</td><td class="num dim">—</td><td class="num dim">—</td></tr>
@@ -554,10 +554,14 @@
     <li><strong>Function benchmarks are thin.</strong> EC, metal-ion binding and catalytic efficiency are in; GO-MF and
     CAFA5 are not, so "does late training hurt function prediction?" is half-answered. EC is mildly negative for both
     late arms under both probes; metal-ion binding is negative under KNN but positive for ProtSent under linear.</li>
-    <li><strong>CATH's test_h split is 150 queries.</strong> Every accuracy in that table carries a ±8-point marginal
-    interval, so only the large gaps there (dense → MaxSim, +14 for ESM-2) are safe to lean on; the 3.3-point
-    trained-vs-zero-shot difference is five proteins. Per-query correctness is now saved so future runs can compare
-    arms with McNemar instead of by subtraction.</li>
+    <li><strong>The CATH table has two separate problems, and they are different problems.</strong> First, test_h is
+    150 queries, so every accuracy carries a ±8-point interval and the 3.3-point trained-vs-zero-shot difference is
+    five proteins (McNemar p ≥ 0.07 under the most favourable pairing). Second — and this one is not about sample
+    size — the dense rows are the <em>published EAT numbers</em>: euclidean 1-NN on unnormalised embeddings, a
+    different scoring rule and a different code path from the cosine/MaxSim rows beside them. So the large
+    dense → MaxSim gaps (+14.0 for ESM-2, 21 proteins) are cross-protocol comparisons, and an unknown share of them
+    belongs to cosine-vs-euclidean rather than to MaxSim. Treat +14.0 as an upper bound. A six-arm rerun through one
+    pipeline, which makes every pair properly paired and McNemar-testable, is running.</li>
     <li><strong>Built on ProtSent-V2, not the shipped V2.5.</strong> Numbers here should not be quoted against V2.5 results.</li>
     <li><strong>No PROTOCOL comparison.</strong> Different splits, relevance definitions and hierarchy level — a direct
     number-to-number comparison would be wrong without redoing their protocol.</li>
