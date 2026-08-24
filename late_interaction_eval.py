@@ -279,11 +279,26 @@ def cmd_proteingym(args) -> None:
             idx = rng.choice(idx, args.max_variants_per_assay, replace=False).tolist()
         sub = ds.select(sorted(int(i) for i in idx))
         y = np.asarray(sub[cfg["label"]], dtype=float)
+        mut, wt = sub[cfg["mutant"]], sub[0][cfg["wt"]]
+        # A mutation past max_seq_length leaves the truncated mutant byte-identical to the
+        # truncated WT, so its score is exactly the self-similarity: not noise, a block of exact
+        # ties that drags Spearman toward zero. 55 of 217 assays have a WT longer than 510 aa and
+        # ~4.7% of mutations land past the cut. Drop what the model cannot see, and record how many.
+        cut = args.max_seq_length - 2
+        wt_cut = wt[:cut]
+        visible = [i for i, s in enumerate(mut) if s[:cut] != wt_cut]
+        n_silent = len(mut) - len(visible)
+        if len(visible) < 2:
+            continue
+        mut = [mut[i] for i in visible]
+        y = y[visible]
         if len(np.unique(y)) < 2:
             continue  # constant labels have no rank correlation; averaging a NaN in would poison the mean
-        work.append((a, sub[cfg["mutant"]], sub[0][cfg["wt"]], y))
-    logger.info("%s: %d assays, %d sequences to encode per model",
-                args.variant, len(work), sum(len(w[1]) for w in work))
+        work.append((a, mut, wt, y, n_silent))
+    n_silent_total = sum(w[4] for w in work)
+    logger.info("%s: %d assays, %d sequences to encode per model (%d variants dropped as "
+                "invisible past the %d-residue truncation)", args.variant, len(work),
+                sum(len(w[1]) for w in work), n_silent_total, args.max_seq_length - 2)
 
     rows = []
     for spec in args.models:
@@ -291,12 +306,13 @@ def cmd_proteingym(args) -> None:
         scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
         t0 = time.time()
         per_assay = []
-        for a, mut, wt, y in work:
+        for a, mut, wt, y, n_silent in work:
             sim = scorer([wt], queries=mut, bs=args.batch_size, ce=args.chunk_elements)[:, 0]
             lens = np.array([min(len(s), args.max_seq_length - 2) for s in mut], dtype=float)
             rho = spearmanr(sim / lens, y).statistic
             if np.isfinite(rho):
-                per_assay.append({"assay": a, "spearman": float(rho), "n": len(mut)})
+                per_assay.append({"assay": a, "spearman": float(rho), "n": len(mut),
+                                  "n_silent": n_silent})
         del scorer
         torch.cuda.empty_cache()
         if not per_assay:
@@ -307,6 +323,8 @@ def cmd_proteingym(args) -> None:
         rows.append({"model": name, "scoring": scoring, "variant": args.variant,
                      "mean_spearman": float(rhos.mean()), "ci95": f"[{lo:.4f}, {hi:.4f}]",
                      "n_assays": len(per_assay), "cap": args.max_variants_per_assay,
+                     "n_variants_scored": int(sum(r["n"] for r in per_assay)),
+                     "n_variants_dropped_truncated": int(sum(r["n_silent"] for r in per_assay)),
                      "runtime_s": round(time.time() - t0, 1)})
         logger.info("%s %s: mean Spearman %.4f over %d assays in %.0fs", name, args.variant,
                     rhos.mean(), len(per_assay), time.time() - t0)
