@@ -11,7 +11,7 @@ export HF_HOME="${HF_HOME:-/storage/models/hf_home}" TOKENIZERS_PARALLELISM=fals
 M="$(pwd)/models/late_interaction"
 RES="$(pwd)/results/late_interaction"
 ARMS="${ARMS:-protsent_late_35m_prop protsent_late_150m_prop}"
-STAGES="${STAGES:-scope cath bench proteingym}"
+STAGES="${STAGES:-scope cath bench_cheap proteingym bench_full}"
 MAX_WAIT_H="${MAX_WAIT_H:-24}"
 
 wait_for_runs() {
@@ -55,12 +55,12 @@ stage_proteingym() {  # MaxSim(mutant, WT); the pooled cosine arm comes from `be
     "${args[@]}" --variant dms_substitutions --max_variants_per_assay 2000 --out_dir "$out"
 }
 
-stage_bench() {   # pooled ProtBench over each arm's dense view: cheap subset first, then full
-  local pairs=("esm2_35m=facebook/esm2_t12_35M_UR50D" "protsent_v2_35m=GrimSqueaker/ProtSent-V2-35M")
-  for a in $ARMS; do pairs+=("$a=$M/$a/dense_view"); done
-  GPU=3 TASKS=cheap ./run_late_bench.sh "${pairs[@]}"
-  GPU=3 TASKS=full  ./run_late_bench.sh "${pairs[@]}"
+bench_pairs() {
+  echo "esm2_35m=facebook/esm2_t12_35M_UR50D" "protsent_v2_35m=GrimSqueaker/ProtSent-V2-35M"
+  for a in $ARMS; do echo "$a=$M/$a/dense_view"; done
 }
+stage_bench_cheap() { GPU=3 TASKS=cheap ./run_late_bench.sh $(bench_pairs); }
+stage_bench_full()  { GPU=3 TASKS=full  ./run_late_bench.sh $(bench_pairs); }
 
 mkdir -p logs
 wait_for_runs || exit 1
@@ -68,17 +68,25 @@ for a in $ARMS; do
   echo "=== $a: $(python3 -c "import json;d=json.load(open('$M/$a/runtime.json'));print(f\"{d['steps']} steps, {d['pairs_seen']:,} pairs, {d['wall_time_s']/3600:.1f} h\")" 2>/dev/null || echo '?')"
 done
 
-# Independent stages on separate cards; each writes its own log and marker.
-for s in $STAGES; do
-  marker="logs/after_${s}.done"
-  [[ -f "$marker" ]] && { echo "[skip] $s"; continue; }
-  ( echo "[run ] $s"
+run_stage() {  # skips if its done-marker exists, so a re-run resumes
+  local s="$1" mk="logs/after_$1.done"
+  [[ -f "$mk" ]] && { echo "[skip] $s"; return 0; }
+  ( echo "[run ] $s $(date +%H:%M:%S)"
     case "$s" in
-      scope)      stage_scope      "$RES/pilot_35m/scope" ;;
-      cath)       stage_cath       "$RES/pilot_35m/benchmarks" ;;
-      proteingym) stage_proteingym "$RES/pilot_35m/benchmarks" ;;
-      bench)      stage_bench ;;
-    esac && touch "$marker" && echo "[done] $s" ) >> "logs/after_$s.log" 2>&1 &
-done
+      scope)       stage_scope      "$RES/pilot_35m/scope" ;;
+      cath)        stage_cath       "$RES/pilot_35m/benchmarks" ;;
+      proteingym)  stage_proteingym "$RES/pilot_35m/benchmarks" ;;
+      bench_cheap) stage_bench_cheap ;;
+      bench_full)  stage_bench_full ;;
+    esac && touch "$mk" && echo "[done] $s $(date +%H:%M:%S)" ) >> "logs/after_$s.log" 2>&1
+}
+in_stages() { [[ " $STAGES " == *" $1 "* ]]; }
+
+# Wave 1: independent, one card each.
+for s in scope cath bench_cheap; do in_stages "$s" && run_stage "$s" & done
+wait
+# Wave 2: ProteinGym runs after the cheap pooled benchmark, so the quick pooled numbers land first
+# and ProteinGym is not competing with them for a card.
+for s in proteingym bench_full; do in_stages "$s" && run_stage "$s" & done
 wait
 echo "all stages finished; markers in logs/after_*.done"
