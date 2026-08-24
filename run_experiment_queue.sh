@@ -51,112 +51,67 @@ scope_rows() {  # scope_rows <gpu> <out_dir> <specs...>
 }
 
 # ---------------------------------------------------------------- queues
-# The long runs live in their own queues so they can take the two GPUs the 150M arms
-# free up, rather than running back to back on one card.
+# ---------------------------------------------------------------- phase 2: the 50k campaign
 #
-# 18,219 steps is one complete ROUND_ROBIN pass: the sampler cycles until the smallest
-# source is exhausted, Pfam is smallest at 777,306 pairs = 6,073 batches, so a pass over
-# three sources is 3x that = 2.33M pairs. Stopping at a round 10k would end mid-pass with
-# the sources unevenly represented.
+# Data matches the ProtSent-V2 paper recipe: the WHOLE dc40 corpus at k=8 pairs per cluster, no
+# caps. That builds Pfam 777,306 + AFDB 18,987,468 + STRING 15,000,000 = 34.76M pairs, against
+# V2's own 34.8M.
 #
-# 128-D, not the 64-D default: the head-size ablation measured 128-D at +.034 MAP over
-# 64-D and +.007 over scoring the backbone's own 480-D residues, both with paired CIs
-# clear of zero, so the 64-D head these runs originally inherited is the wrong one to
-# spend 8 GPU-h on.
-LONG_STEPS="${LONG_STEPS:-18219}"
-# --compile: the 250 s warmup is 1.5% of an 18,219-step run, and a 300-step probe puts steady
-# state at ~1.66 steps/s against 1.329 without, with peak VRAM 6.1 GB against 9.3. Every arm
-# carries it so the arms stay comparable; validated against the 170 pairs/s fp32 baseline at the
-# first checkpoint. The earlier "+3.6% Pfam / -13% STRING" verdict was measured under the bf16
-# bug and is void.
-LONG_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 6000000 --seed 42 --compile)
+# PROPORTIONAL samples each source in proportion to its size, as V2 did: AFDB 54.6%, STRING
+# 43.1%, **Pfam 2.2%**. That last number is the risk in this design -- round-robin gave Pfam 33%,
+# and Pfam is the family-level signal SCOPe rewards most. queue_pr is the control that measures
+# it: same start point, same steps, ROUND_ROBIN.
+#
+# 50,000 steps x 128 = 6.4M pairs, 12.5x the pilot arms, ~9.4 h per 35M card. The 150M arm gets
+# 25,000 steps to land in the same wallclock. All arms resume, so a stop costs nothing.
+PHASE2_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 15000000 --seed 42 --compile)
+P2_STEPS="${P2_STEPS:-50000}"
+P2_STEPS_150M="${P2_STEPS_150M:-25000}"
+# The 35M ProtSent arms continue from the best validated 128-D model rather than from V2 itself:
+# 4,000 fp32 steps, fully annealed, .7057 SCOPe superfamily eligible MAP. build_multivector_encoder
+# reuses that checkpoint's trained projection head instead of randomising a fresh one.
+P2_BASE_35M="${P2_BASE_35M:-$MODELS/protsent_late_proj128/late}"
 
-# The long runs draw from an uncapped pair pool, while protsent_late_proj128 -- the only
-# other 128-D arm -- was built with the default 2M-per-file caps. Comparing them directly
-# would vary step count AND pool diversity together, and in the same direction, so a gain
-# would not be attributable to either. queue_f trains the missing cell: same 512k pairs as
-# proj128, same head and batch, drawn from the long runs' pool. long vs f isolates steps;
-# f vs proj128 isolates pool diversity.
-# Run this before the long runs when the Arrow cache is cold. The original reason -- that
-# _build_pair_dataset sampled with the unseeded global `random`, so concurrent cold builds
-# produced different pair sets and the control stopped controlling for anything -- no longer
-# holds now that the trainer seeds it. What remains is cheaper: whoever runs first pays the
-# ~19M-pair AFDB build once and the rest reuse the cache, and two processes building the same
-# cache entry simultaneously is still wasted work.
-queue_f() {  # matched-pool control for the long runs -- run first
+queue_pp() {  # ProtSent 35M, PROPORTIONAL -- the priority arm
   local gpu="$1"
-  train "$gpu" protsent_late_pool_control GrimSqueaker/ProtSent-V2-35M 4000 1000 "${LONG_ARGS[@]}"
-  scope_rows "$gpu" "$RES/pilot_35m/scope" \
-    "protsent_late_pool_control=late:$MODELS/protsent_late_pool_control/late"
-}
-
-queue_p() {  # ProtSent-V2 35M, long -- the priority arm
-  local gpu="$1"
-  watch_curve "$gpu" protsent_late_long "$RES/pilot_35m/scope"
-  train "$gpu" protsent_late_long GrimSqueaker/ProtSent-V2-35M "$LONG_STEPS" 2000 "${LONG_ARGS[@]}"
+  watch_curve "$gpu" protsent_late_prop50k "$RES/pilot_35m/scope"
+  train "$gpu" protsent_late_prop50k "$P2_BASE_35M" "$P2_STEPS" 5000 \
+    "${PHASE2_ARGS[@]}" --multi_dataset_sampler proportional
   wait
 }
 
-queue_q() {  # ProtSent-V2 150M, long
+queue_pr() {  # identical start and budget, ROUND_ROBIN -- isolates the sampler
   local gpu="$1"
-  watch_curve "$gpu" protsent_late_150m_long "$RES/pilot_150m/scope"
-  train "$gpu" protsent_late_150m_long GrimSqueaker/ProtSent-V2-150M "$LONG_STEPS" 2000 "${LONG_ARGS[@]}"
+  watch_curve "$gpu" protsent_late_rr50k "$RES/pilot_35m/scope"
+  train "$gpu" protsent_late_rr50k "$P2_BASE_35M" "$P2_STEPS" 5000 \
+    "${PHASE2_ARGS[@]}" --multi_dataset_sampler round_robin
   wait
 }
 
-# Phase 2: continue phase 1's checkpoint under PROPORTIONAL sampling, where AFDB dominates
-# in proportion to its size the way ProtSent-V2's own 34.8M-pair run did, rather than being
-# rationed to Pfam's size by round-robin. Resumable, so it can be stopped for other users and
-# restarted without losing progress. PHASE2_STEPS is deliberately large; stop it when the
-# curve flattens rather than when a step counter runs out.
-PHASE2_STEPS="${PHASE2_STEPS:-100000}"
-queue_g() {  # phase 2, proportional, continues from phase 1's weights
+queue_vp() {  # vanilla ESM-2 35M -- isolates the starting point
   local gpu="$1"
-  local base="${PHASE2_BASE:-protsent_late_long}"
-  local name="${base}_prop"
-  # Distinct output dir: train() skips any job whose $dir/runtime.json exists, so reusing
-  # phase 1's directory would make this a permanent no-op. Distinct curve name for the same
-  # reason on the eval side -- the watcher dedups on name, so phase 2 points sharing phase 1's
-  # name would all be discarded as already scored.
-  #
-  # --model is phase 1's exported model, not the base HF id: phase 1 deletes its checkpoints
-  # at exit (save_total_limit 1 plus cleanup), so "continue" has to mean "start from the
-  # weights it exported", which is what late/ is.
-  watch_curve "$gpu" "$name" "$RES/pilot_35m/scope"
-  train "$gpu" "$name" "$MODELS/$base/late" "$PHASE2_STEPS" 2000 \
-    "${LONG_ARGS[@]}" --multi_dataset_sampler proportional
+  watch_curve "$gpu" esm2_late_prop50k "$RES/pilot_35m/scope"
+  train "$gpu" esm2_late_prop50k facebook/esm2_t12_35M_UR50D "$P2_STEPS" 5000 \
+    "${PHASE2_ARGS[@]}" --multi_dataset_sampler proportional
   wait
 }
 
-# facebook/* rather than Synthyra/* for the long runs. Same weights -- Synthyra/ESM2-35M
-# packages facebook/esm2_t12_35M_UR50D -- but the Synthyra repos are FastPLM custom-code, and
-# resolve_attention keeps those on sdpa so they load through the FastPLM branch rather than the
-# plain Transformer the flash path uses. Left as Synthyra, the vanilla control would train in
-# fp32/sdpa while the ProtSent arm it controls for trains in bf16/flash, so the comparison would
-# carry an optimizer-numerics difference on top of the initialization difference it is meant to
-# isolate. The native checkpoints let both arms take the same path.
-queue_d() {  # vanilla ESM-2 35M, long -- lowest priority, first to be dropped
+queue_lp() {  # ProtSent 150M -- isolates scale. No 128-D 150M model exists to continue from,
+              # so this one starts from V2-150M with a fresh head.
   local gpu="$1"
-  watch_curve "$gpu" esm2_late_long "$RES/pilot_35m/scope"
-  train "$gpu" esm2_late_long facebook/esm2_t12_35M_UR50D "$LONG_STEPS" 2000 "${LONG_ARGS[@]}"
+  watch_curve "$gpu" protsent_late_150m_prop25k "$RES/pilot_150m/scope"
+  train "$gpu" protsent_late_150m_prop25k GrimSqueaker/ProtSent-V2-150M "$P2_STEPS_150M" 5000 \
+    "${PHASE2_ARGS[@]}" --multi_dataset_sampler proportional
   wait
 }
-
-queue_v() {  # vanilla ESM-2 150M, long
-  local gpu="$1"
-  watch_curve "$gpu" esm2_late_150m_long "$RES/pilot_150m/scope"
-  train "$gpu" esm2_late_150m_long facebook/esm2_t30_150M_UR50D "$LONG_STEPS" 2000 "${LONG_ARGS[@]}"
-  wait
-}
-
 
 # ---------------------------------------------------------------- driver
 # Default card per queue. Override any of them with GPU_P=3 etc.
-declare -A DEFAULT_GPU=( [f]=0 [p]=1 [q]=2 [d]=3 [g]=1 [v]=3 )
+declare -A DEFAULT_GPU=( [pp]=0 [pr]=1 [vp]=2 [lp]=3 )
 
 case "${1:-start}" in
   start)
-    for q in ${QUEUES:-f p q d}; do
+    for q in ${QUEUES:-pp pr vp lp}; do
       gpu_var="GPU_${q^^}"; gpu="${!gpu_var:-${DEFAULT_GPU[$q]:-0}}"
       if pgrep -f "run_experiment_queue.sh __run $q" > /dev/null; then echo "queue $q already running"; continue; fi
       setsid nohup "$ROOT/run_experiment_queue.sh" __run "$q" "$gpu" >> "logs/queue_$q.log" 2>&1 < /dev/null &

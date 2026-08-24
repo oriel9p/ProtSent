@@ -90,7 +90,31 @@ def build_multivector_encoder(
     # One Transformer instance, two views of it: max_seq_length set on either reaches the same
     # module, so there is nothing to keep in sync.
     mve = MultiVectorEncoder(modules=_late_modules(dense_st[0], proj_dim), device=device)
+    _restore_saved_projection(mve, model_name_or_path)
     return mve, dense_st
+
+
+def _restore_saved_projection(mve: MultiVectorEncoder, path: str) -> bool:
+    """Reuse a saved projection head when continuing from a late checkpoint.
+
+    A saved late model puts its backbone at the directory root (modules.json gives the
+    Transformer ``path: ""``) and its projection in ``1_Dense/``. The loader above reads only the
+    root, so without this a continuation pairs a fully trained backbone with a freshly randomised
+    head -- which runs, converges, and quietly discards everything the head had learned.
+    """
+    dense = next((m for m in mve if isinstance(m, Dense)), None)
+    saved = Path(path) / "1_Dense"
+    if dense is None or not saved.is_dir():
+        return False
+    loaded = Dense.load(str(saved))
+    if loaded.linear.weight.shape != dense.linear.weight.shape:
+        logger.warning("saved projection is %s but this run asks for %s; keeping the fresh head",
+                       tuple(loaded.linear.weight.shape), tuple(dense.linear.weight.shape))
+        return False
+    dense.load_state_dict(loaded.state_dict())
+    logger.info("continuing from the saved %d-D projection head in %s",
+                dense.linear.weight.shape[0], saved)
+    return True
 
 
 def _late_modules(transformer, proj_dim: int) -> List[torch.nn.Module]:

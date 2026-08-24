@@ -148,3 +148,27 @@ def test_configured_learning_rate_actually_moves_the_backbone(tiny_models):
         f"pinning a backend cost the backbone its updates at lr 1e-5: only {moved:.1%} of "
         f"elements moved (half-precision weights cannot represent a step that small)"
     )
+
+
+def test_continuing_from_a_saved_model_keeps_its_trained_head(tiny_models, tmp_path):
+    """Continuing training from a saved late model must not re-randomise its projection.
+
+    The saved layout puts the backbone at the directory root (modules.json gives the Transformer
+    `path: ""`) with the projection in `1_Dense/`. A loader that only reads the root therefore
+    picks up a fully trained backbone and silently pairs it with a fresh random head — which
+    looks like a working continuation and throws away everything the head learned.
+    """
+    import torch
+
+    mve, _ = tiny_models
+    with torch.no_grad():  # make the head distinctive so a fresh init cannot coincide
+        mve[1].linear.weight.fill_(0.0123)
+    saved = tmp_path / "late"
+    mve.save_pretrained(str(saved))
+
+    continued, _ = li.build_multivector_encoder(
+        str(saved), proj_dim=16, max_seq_length=64, device="cpu"
+    )
+    assert torch.allclose(continued[1].linear.weight, mve[1].linear.weight), (
+        "continuation discarded the trained projection head"
+    )
