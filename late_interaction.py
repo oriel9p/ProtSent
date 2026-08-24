@@ -35,7 +35,6 @@ logger = logging.getLogger(__name__)
 
 SPECIAL_TOKENS = ("<cls>", "<eos>")  # ESM-2 / FastPLM tokenizers; <pad> is already masked
 SCOPE_LEVELS: Dict[str, int] = {"fold": 2, "superfamily": 3, "family": 4}
-KS: Tuple[int, ...] = (1, 10, 30)
 
 
 # --------------------------------------------------------------------------- models
@@ -126,24 +125,21 @@ def _build_with_attention(model_name_or_path, proj_dim, max_seq_length, device, 
     from sentence_transformers.base.modules import Transformer
     from sentence_transformers.sentence_transformer.modules import Pooling
 
-    from model_utils import patch_unknown_residue_tokens
-    from protein_pipeline import _ensure_trainable_rotary_caches
+    from protein_pipeline import finalize_native_esm
 
     transformer = Transformer(
         model_name_or_path,
         model_kwargs={"attn_implementation": attn, "dtype": torch.bfloat16},
     )
-    # This path does not go through load_model_for_training, so the post-load fixes it
-    # applies have to be applied here too. Both have bitten this project already: an
-    # out-of-vocabulary residue killed a DDP run at step 134, and ESM2 rotary caches
-    # created under inference_mode crash the first backward that reuses them.
-    patch_unknown_residue_tokens(transformer.tokenizer)
-    _ensure_trainable_rotary_caches(transformer.auto_model)
-
     dim = transformer.get_embedding_dimension()
     dense_st = SentenceTransformer(
         modules=[transformer, Pooling(dim, pooling_mode="mean")], device=device
     )
+    # This path does not go through load_model_for_training, so its post-load fixes have to
+    # be applied here too. Hand-picking them is what went wrong before: this path applied two
+    # of six and the mainline path applied five of six (a different five). finalize_native_esm
+    # is the named set both now share.
+    finalize_native_esm(transformer)
     dense_st.max_seq_length = max_seq_length
     mve = MultiVectorEncoder(modules=_late_modules(transformer, proj_dim), device=device)
     mve.max_seq_length = max_seq_length
@@ -220,23 +216,20 @@ def _sync_token_dropout_config(auto_model: torch.nn.Module) -> None:
         config.token_dropout = bool(embeddings.token_dropout)
 
 
-def save_dense_view(mve: MultiVectorEncoder, pooling: torch.nn.Module, out_dir: str) -> str:
-    """Export ``[mve[0] (trained backbone), mean Pooling]`` as a normal ProtSent model."""
-    _sync_token_dropout_config(mve[0].auto_model)
-    dense = SentenceTransformer(modules=[mve[0], pooling], device=str(mve.device))
-    dense.save_pretrained(out_dir)
-    make_loadable(out_dir)
-    return out_dir
-
-
 def save_late_and_dense(
     mve: MultiVectorEncoder, pooling: torch.nn.Module, out_dir: str
 ) -> Tuple[str, str]:
+    """Save the multi-vector model and its mean-pooled "dense view" side by side.
+
+    The dense view is ``[trained backbone, mean Pooling]`` -- an ordinary ProtSent model, which
+    is what the pooled benchmarks consume, since they cannot score an ``[L x d]`` model.
+    """
     late_dir, dense_dir = os.path.join(out_dir, "late"), os.path.join(out_dir, "dense_view")
     _sync_token_dropout_config(mve[0].auto_model)
     mve.save_pretrained(late_dir)
     make_loadable(late_dir)
-    save_dense_view(mve, pooling, dense_dir)
+    SentenceTransformer(modules=[mve[0], pooling], device=str(mve.device)).save_pretrained(dense_dir)
+    make_loadable(dense_dir)
     return late_dir, dense_dir
 
 
@@ -288,9 +281,12 @@ def maxsim_matrix(
 
 def cosine_matrix(st: SentenceTransformer, seqs: Sequence[str], *, batch_size: int = 64,
                   queries: Optional[Sequence[str]] = None) -> np.ndarray:
-    docs = st.encode(list(seqs), batch_size=batch_size, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
-    qs = docs if queries is None else st.encode(list(queries), batch_size=batch_size, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
-    return qs @ docs.T
+    def encode(texts):
+        return st.encode(list(texts), batch_size=batch_size, convert_to_numpy=True,
+                         normalize_embeddings=True, show_progress_bar=False)
+
+    docs = encode(seqs)
+    return (docs if queries is None else encode(queries)) @ docs.T
 
 
 # --------------------------------------------------------------------------- SCOPe
@@ -312,7 +308,6 @@ def scope_rows(
     *,
     model: str,
     scoring: str,
-    ks: Tuple[int, ...] = KS,
     n_boot: int = 1000,
     seed: int = 0,
     runtime_s: float = float("nan"),
@@ -327,19 +322,15 @@ def scope_rows(
     rows, per_query = [], {}
     for level in SCOPE_LEVELS:
         labels = scope_labels(families, level)
-        # per_query_metrics already returns hit1/hit10/hit30, computed the same way
-        # (rel[:k].any()), so for the default ks there is nothing to recompute -- doing it
-        # anyway built three more n x (n-1) label matrices per model and then overwrote pq
-        # with identical values. Only a non-default k needs the matrix.
+        # Recall@k comes straight from per_query_metrics; recomputing it here built three more
+        # n x (n-1) label matrices per model only to overwrite pq with identical values.
         pq = per_query_metrics(ranking, labels)
         elig = pq["eligible"]
-        rel = labels[ranking] == labels[:, None] if any(f"hit{k}" not in pq for k in ks) else None
         row = {"model": model, "scoring": scoring, "level": level,
                "n_queries": int(len(labels)), "n_eligible_queries": int(elig.sum()),
                "runtime_s": runtime_s}
-        for k in ks:
-            hit = pq[f"hit{k}"] if f"hit{k}" in pq else rel[:, :k].any(axis=1).astype(float)
-            pq.setdefault(f"hit{k}", hit)
+        for k in (1, 10, 30):
+            hit = pq[f"hit{k}"]
             row[f"Recall@{k}"] = float(hit.mean())
             row[f"eligible_Recall@{k}"] = float(hit[elig].mean()) if elig.any() else float("nan")
         row["MAP"] = float(pq["ap"].mean())

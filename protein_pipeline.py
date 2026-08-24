@@ -407,6 +407,90 @@ def _ensure_trainable_rotary_caches(model: nn.Module) -> None:
         )
 
 
+def finalize_native_esm(word_embedding_model) -> None:
+    """Apply every post-load fix a native ESM-2 / ModernBERT backbone needs.
+
+    This exists because there is more than one way into a ``models.Transformer``:
+    ``load_model_for_training``'s standard branch builds one, and so does
+    ``late_interaction._build_with_attention`` (which must construct it directly to pin
+    an attention backend). Before this function the two reconstructed the fix set from
+    memory and disagreed on four of six items -- the flash path skipped pad-token
+    reconciliation, token_dropout, vocab reconciliation and the tokenization check, while
+    the standard path skipped ``patch_unknown_residue_tokens``. Naming the set is what
+    stops it drifting again; every fix here is idempotent, so calling it twice is safe.
+
+    Call it AFTER the SentenceTransformer wrapper is built: ``_ensure_trainable_rotary_caches``
+    has to run last so it catches caches that construction left in inference mode.
+    """
+    hf_tokenizer = cast(Any, word_embedding_model.tokenizer)
+    if hf_tokenizer.pad_token is None:
+        if hf_tokenizer.eos_token is not None:
+            hf_tokenizer.pad_token = hf_tokenizer.eos_token
+            logger.info("   ⚠️  Pad token was None, set to EOS token.")
+        else:
+            hf_tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+            word_embedding_model.auto_model.resize_token_embeddings(len(hf_tokenizer))
+            logger.info("   ⚠️  Pad token was None, added '[PAD]' token.")
+
+    _ensure_trainable_rotary_caches(word_embedding_model.auto_model)
+
+    # Fix ESM2 token_dropout bug (HuggingFace transformers >=5.x)
+    disable_esm2_token_dropout(word_embedding_model.auto_model)
+
+    # 'J', '|' and '#' each took down a run or a benchmark task before this was installed.
+    patch_unknown_residue_tokens(hf_tokenizer)
+
+    # Validate tokenizer/model vocabulary consistency
+    tokenizer = hf_tokenizer
+    embedding_layer = word_embedding_model.auto_model.get_input_embeddings()
+    model_vocab_size = embedding_layer.num_embeddings
+    tokenizer_vocab_size = len(tokenizer)
+
+    logger.info(
+        f"   📊 Tokenizer vocab size: {tokenizer_vocab_size}, Model vocab size: {model_vocab_size}"
+    )
+
+    if tokenizer_vocab_size != model_vocab_size:
+        logger.warning(
+            f"   ⚠️  VOCAB MISMATCH DETECTED! Tokenizer: {tokenizer_vocab_size}, Model: {model_vocab_size}"
+        )
+        if tokenizer_vocab_size > model_vocab_size:
+            logger.info(
+                f"   🔧 Resizing model embeddings from {model_vocab_size} to {tokenizer_vocab_size}"
+            )
+            word_embedding_model.auto_model.resize_token_embeddings(
+                tokenizer_vocab_size
+            )
+            model_vocab_size = tokenizer_vocab_size
+        else:
+            logger.error(
+                "   ❌ Tokenizer vocab is smaller than model! This may indicate wrong tokenizer."
+            )
+
+    # Test tokenization
+    test_seq = "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEKAVQVKVKALPDAQFEVVHSLAKWKRQTLGQHDFSAGEGLYTHMKALRPDEDRLSLEVGN"
+    try:
+        test_tokens = tokenizer(test_seq, return_tensors="pt", truncation=True)
+        test_ids = test_tokens["input_ids"][0]
+        max_token_id = test_ids.max().item()
+        min_token_id = test_ids.min().item()
+
+        logger.info(
+            f"   🧪 Test tokenization: min_id={min_token_id}, max_id={max_token_id}, model_vocab={model_vocab_size}"
+        )
+
+        if max_token_id >= model_vocab_size:
+            raise ValueError(
+                f"Tokenizer produced out-of-bounds token ID {max_token_id} >= vocab_size {model_vocab_size}."
+            )
+        if min_token_id < 0:
+            raise ValueError(f"Tokenizer produced negative token ID {min_token_id}.")
+        logger.info("   ✅ Tokenization test passed")
+    except Exception as e:
+        logger.error(f"   ❌ Tokenization test failed: {e}")
+        raise
+
+
 def _is_distributed_launcher_active(world_size: int) -> bool:
     """Return True when launched via DDP tooling (accelerate/torchrun)."""
     if world_size <= 1:
@@ -1063,17 +1147,6 @@ def _load_model_for_training(
         model_args={"trust_remote_code": True},
         tokenizer_args={"trust_remote_code": True},
     )
-
-    hf_tokenizer = cast(Any, word_embedding_model.tokenizer)
-    if hf_tokenizer.pad_token is None:
-        if hf_tokenizer.eos_token is not None:
-            hf_tokenizer.pad_token = hf_tokenizer.eos_token
-            logger.info("   ⚠️  Pad token was None, set to EOS token.")
-        else:
-            hf_tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-            word_embedding_model.auto_model.resize_token_embeddings(len(hf_tokenizer))
-            logger.info("   ⚠️  Pad token was None, added '[PAD]' token.")
-
     pooling_dimension = word_embedding_model.get_word_embedding_dimension()
     pooling_model = _build_pooling_module(
         pooling_dimension,
@@ -1086,61 +1159,7 @@ def _load_model_for_training(
         trust_remote_code=True,
         device=device,
     )
-    _ensure_trainable_rotary_caches(word_embedding_model.auto_model)
-
-    # Fix ESM2 token_dropout bug (HuggingFace transformers >=5.x)
-    disable_esm2_token_dropout(word_embedding_model.auto_model)
-
-    # Validate tokenizer/model vocabulary consistency
-    tokenizer = cast(Any, word_embedding_model.tokenizer)
-    embedding_layer = word_embedding_model.auto_model.get_input_embeddings()
-    model_vocab_size = embedding_layer.num_embeddings
-    tokenizer_vocab_size = len(tokenizer)
-
-    logger.info(
-        f"   📊 Tokenizer vocab size: {tokenizer_vocab_size}, Model vocab size: {model_vocab_size}"
-    )
-
-    if tokenizer_vocab_size != model_vocab_size:
-        logger.warning(
-            f"   ⚠️  VOCAB MISMATCH DETECTED! Tokenizer: {tokenizer_vocab_size}, Model: {model_vocab_size}"
-        )
-        if tokenizer_vocab_size > model_vocab_size:
-            logger.info(
-                f"   🔧 Resizing model embeddings from {model_vocab_size} to {tokenizer_vocab_size}"
-            )
-            word_embedding_model.auto_model.resize_token_embeddings(
-                tokenizer_vocab_size
-            )
-            model_vocab_size = tokenizer_vocab_size
-        else:
-            logger.error(
-                "   ❌ Tokenizer vocab is smaller than model! This may indicate wrong tokenizer."
-            )
-
-    # Test tokenization
-    test_seq = "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEKAVQVKVKALPDAQFEVVHSLAKWKRQTLGQHDFSAGEGLYTHMKALRPDEDRLSLEVGN"
-    try:
-        test_tokens = tokenizer(test_seq, return_tensors="pt", truncation=True)
-        test_ids = test_tokens["input_ids"][0]
-        max_token_id = test_ids.max().item()
-        min_token_id = test_ids.min().item()
-
-        logger.info(
-            f"   🧪 Test tokenization: min_id={min_token_id}, max_id={max_token_id}, model_vocab={model_vocab_size}"
-        )
-
-        if max_token_id >= model_vocab_size:
-            raise ValueError(
-                f"Tokenizer produced out-of-bounds token ID {max_token_id} >= vocab_size {model_vocab_size}."
-            )
-        if min_token_id < 0:
-            raise ValueError(f"Tokenizer produced negative token ID {min_token_id}.")
-        logger.info("   ✅ Tokenization test passed")
-    except Exception as e:
-        logger.error(f"   ❌ Tokenization test failed: {e}")
-        raise
-
+    finalize_native_esm(word_embedding_model)
     logger.info(f"   ✅ Model loaded successfully (dim={pooling_dimension})")
     return model
 
