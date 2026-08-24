@@ -873,7 +873,7 @@ score it unchanged. Outputs under `models/late_interaction/$NAME`, results under
 | `esm2_late` | Synthyra/ESM2-35M | 2,000 × 256 (2 GPU) | 64-D | capped 2M/file | done, pilot |
 | `protsent_late_150m` / `esm2_late_150m` | V2-150M / Synthyra-150M | 5,000 × 128 | 64-D | capped | done |
 | `protsent_late_proj128` | ProtSent-V2-35M | 4,000 × 128 | **128-D** | capped | done — head-size ablation |
-| `protsent_late_swap` | ProtSent-V2-35M | 4,000 × 128 | 128-D | capped | done — symmetry ablation |
+| `protsent_late_swap` | ProtSent-V2-35M | 4,000 × 128 | 64-D | capped | done — symmetry ablation |
 | `protsent_late_pool_control` | ProtSent-V2-35M | 4,000 × 128 | 128-D | **uncapped** | matched-pool control |
 | **`protsent_late_long`** | ProtSent-V2-35M | 18,219 × 128 | 128-D | uncapped | phase 1, running |
 | **`protsent_late_150m_long`** | ProtSent-V2-150M | 18,219 × 128 | 128-D | uncapped | phase 1, running |
