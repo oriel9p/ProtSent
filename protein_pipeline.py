@@ -410,17 +410,17 @@ def _ensure_trainable_rotary_caches(model: nn.Module) -> None:
 def finalize_native_esm(word_embedding_model) -> None:
     """Apply every post-load fix a native ESM-2 / ModernBERT backbone needs.
 
-    This exists because there is more than one way into a ``models.Transformer``:
-    ``load_model_for_training``'s standard branch builds one, and so does
-    ``late_interaction._build_with_attention`` (which must construct it directly to pin
-    an attention backend). Before this function the two reconstructed the fix set from
-    memory and disagreed on four of six items -- the flash path skipped pad-token
-    reconciliation, token_dropout, vocab reconciliation and the tokenization check, while
-    the standard path skipped ``patch_unknown_residue_tokens``. Naming the set is what
-    stops it drifting again; every fix here is idempotent, so calling it twice is safe.
+    Six fixes that must travel together: pad-token reconciliation, rotary caches, ESM2
+    token_dropout, the unknown-residue fallback, vocab reconciliation and a tokenization smoke
+    test. They are a named set rather than inline code because they were once applied from
+    memory at two different construction sites, which disagreed on four of the six -- each
+    applying a fix the other lacked. There is one construction site again (the late-interaction
+    path now goes through ``load_model_for_training`` with ``model_kwargs``), and the name is
+    what keeps a second one from re-deriving the set by hand.
 
-    Call it AFTER the SentenceTransformer wrapper is built: ``_ensure_trainable_rotary_caches``
-    has to run last so it catches caches that construction left in inference mode.
+    Every fix is idempotent, so calling it twice is safe. Call it AFTER the SentenceTransformer
+    wrapper is built: ``_ensure_trainable_rotary_caches`` has to run last so it catches caches
+    that construction left in inference mode.
     """
     hf_tokenizer = cast(Any, word_embedding_model.tokenizer)
     if hf_tokenizer.pad_token is None:
@@ -869,6 +869,7 @@ def load_model_for_training(
     device: Optional[str] = None,
     pooling_mode: str = "mean",
     pooling_activation: str = "tanh",
+    model_kwargs: Optional[dict] = None,
 ) -> SentenceTransformer:
     """Load a model for training and enforce ``max_seq_length``.
 
@@ -881,6 +882,10 @@ def load_model_for_training(
     tokens on a 512-pair batch, which is what turns a 6 GiB contrastive step
     into a 150 GiB one. Set it once here, after the model is fully assembled,
     so no branch can drop it.
+
+    ``model_kwargs`` is forwarded to the underlying ``models.Transformer`` -- this is how the
+    late-interaction path pins an attention backend and bf16 weights. Native checkpoints only;
+    see ``_load_model_for_training``.
     """
     model = _load_model_for_training(
         model_name,
@@ -888,6 +893,7 @@ def load_model_for_training(
         device=device,
         pooling_mode=pooling_mode,
         pooling_activation=pooling_activation,
+        model_kwargs=model_kwargs,
     )
     _enforce_max_seq_length(model, max_seq_length)
     return model
@@ -923,6 +929,7 @@ def _load_model_for_training(
     device: Optional[str] = None,
     pooling_mode: str = "mean",
     pooling_activation: str = "tanh",
+    model_kwargs: Optional[dict] = None,
 ) -> SentenceTransformer:
     """
     Robustly loads a model for SentenceTransformers training.
@@ -941,6 +948,18 @@ def _load_model_for_training(
     logger.info(f"🏗️  Loading model: {model_name} (device={device})")
 
     model_type = detect_model_type(model_name)
+
+    # Refuse rather than ignore. Five of the six branches below build their backbone through a
+    # family-specific wrapper and then swap the module's model or tokenizer out from under it,
+    # so a forwarded attn_implementation or dtype would be dropped on the floor -- and a caller
+    # who believes it took effect is worse off than one told it cannot. resolve_attention gates
+    # on the same families, so in practice this only fires on a programming error.
+    if model_kwargs and model_type != "standard":
+        raise ValueError(
+            f"model_kwargs is only supported for native checkpoints, but {model_name} is "
+            f"{model_type!r}. Those load through a family-specific wrapper that would silently "
+            f"discard {sorted(model_kwargs)}."
+        )
 
     if model_type == "amplify":
         logger.info("   ✨ Using AMPLIFY strategy")
@@ -1144,10 +1163,10 @@ def _load_model_for_training(
     word_embedding_model = models.Transformer(
         model_name,
         max_seq_length=max_seq_length,
-        model_args={"trust_remote_code": True},
-        tokenizer_args={"trust_remote_code": True},
+        model_kwargs={"trust_remote_code": True, **(model_kwargs or {})},
+        processor_kwargs={"trust_remote_code": True},
     )
-    pooling_dimension = word_embedding_model.get_word_embedding_dimension()
+    pooling_dimension = word_embedding_model.get_embedding_dimension()
     pooling_model = _build_pooling_module(
         pooling_dimension,
         pooling_mode,

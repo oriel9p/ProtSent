@@ -111,6 +111,51 @@ def append_csv(path: Path, rows: list[dict]) -> None:
     logger.info("wrote %d rows -> %s", len(rows), path)
 
 
+def subsample(seqs: list, labels, n: int, seed: int):
+    """Take a seeded random n of (seqs, labels), or return them unchanged if n is 0 or too big."""
+    if not n or len(seqs) <= n:
+        return seqs, labels
+    idx = np.random.default_rng(seed).choice(len(seqs), n, replace=False)
+    return [seqs[i] for i in idx], labels[idx]
+
+
+def curve_points(run: Path, prefix: str):
+    """Yield ``(name, kind, path)`` for a training run's scoreable points, in training order.
+
+    step0 -> checkpoint-* (numeric order) -> the exported final model. Both the one-shot `scope`
+    command and the live `watch_curve` walk exactly this sequence, and used to walk it with two
+    hand-written copies that disagreed about the trailing @final point.
+    """
+    if (run / "step0" / "late").exists():
+        yield f"{prefix}@0", "late", str(run / "step0" / "late")
+    for ckpt in sorted(run.glob("checkpoint-*"), key=lambda c: int(c.name.split("-")[1])):
+        if (ckpt / "modules.json").exists():  # written last, so its presence means the save finished
+            yield f"{prefix}@{ckpt.name.split('-')[1]}", "late", str(ckpt)
+    if (run / "late").exists():
+        yield f"{prefix}@final", "late", str(run / "late")
+
+
+def score_scope(name: str, kind: str, path: str, seqs, families, out: Path, args):
+    """Score one model on SCOPe-40 and persist its per-query vectors. Returns ``(rows, pq)``.
+
+    The bootstrap and the .npz are computed here or never: a live watcher's checkpoint is
+    rotated off disk by the next save, so there is no second chance to rescore it.
+    """
+    scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
+    t0 = time.time()
+    sim = scorer(seqs, bs=args.batch_size, ce=args.chunk_elements)
+    runtime_s = time.time() - t0
+    rows, pq = li.scope_rows(sim, families, model=name, scoring=scoring, n_boot=args.n_boot,
+                             seed=args.seed, runtime_s=round(runtime_s, 2))
+    save_per_query(out, name, pq)
+    family = next(r for r in rows if r["level"] == "family")
+    logger.info("%s (%s): %.1fs scoring; family eligible R@10=%.4f", name, scoring, runtime_s,
+                family.get("eligible_Recall@10", float("nan")))
+    del scorer, sim
+    torch.cuda.empty_cache()
+    return rows, pq
+
+
 def cmd_scope(args) -> None:
     seqs, families = li.load_scope40()
     out = Path(args.out_dir)
@@ -119,29 +164,13 @@ def cmd_scope(args) -> None:
     specs = [parse_model_spec(s) for s in args.models or []]
     if args.checkpoints:
         run = Path(args.checkpoints)
-        ckpts = sorted(run.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
-        if (run / "step0" / "late").exists():
-            specs.append((f"{run.name}@0", "late", str(run / "step0" / "late")))
-        specs += [(f"{run.name}@{c.name.split('-')[1]}", "late", str(c)) for c in ckpts]
-        if (run / "late").exists():
-            specs.append((f"{run.name}@final", "late", str(run / "late")))
+        specs += list(curve_points(run, run.name))
 
     all_rows, per_query_by_model = [], {}
     for name, kind, path in specs:
-        scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
-        t0 = time.time()
-        sim = scorer(seqs, bs=args.batch_size, ce=args.chunk_elements)
-        runtime_s = time.time() - t0
-        rows, pq = li.scope_rows(
-            sim, families, model=name, scoring=scoring, n_boot=args.n_boot, seed=args.seed,
-            runtime_s=round(runtime_s, 2),
-        )
+        rows, pq = score_scope(name, kind, path, seqs, families, out, args)
         all_rows += rows
         per_query_by_model[name] = pq
-        save_per_query(out, name, pq)
-        logger.info("%s (%s): %.1fs scoring; family eligible R@10=%.4f", name, scoring, runtime_s,
-                    [r for r in rows if r["level"] == "family"][0].get("eligible_Recall@10", float("nan")))
-        del scorer, sim
 
     append_csv(out / ("scope_checkpoint_curve.csv" if args.checkpoints else "scope_hierarchy.csv"), all_rows)
 
@@ -166,10 +195,7 @@ def cmd_fewshot_rh(args) -> None:
     train, test = ds["train"], ds["test"]
     tr_seqs, tr_y = list(train["seq"]), np.asarray(train["label"])
     te_seqs, te_y = list(test["seq"]), np.asarray(test["label"])
-    if args.max_test and len(te_seqs) > args.max_test:
-        rng = np.random.default_rng(args.seed)
-        idx = rng.choice(len(te_seqs), args.max_test, replace=False)
-        te_seqs, te_y = [te_seqs[i] for i in idx], te_y[idx]
+    te_seqs, te_y = subsample(te_seqs, te_y, args.max_test, args.seed)
 
     rows = []
     for spec in args.models:
@@ -224,32 +250,20 @@ def cmd_watch_curve(args) -> None:
             return set()
         return {r["model"] for r in csv.DictReader(curve.open())}
 
-    def score(name: str, path: str) -> None:
+    def score(name: str, kind: str, path: str) -> None:
         try:
-            mve = li.load_multivector_encoder(path, device=args.device)
-            mve.max_seq_length = args.max_seq_length
-            t0 = time.time()
-            sim = li.maxsim_matrix(mve, seqs, batch_size=args.batch_size, chunk_elements=args.chunk_elements)
-            # Bootstrap and per-query vectors are computed HERE or never: the trainer keeps one
-            # checkpoint on disk, so this point cannot be rescored once the next save rotates it out.
-            rows, pq = li.scope_rows(sim, families, model=name, scoring="maxsim", n_boot=args.n_boot,
-                                     runtime_s=round(time.time() - t0, 2))
+            rows, _ = score_scope(name, kind, path, seqs, families, out, args)
             append_csv(curve, rows)
-            save_per_query(out, name, pq)
-            del mve, sim
-            torch.cuda.empty_cache()
         except Exception as exc:  # a busy GPU or a half-written checkpoint must not kill the watcher
             logger.warning("curve point %s failed: %s", name, exc)
 
     deadline = time.time() + args.max_hours * 3600
     while time.time() < deadline:
         done = already()
-        if (run / "step0" / "late").exists() and f"{args.name}@0" not in done:
-            score(f"{args.name}@0", str(run / "step0" / "late"))
-        for ckpt in sorted(run.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1])):
-            tag = f"{args.name}@{ckpt.name.split('-')[1]}"
-            if tag not in done and (ckpt / "modules.json").exists():
-                score(tag, str(ckpt))
+        for name, kind, path in curve_points(run, args.name):
+            # @final is handled below, once training has actually stopped.
+            if not name.endswith("@final") and name not in done:
+                score(name, kind, path)
         if args.follow_pid:
             try:
                 os.kill(args.follow_pid, 0)
@@ -266,7 +280,7 @@ def cmd_watch_curve(args) -> None:
             done = already()
             scored_any = any(m.startswith(f"{args.name}@") and not m.endswith("@final") for m in done)
             if not scored_any and f"{args.name}@final" not in done:
-                score(f"{args.name}@final", str(run / "late"))
+                score(f"{args.name}@final", "late", str(run / "late"))
             logger.info("curve watcher done for %s", args.name)
             return
         time.sleep(args.poll_seconds)
@@ -281,10 +295,7 @@ def cmd_cath(args) -> None:
     lookup, test = ds["lookup"], ds[args.test_split]
     gal_seqs, gal_y = list(lookup["sequence"]), np.asarray(lookup[args.label_col])
     q_seqs, q_y = list(test["sequence"]), np.asarray(test[args.label_col])
-    if args.max_lookup and len(gal_seqs) > args.max_lookup:
-        rng = np.random.default_rng(args.seed)
-        idx = rng.choice(len(gal_seqs), args.max_lookup, replace=False)
-        gal_seqs, gal_y = [gal_seqs[i] for i in idx], gal_y[idx]
+    gal_seqs, gal_y = subsample(gal_seqs, gal_y, args.max_lookup, args.seed)
 
     rows = []
     for spec in args.models:

@@ -61,43 +61,31 @@ def build_multivector_encoder(
 ) -> Tuple[MultiVectorEncoder, SentenceTransformer]:
     """Return ``(mve, dense_st)`` sharing one backbone Transformer module.
 
-    ``dense_st`` is the ordinary ``[Transformer, mean Pooling]`` SentenceTransformer
-    from ``protein_pipeline.load_model_for_training`` (max_seq_length enforced,
-    ESM/FastPLM patches applied). ``mve`` reuses ``dense_st[0]`` in place.
+    ``dense_st`` is the ordinary ``[Transformer, mean Pooling]`` SentenceTransformer from
+    ``protein_pipeline.load_model_for_training`` (max_seq_length enforced, ESM/FastPLM patches
+    applied). ``mve`` reuses ``dense_st[0]`` in place, so training the multi-vector model trains
+    the dense view too and the two can never drift apart.
 
-    Note the environment gate: transformers accepts ``kernels`` only in
-    ``[0.15.2, 0.16)``. Outside that window the kernel fails to load and
-    :func:`resolve_attention` falls back to sdpa with a warning rather than
-    training silently slower than the caller thinks.
+    ``attn_implementation`` pins an attention backend, e.g. :data:`FLASH_ATTENTION` for the ~2x
+    throughput measured above. Two conditions come with it, and both change more than speed:
 
-    ``attn_implementation`` opts into a specific attention backend, e.g.
-    ``FLASH_ATTENTION`` for the ~2x throughput above. It is off by default and
-    carries two conditions, both of which change more than speed:
-
-    * Flash attention requires **bf16/fp16 weights**; transformers refuses it on
-      an fp32 model. The default recipe here loads fp32 and autocasts to bf16,
-      keeping fp32 master weights for the optimizer, so turning this on moves the
-      optimizer to bf16 states. That is a numerics change: validate retrieval
-      quality on a real run before adopting it, do not assume speed is free.
-    * It builds the Transformer module directly rather than through
-      ``load_model_for_training``, so it applies to native ESM checkpoints only.
-      FastPLM backbones (Synthyra/*) reject flash kernels and must stay on sdpa.
-
-    Requires ``kernels>=0.15.2``; older versions fail the load and silently fall
-    back to sdpa.
+    * Flash attention requires **bf16/fp16 weights**; transformers refuses it on an fp32 model.
+      The default recipe loads fp32 and autocasts, keeping fp32 master weights for the
+      optimizer, so pinning flash moves the optimizer to bf16 states. That is a numerics change.
+    * It reaches ``models.Transformer`` through ``load_model_for_training``'s native-checkpoint
+      branch, which is the only branch that can honour it. :func:`resolve_attention` gates on the
+      same families, and the loader raises rather than silently ignoring the request.
     """
-    if attn_implementation:
-        return _build_with_attention(
-            model_name_or_path, proj_dim, max_seq_length, device, attn_implementation
-        )
-
     from protein_pipeline import load_model_for_training
 
     dense_st = load_model_for_training(
-        model_name_or_path, max_seq_length=max_seq_length, device=device, pooling_mode="mean"
+        model_name_or_path, max_seq_length=max_seq_length, device=device, pooling_mode="mean",
+        model_kwargs=({"attn_implementation": attn_implementation, "dtype": torch.bfloat16}
+                      if attn_implementation else None),
     )
-    transformer = dense_st[0]
-    mve = MultiVectorEncoder(modules=_late_modules(transformer, proj_dim), device=device)
+    # One Transformer instance, two views of it: max_seq_length set on either reaches the same
+    # module, so there is nothing to keep in sync.
+    mve = MultiVectorEncoder(modules=_late_modules(dense_st[0], proj_dim), device=device)
     return mve, dense_st
 
 
@@ -120,32 +108,6 @@ def _late_modules(transformer, proj_dim: int) -> List[torch.nn.Module]:
     ]
 
 
-def _build_with_attention(model_name_or_path, proj_dim, max_seq_length, device, attn):
-    """Native-ESM path that pins the attention backend. See build_multivector_encoder."""
-    from sentence_transformers.base.modules import Transformer
-    from sentence_transformers.sentence_transformer.modules import Pooling
-
-    from protein_pipeline import finalize_native_esm
-
-    transformer = Transformer(
-        model_name_or_path,
-        model_kwargs={"attn_implementation": attn, "dtype": torch.bfloat16},
-    )
-    dim = transformer.get_embedding_dimension()
-    dense_st = SentenceTransformer(
-        modules=[transformer, Pooling(dim, pooling_mode="mean")], device=device
-    )
-    # This path does not go through load_model_for_training, so its post-load fixes have to
-    # be applied here too. Hand-picking them is what went wrong before: this path applied two
-    # of six and the mainline path applied five of six (a different five). finalize_native_esm
-    # is the named set both now share.
-    finalize_native_esm(transformer)
-    dense_st.max_seq_length = max_seq_length
-    mve = MultiVectorEncoder(modules=_late_modules(transformer, proj_dim), device=device)
-    mve.max_seq_length = max_seq_length
-    return mve, dense_st
-
-
 def resolve_attention(requested: Optional[str], model_name_or_path: str) -> Optional[str]:
     """Pick an attention backend: ``auto`` tries flash and falls back to sdpa.
 
@@ -158,12 +120,11 @@ def resolve_attention(requested: Optional[str], model_name_or_path: str) -> Opti
         return None
     if requested != "auto":
         return requested
-    # Family check first. _build_with_attention loads the checkpoint as a plain Transformer,
-    # which is right for native ESM but bypasses the FastPLM branch of load_model_for_training
-    # (FastPLMESM2Wrapper, native tokenizer, force_sdpa_backend) that every other consumer of a
-    # Synthyra/* checkpoint goes through. Handing those arms flash would not just change the
-    # attention kernel, it would build a different model than the rest of the project does --
-    # and when a Synthyra arm is the control for a native-ESM arm, that is the comparison.
+    # Family check first. Only load_model_for_training's native-checkpoint branch can honour a
+    # pinned backend; the FastPLM branch (FastPLMESM2Wrapper, native tokenizer,
+    # force_sdpa_backend) swaps the module's model out and would discard it. The loader raises
+    # rather than ignoring, so this gate is what keeps a Synthyra arm from erroring out --
+    # and it is why such an arm quietly trains on sdpa instead.
     from model_utils import detect_model_type
 
     family = detect_model_type(model_name_or_path)
@@ -321,27 +282,37 @@ def scope_rows(
     ranking = ranking_from_similarity(sim)
     rows, per_query = [], {}
     for level in SCOPE_LEVELS:
-        labels = scope_labels(families, level)
-        # Recall@k comes straight from per_query_metrics; recomputing it here built three more
-        # n x (n-1) label matrices per model only to overwrite pq with identical values.
-        pq = per_query_metrics(ranking, labels)
-        elig = pq["eligible"]
-        row = {"model": model, "scoring": scoring, "level": level,
-               "n_queries": int(len(labels)), "n_eligible_queries": int(elig.sum()),
-               "runtime_s": runtime_s}
-        for k in (1, 10, 30):
-            hit = pq[f"hit{k}"]
-            row[f"Recall@{k}"] = float(hit.mean())
-            row[f"eligible_Recall@{k}"] = float(hit[elig].mean()) if elig.any() else float("nan")
-        row["MAP"] = float(pq["ap"].mean())
-        row["eligible_MAP"] = float(pq["ap"][elig].mean()) if elig.any() else float("nan")
-        if n_boot and elig.any():
-            for name in ("hit1", "hit10", "ap"):
-                _, lo, hi = boot_ci(pq[name][elig], n_boot=n_boot, seed=seed)
-                row[f"eligible_{name}_ci95"] = f"[{lo:.4f}, {hi:.4f}]"
-        rows.append(row)
+        pq = per_query_metrics(ranking, scope_labels(families, level))
+        rows.append({"model": model, "scoring": scoring, "level": level, "runtime_s": runtime_s,
+                     **retrieval_row(pq, n_boot=n_boot, seed=seed)})
         per_query[level] = pq
     return rows, per_query
+
+
+def retrieval_row(pq: Dict[str, np.ndarray], *, n_boot: int = 0, seed: int = 0) -> dict:
+    """Per-query vectors -> the metric columns every retrieval table in this project uses.
+
+    The ``eligible_*`` spelling is load-bearing: those are means over queries with at least one
+    reachable positive, roughly 2 points above plain Recall over all queries. A table that
+    reports one under the other's name joins wrongly against the rest. Having said that twice,
+    in two places that computed it separately, is what this function replaces.
+
+    Recall@k is read straight off ``per_query_metrics``; recomputing it here built three more
+    n x (n-1) label matrices per model only to overwrite pq with identical values.
+    """
+    elig = pq["eligible"]
+    row = {"n_queries": int(len(elig)), "n_eligible_queries": int(elig.sum())}
+    for k in (1, 10, 30):
+        hit = pq[f"hit{k}"]
+        row[f"Recall@{k}"] = float(hit.mean())
+        row[f"eligible_Recall@{k}"] = float(hit[elig].mean()) if elig.any() else float("nan")
+    row["MAP"] = float(pq["ap"].mean())
+    row["eligible_MAP"] = float(pq["ap"][elig].mean()) if elig.any() else float("nan")
+    if n_boot and elig.any():
+        for name in ("hit1", "hit10", "ap"):
+            _, lo, hi = boot_ci(pq[name][elig], n_boot=n_boot, seed=seed)
+            row[f"eligible_{name}_ci95"] = f"[{lo:.4f}, {hi:.4f}]"
+    return row
 
 
 def paired_bootstrap(

@@ -40,14 +40,8 @@ logger = logging.getLogger("maxsim_cost")
 
 
 def metrics(ranking: np.ndarray, labels: np.ndarray) -> dict:
-    pq = per_query_metrics(ranking, labels)
-    elig = pq["eligible"]
-    # Spelled eligible_* to match scope_hierarchy.csv: these are means over queries that
-    # have at least one reachable positive, NOT plain Recall over all queries (which is
-    # ~2 points lower and would join wrongly against the other tables on a bare "R@1").
-    return {"eligible_Recall@1": float(pq["hit1"][elig].mean()),
-            "eligible_Recall@10": float(pq["hit10"][elig].mean()),
-            "eligible_MAP": float(pq["ap"][elig].mean()), "n_eligible": int(elig.sum())}
+    """Metric columns for one ranking, spelled exactly as scope_hierarchy.csv spells them."""
+    return li.retrieval_row(per_query_metrics(ranking, labels))
 
 
 def rerank_from(shortlist: np.ndarray, maxsim: np.ndarray, k: int) -> np.ndarray:
