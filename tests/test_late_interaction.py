@@ -190,3 +190,46 @@ def test_cosine_scores_are_not_divided_by_length():
     # dividing cosine by length flips which variant ranks first -- that is what broke Spearman
     assert list(np.argsort(-variant_scores(sim, lens, "cosine"))) == [1, 0]
     assert list(np.argsort(-(sim / lens))) == [0, 1]
+
+
+def test_head_size_mismatch_refuses_to_silently_reinitialise(tiny_models, tmp_path):
+    """Asking for a different proj_dim than the checkpoint saved must fail loudly.
+
+    This warned and carried on, which is how `protsent_late_150m_prop` came to spend 30,000 steps
+    training a fresh random 128-D head on a parent that had saved a 64-D one. The run looked like
+    a continuation, its logs said "continuing", and its step-0 checkpoint -- the baseline every
+    later checkpoint was compared against -- was a random projection. That made an ordinary
+    regression read as a scale-dependent sign flip.
+
+    A dimension mismatch is never a recoverable condition: the saved head cannot be loaded at the
+    requested width by any means, so continuing can only mean discarding it. Say so before the
+    GPUs are booked, not in a warning nobody reads eight hours later.
+    """
+    import torch
+
+    mve, _ = tiny_models
+    with torch.no_grad():
+        mve[1].linear.weight.fill_(0.0123)
+    saved = tmp_path / "late"
+    mve.save_pretrained(str(saved))
+
+    with pytest.raises(ValueError, match="16-D.*8-D|8-D.*16-D"):
+        li.build_multivector_encoder(str(saved), proj_dim=8, max_seq_length=64, device="cpu")
+
+
+def test_head_size_mismatch_is_allowed_when_asked_for_explicitly(tiny_models, tmp_path):
+    """Retargeting a checkpoint to a new head width is a real experiment, just never an accident."""
+    import torch
+
+    mve, _ = tiny_models
+    with torch.no_grad():
+        mve[1].linear.weight.fill_(0.0123)
+    saved = tmp_path / "late"
+    mve.save_pretrained(str(saved))
+
+    retargeted, _ = li.build_multivector_encoder(
+        str(saved), proj_dim=8, max_seq_length=64, device="cpu", allow_head_reinit=True
+    )
+    assert retargeted[1].linear.weight.shape[0] == 8
+    assert not torch.allclose(retargeted[1].linear.weight,
+                              torch.full_like(retargeted[1].linear.weight, 0.0123))

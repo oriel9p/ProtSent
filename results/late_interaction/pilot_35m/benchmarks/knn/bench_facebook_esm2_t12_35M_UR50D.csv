@@ -7,3 +7,10 @@ facebook/esm2_t12_35M_UR50D,Stability (Biomap),100000,2026-08-25,knn,standard,te
 facebook/esm2_t12_35M_UR50D,beta-lactamase-PEER,100000,2026-08-25,knn,standard,test,test_split_column,none,e6aa519,42,,,,,,0.00135,,,,0.73751,0.78923,0.03953,0.13591,0.61679
 facebook/esm2_t12_35M_UR50D,Secondary Structure 3 (NetSurfP-SS3),100000,2026-08-25,knn,standard,test,test_split,none,e6aa519,42,0.73289,0.72564,0.72291,0.58309,0.73172,0.10551,,,,,,,,
 facebook/esm2_t12_35M_UR50D,Residue Conservation (FLIP),100000,2026-08-25,knn,standard,test,test_split,none,e6aa519,42,0.20611,0.19322,0.20016,0.10639,0.19888,0.10459,,,,0.39113,,,,
+facebook/esm2_t12_35M_UR50D,Remote Homology (Fold),Full,2026-08-25,knn,standard,test,test_split,none,e6aa519,42,0.58354,0.31881,0.37097,0.57837,0.56209,0.0123,,,,,,,,
+facebook/esm2_t12_35M_UR50D,Solubility (DeepSol),Full,2026-08-25,knn,standard,test,test_split,none,e6aa519,42,0.50725,0.50138,0.50719,0.01473,,0.01356,0.44731,0.52858,0.51747,,,,,
+facebook/esm2_t12_35M_UR50D,Metal Ion Binding,Full,2026-08-25,knn,standard,test,test_split,none,e6aa519,42,0.7455,0.74542,0.7455,0.49128,,0.0019,0.74982,0.79796,0.75219,,,,,
+facebook/esm2_t12_35M_UR50D,Fluorescence (TAPE),Full,2026-08-25,knn,standard,test,test_split,none,e6aa519,42,,,,,,0.00728,,,,0.37412,0.40711,1.72936,1.03455,-0.82219
+facebook/esm2_t12_35M_UR50D,Stability (Biomap),Full,2026-08-25,knn,standard,test,test_split,none,e6aa519,42,,,,,,0.00959,,,,0.64603,0.58735,0.15174,0.30035,0.09161
+facebook/esm2_t12_35M_UR50D,beta-lactamase-PEER,Full,2026-08-25,knn,standard,test,test_split_column,none,e6aa519,42,,,,,,0.00121,,,,0.73751,0.78923,0.03953,0.13591,0.61679
+facebook/esm2_t12_35M_UR50D,Secondary Structure 3 (NetSurfP-SS3),Full,2026-08-25,knn,standard,test,test_split,none,e6aa519,42,0.76083,0.75582,0.75345,0.62679,0.76006,0.79983,,,,,,,,

@@ -67,6 +67,7 @@ def build_multivector_encoder(
     max_seq_length: int = 512,
     device: Optional[str] = None,
     attn_implementation: Optional[str] = None,
+    allow_head_reinit: bool = False,
 ) -> Tuple[MultiVectorEncoder, SentenceTransformer]:
     """Return ``(mve, dense_st)`` sharing one backbone Transformer module.
 
@@ -83,6 +84,10 @@ def build_multivector_encoder(
       was a serious bug: AdamW's params became bf16, and a 1e-5 update is ~1/24th of bf16's
       spacing near a typical weight, so 97.6% of backbone elements could not move (fp32: 93.4%).
       See test_configured_learning_rate_actually_moves_the_backbone.
+    ``allow_head_reinit`` opts in to training a fresh head on a checkpoint that saved a different
+    width. Without it that mismatch raises: it is the one condition under which "continuing" and
+    "starting over" look identical in the logs but differ completely in what is being measured.
+
     * It reaches ``models.Transformer`` through ``load_model_for_training``'s native-checkpoint
       branch, which is the only branch that can honour it. :func:`resolve_attention` gates on the
       same families, and the loader raises rather than silently ignoring the request.
@@ -97,11 +102,12 @@ def build_multivector_encoder(
     # One Transformer instance, two views of it: max_seq_length set on either reaches the same
     # module, so there is nothing to keep in sync.
     mve = MultiVectorEncoder(modules=_late_modules(dense_st[0], proj_dim), device=device)
-    _restore_saved_projection(mve, model_name_or_path)
+    _restore_saved_projection(mve, model_name_or_path, allow_head_reinit=allow_head_reinit)
     return mve, dense_st
 
 
-def _restore_saved_projection(mve: MultiVectorEncoder, path: str) -> bool:
+def _restore_saved_projection(mve: MultiVectorEncoder, path: str, *,
+                              allow_head_reinit: bool = False) -> bool:
     """Reuse a saved projection head when continuing from a late checkpoint.
 
     A saved model keeps its backbone at the root and its projection in ``1_Dense/``; the loader
@@ -119,8 +125,19 @@ def _restore_saved_projection(mve: MultiVectorEncoder, path: str) -> bool:
                        saved, exc)
         return False
     if loaded.linear.weight.shape != dense.linear.weight.shape:
-        logger.warning("saved projection is %s but this run asks for %s; keeping the fresh head",
-                       tuple(loaded.linear.weight.shape), tuple(dense.linear.weight.shape))
+        # Unlike a malformed dir, this is not recoverable: no amount of retrying loads a 64-D head
+        # at 128-D. Continuing can only mean discarding it, so make that the caller's decision and
+        # make it now, before the run books two GPUs for eight hours.
+        have, want = loaded.linear.weight.shape[0], dense.linear.weight.shape[0]
+        if not allow_head_reinit:
+            raise ValueError(
+                f"{path} saved a {have}-D projection head but this run asks for {want}-D, so the "
+                f"trained head cannot be carried over. Pass --proj_dim {have} to continue it, or "
+                f"--allow_head_reinit to deliberately train a fresh {want}-D head on this "
+                f"backbone. This silently warned and continued until 2026-08-25; see "
+                f"test_head_size_mismatch_refuses_to_silently_reinitialise.")
+        logger.warning("saved projection is %d-D but this run asks for %d-D; training a fresh head "
+                       "on this backbone (--allow_head_reinit)", have, want)
         return False
     # Dense.load takes no device/dtype: it lands on CPU in whatever it was saved as. Match here.
     target = dense.linear.weight

@@ -43,6 +43,18 @@ specs_for() {  # specs_for <arm>  -> the maxsim and dense views of that arm
   echo "$a=late:$M/$a/late" "${a}_dense=dense:$M/$a/dense_view"
 }
 
+# Intermediate checkpoints, so a run that peaks mid-training can be caught. The 150M peaked at
+# 15k on SCOPe and declined after; comparing only the final model would report the decline as the
+# result. Snapshots are MVE dirs, so they score as `late:` (no dense view is exported for them).
+snapshot_specs() {
+  for s in "$M"/*/snapshots/step-*; do
+    [[ -d "$s" ]] || continue
+    local arm step
+    arm=$(basename "$(dirname "$(dirname "$s")")"); step=$(basename "$s")
+    echo "${arm}@${step#step-}=late:$s"
+  done
+}
+
 stage_scope() {   # SCOPe-40 at fold/superfamily/family, MaxSim and pooled cosine
   local out="$1"; shift
   # Baselines at both sizes, each in its dense (pooled cosine) and zeroshot (MaxSim, no projection,
@@ -53,6 +65,7 @@ stage_scope() {   # SCOPe-40 at fold/superfamily/family, MaxSim and pooled cosin
               --models "protsent_v2_150m_dense=dense:GrimSqueaker/ProtSent-V2-150M"
               --models "protsent_v2_150m_zeroshot=zeroshot:GrimSqueaker/ProtSent-V2-150M")
   for a in $ARMS $PARENTS; do for s in $(specs_for "$a"); do args+=(--models "$s"); done; done
+  for s in $(snapshot_specs); do args+=(--models "$s"); done
   CUDA_VISIBLE_DEVICES=2 uv run --no-sync python late_interaction_eval.py scope \
     "${args[@]}" --n_boot 1000 --out_dir "$out"
 }
@@ -61,6 +74,7 @@ stage_cath() {    # CATH v4.3 midnight zone, with the paired McNemar over arms
   local out="$1"
   local args=()
   for a in $ARMS $PARENTS; do for s in $(specs_for "$a"); do args+=(--models "$s"); done; done
+  for s in $(snapshot_specs); do args+=(--models "$s"); done
   CUDA_VISIBLE_DEVICES=3 uv run --no-sync python late_interaction_eval.py cath \
     "${args[@]}" --mcnemar --out_dir "$out"
 }
