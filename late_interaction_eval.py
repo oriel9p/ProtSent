@@ -249,6 +249,28 @@ def cmd_fewshot_rh(args) -> None:
     append_csv(Path(args.out_dir) / "late_fewshot_knn.csv", rows)
 
 
+# ProteinGym's headline number is a "corrected average": the metric is averaged WITHIN each of five
+# function groups, then those five means are averaged, so the 66 stability and 77 organismal-fitness
+# assays do not outweigh the 13 binding ones. A plain mean over assays is a different estimator and
+# is not comparable to the leaderboard. Group labels come from ProteinGym's own reference file.
+PROTEINGYM_REF = Path("/opt/hpc/ddofer/ProtBench/data/proteingym_ref/DMS_substitutions.csv")
+
+
+def corrected_average(per_group: dict) -> float:
+    """Mean within each function group, then the mean of those group means."""
+    groups: dict = {}
+    if not PROTEINGYM_REF.exists():
+        return float("nan")
+    import csv as _csv
+    fn = {r["DMS_id"]: r["coarse_selection_type"]
+          for r in _csv.DictReader(PROTEINGYM_REF.open()) if r.get("coarse_selection_type")}
+    for assay, score in per_group.items():
+        g = fn.get(str(assay))
+        if g:
+            groups.setdefault(g, []).append(score)
+    return float(np.mean([np.mean(v) for v in groups.values()])) if groups else float("nan")
+
+
 def cmd_proteingym(args) -> None:
     """Zero-shot ProteinGym with MaxSim: score each variant by its similarity to the wild type.
 
@@ -342,16 +364,19 @@ def cmd_proteingym(args) -> None:
             logger.warning("%s: no scoreable assay", name)
             continue
         rhos = np.array([r["score"] for r in per_assay])
+        corrected = corrected_average({r["assay"]: r["score"] for r in per_assay})
         _, lo, hi = boot_ci(rhos, n_boot=args.n_boot, seed=args.seed)
         rows.append({"model": name, "scoring": scoring, "variant": args.variant,
                      "metric": cfg["metric"], "mean_score": float(rhos.mean()),
+                     "corrected_average": round(corrected, 4),
                      "ci95": f"[{lo:.4f}, {hi:.4f}]",
                      "n_assays": len(per_assay), "cap": args.max_variants_per_assay,
                      "n_variants_scored": int(sum(r["n"] for r in per_assay)),
                      "n_variants_dropped_truncated": int(sum(r["n_silent"] for r in per_assay)),
                      "runtime_s": round(time.time() - t0, 1)})
-        logger.info("%s %s: mean %s %.4f over %d groups in %.0fs", name, args.variant,
-                    cfg["metric"], rhos.mean(), len(per_assay), time.time() - t0)
+        logger.info("%s %s: mean %s %.4f (corrected avg %.4f) over %d groups in %.0fs",
+                    name, args.variant, cfg["metric"], rhos.mean(), corrected,
+                    len(per_assay), time.time() - t0)
         np.savez_compressed(out / f"proteingym_{args.variant}_{name.replace('/', '_')}.npz",
                             assay=np.array([r["assay"] for r in per_assay]), score=rhos)
     append_csv(out / "proteingym_maxsim.csv", rows)
@@ -527,9 +552,9 @@ def main() -> None:
     pg = sub.add_parser("proteingym", parents=[common])
     pg.add_argument("--variant", default="dms_substitutions", choices=sorted(PROTEINGYM_VARIANTS))
     pg.add_argument("--max_assays", type=int, default=0, help="0 = all")
-    pg.add_argument("--max_variants_per_assay", type=int, default=500,
-                    help="Seeded subsample per assay. 500 costs ~0.002 on the mean across 217 "
-                         "assays (per-assay wobble 0.027, no bias) for 3.4x less compute than 2000")
+    pg.add_argument("--max_variants_per_assay", type=int, default=0,
+                    help="Seeded subsample per assay; 0 = all variants (the comparable setting). "
+                         "A 500 cap scores only 4.3%% of ProteinGym and fully covers 15/217 assays")
     pg.add_argument("--n_boot", type=int, default=1000)
     pg.set_defaults(fn=cmd_proteingym)
 
