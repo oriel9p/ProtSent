@@ -239,6 +239,12 @@ def main() -> None:
 
     # resumed_from is the step this process starts at, so throughput is reported over the work
     # this process actually did rather than over every step the run has ever taken.
+    # Capture HEAD now, not when runtime.json is written at the end: the repo gets edited during a
+    # 10-hour run, so an end-of-run capture names a commit that never trained the model.
+    git_commit_at_start = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True,
+        cwd=Path(__file__).parent).stdout.strip()
+
     steps_on_disk = sorted(int(c.name.split("-")[1]) for c in out.glob("checkpoint-*"))
     resuming = bool(args.resume and steps_on_disk)
     resumed_from = steps_on_disk[-1] if resuming else 0
@@ -292,9 +298,7 @@ def main() -> None:
             "sentence_transformers": st_pkg.__version__,
             "torch": torch.__version__,
             "transformers": transformers.__version__,
-            "git_commit": subprocess.run(
-                ["git", "rev-parse", "HEAD"], capture_output=True, text=True,
-                cwd=Path(__file__).parent).stdout.strip(),
+            "git_commit": git_commit_at_start,
             "argv": sys.argv[1:],
         }
         (out / "runtime.json").write_text(json.dumps(runtime, indent=2))
