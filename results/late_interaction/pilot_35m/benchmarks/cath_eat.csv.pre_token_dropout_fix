@@ -15,4 +15,4 @@ accuracy,level,model,n_correct,n_lookup,n_queries,runtime_s,scoring,test_split,c
 0.5666666666666667,cath_h,protsent_late_proj128_dense,85,69605,150,89.7,cosine,test_h,"[0.4933, 0.6467]"
 0.7066666666666667,cath_h,protsent_late_150m,106,69605,150,309.48,maxsim,test_h,"[0.6333, 0.7733]"
 0.64,cath_h,protsent_late_150m_dense,96,69605,150,275.4,cosine,test_h,"[0.5667, 0.7133]"
-0.7,cath_h,protsent_late_150m_prop@25000,105,69605,150,480.33,maxsim,test_h,"[0.6265, 0.7668]"
+0.7,cath_h,protsent_late_150m_prop@25000,105,69605,150,319.48,maxsim,test_h,"[0.6265, 0.7668]"

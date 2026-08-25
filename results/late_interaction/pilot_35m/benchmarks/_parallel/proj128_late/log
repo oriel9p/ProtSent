@@ -11,3 +11,5 @@
 2026-08-25 12:32:34,309 - INFO - No device provided, using cuda:0
 2026-08-25 12:32:34,310 - INFO - Loading MultiVectorEncoder model from /opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_proj128/late.
 Loading weights:   0%|          | 0/200 [00:00<?, ?it/s]Loading weights: 100%|██████████| 200/200 [00:00<00:00, 4893.88it/s]
+2026-08-25 12:47:56,474 - INFO - proj128_late dms_indels: mean spearman 0.5214 (corrected avg nan) over 66 groups in 922s
+2026-08-25 12:47:56,475 - INFO - wrote 1 rows -> results/late_interaction/pilot_35m/benchmarks/_parallel/proj128_late/proteingym_maxsim.csv

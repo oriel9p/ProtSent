@@ -43,6 +43,23 @@ while [[ $(date +%s) -lt $deadline ]]; do
       if rsync -a --exclude 'optimizer.pt' --exclude 'scheduler.pt' --exclude 'rng_state*' \
                --exclude 'trainer_state.json' --exclude 'training_args.bin' \
                "$ckpt/" "$dest.partial/" 2>/dev/null; then
+        # Trainer checkpoints bypass save_late_and_dense, so they carry the POISONED
+        # token_dropout that disable_esm2_token_dropout writes at load time (false), while every
+        # exported late/ carries the runtime truth (true). EsmEmbeddings caches the flag in
+        # __init__, so a snapshot reloaded as-is silently loses ESM's 0.88 embedding scaling and
+        # is not comparable to any other arm. Measured: max|diff| 0.005, cosine 0.999941.
+        if [[ -f "$run/late/config.json" && -f "$dest.partial/config.json" ]]; then
+          python3 - "$run/late/config.json" "$dest.partial/config.json" <<'PYEOF'
+import json, sys
+src, dst = sys.argv[1], sys.argv[2]
+want = json.load(open(src)).get("token_dropout")
+cfg = json.load(open(dst))
+if want is not None and cfg.get("token_dropout") != want:
+    cfg["token_dropout"] = want
+    json.dump(cfg, open(dst, "w"), indent=2)
+    print(f"  synced token_dropout={want} into {dst}")
+PYEOF
+        fi
         mv "$dest.partial" "$dest"   # atomic: a half-copied snapshot never looks complete
         echo "$(date +%H:%M:%S) kept $(basename "$run")@$step ($(du -sh "$dest" | cut -f1))"
       else

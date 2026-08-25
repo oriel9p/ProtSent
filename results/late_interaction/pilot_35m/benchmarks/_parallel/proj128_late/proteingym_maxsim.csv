@@ -1,0 +1,2 @@
+aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
+per_group_mean,0,"[0.4843, 0.5587]",nan,unpinned,late,0.521394249104773,spearman,proj128_late,66,1000,0,287207,/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_proj128/late,-1,921.8,maxsim,dms_indels

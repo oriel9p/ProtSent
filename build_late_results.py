@@ -21,7 +21,29 @@ B, S = RES / "pilot_35m/benchmarks", RES / "pilot_35m/scope"
 # ProteinGym is quarantined as PARTIAL (500-variant cap, 512 truncation). See its README. A
 # full-coverage rerun writes to B, so prefer that the moment it exists rather than silently
 # re-publishing the partial numbers forever.
-PARTIAL = not (B / "proteingym_maxsim.csv").exists()
+def _proteingym_is_full(csv_path):
+    """Full coverage means the RECORDED provenance says so, not that a file exists.
+
+    Keying on Path.exists() meant the first partial run flipped the report to "Full coverage:
+    every variant of every assay, 1024-residue context" while the CSV held a 500-variant cap at
+    512 residues -- and simultaneously hid the other three variants, whose npz still lived in
+    proteingym_partial/.
+    """
+    import csv as _csv
+
+    if not csv_path.exists():
+        return False
+    rows = list(_csv.DictReader(csv_path.open()))
+    if not rows:
+        return False
+    want = {"dms_substitutions", "dms_indels", "clinical_substitutions", "clinical_indels"}
+    if not want <= {r.get("variant") for r in rows}:
+        return False
+    # cap 0 means "all variants"; max_seq_length must be the full-context value
+    return all(str(r.get("cap", "")) in ("0", "") for r in rows)
+
+
+PARTIAL = not _proteingym_is_full(B / "proteingym_maxsim.csv")
 PG = B / "proteingym_partial" if PARTIAL else B
 out: list[str] = []
 w = out.append
