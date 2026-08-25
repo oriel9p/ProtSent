@@ -54,6 +54,15 @@ same truncation and the same assay set, so a delta is a scoring or weights effec
 than a protocol artifact. The per-arm means above each delta table are for internal ranking
 only and must not be placed next to a published ProteinGym score.
 
+The second paired row is **not a step-count contrast**, despite once being labelled as one.
+`protsent_late_35m_prop` continues from `protsent_late_proj128`, but changes five things at
+once: sampler (round-robin → proportional), pool (2.0M/2.0M → 19.0M AFDB / 15.0M STRING),
+world size (1 → 2, so effective batch 128 → 256), attention (sdpa → vllm-flash-attn3) and
+`--compile`. Both `runtime.json` files record this. Decisively, the 15.5x extra pairs bought
+**1.04x** the Pfam exposure (170,667 → 177,441 pairs): round-robin gave Pfam a third of every
+batch, proportional gives it 2.24%. The extra training is ~all AFDB and STRING. Read the row
+as a cost of the phase-2 mixture, not evidence that training longer hurts.
+
 For the clinical variants the score is **negated** before the AUC: the label is pathogenicity,
 and a variant that looks more like the wild type should be less pathogenic.
 
@@ -69,7 +78,7 @@ and a variant that looks more like the wild type should be less pathogenic.
 | paired comparison | Δ | 95% CI |
 |---|---|---|
 | MaxSim − pooled cosine (identical weights) (n=210) | +0.0258 ** | [+0.0191, +0.0322] |
-| 31k steps − 4k steps (n=210) | -0.0051 ** | [-0.0089, -0.0013] |
+| phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=210) | -0.0051 ** | [-0.0089, -0.0013] |
 
 ### dms_indels — spearman, 63 groups
 
@@ -83,7 +92,7 @@ and a variant that looks more like the wild type should be less pathogenic.
 | paired comparison | Δ | 95% CI |
 |---|---|---|
 | MaxSim − pooled cosine (identical weights) (n=63) | +0.1973 ** | [+0.1678, +0.2267] |
-| 31k steps − 4k steps (n=63) | -0.0027 | [-0.0095, +0.0041] |
+| phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=63) | -0.0027 | [-0.0095, +0.0041] |
 
 ### clinical_substitutions — auc, 2226 groups
 
@@ -97,7 +106,7 @@ and a variant that looks more like the wild type should be less pathogenic.
 | paired comparison | Δ | 95% CI |
 |---|---|---|
 | MaxSim − pooled cosine (identical weights) (n=2226) | +0.0552 ** | [+0.0483, +0.0626] |
-| 31k steps − 4k steps (n=2226) | -0.0129 ** | [-0.0178, -0.0080] |
+| phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=2226) | -0.0129 ** | [-0.0178, -0.0080] |
 
 ### clinical_indels — auc, 53 groups
 
@@ -111,5 +120,5 @@ and a variant that looks more like the wild type should be less pathogenic.
 | paired comparison | Δ | 95% CI |
 |---|---|---|
 | MaxSim − pooled cosine (identical weights) (n=53) | +0.1419 ** | [+0.0497, +0.2369] |
-| 31k steps − 4k steps (n=53) | -0.0125 | [-0.0295, +0.0011] |
+| phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=53) | -0.0125 | [-0.0295, +0.0011] |
 

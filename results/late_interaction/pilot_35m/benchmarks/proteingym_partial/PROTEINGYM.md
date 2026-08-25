@@ -48,8 +48,13 @@ there can only be 0, 0.5 or 1. Smoke test, not a result.
    ProtSent-V2, and −0.015 on vanilla ESM-2. Its value is compression (3.75× smaller index).
 3. **Contrastive training helps cosine, hurts MaxSim.** ProtSent-V2 beats ESM-2 under cosine
    (0.282 vs 0.248) and loses under MaxSim (0.316 vs 0.341, −0.025).
-4. **More pretraining splits the views.** The 31k continuation improved pooled (+0.018) and
+4. **The phase-2 mixture splits the views.** The phase-2 arm improved pooled (+0.018) and
    degraded MaxSim (−0.005; clinical −0.013), matching SCOPe (−0.015 superfamily).
+   **Corrected 2026-08-25:** this was written as "more pretraining", which the runtime.json
+   files refute. `protsent_late_35m_prop` continues from `protsent_late_proj128` but changes
+   sampler, pool size, world size, attention backend and `--compile` together with the step
+   count, and its 15.5× extra pairs carry only 1.04× the Pfam exposure (170,667 → 177,441).
+   The mixture, not the step count, is the live explanation; nothing here isolates steps.
 5. **Size does not substitute.** ESM-2 150M cosine 0.244 ≈ 35M's 0.248; 35M MaxSim is 0.341.
 
 Runs were unpinned (`--dataset_revision` now exists); per-arm CIs use 1,000 resamples, paired

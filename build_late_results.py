@@ -77,7 +77,8 @@ def proteingym_tables() -> None:
         pairs = [(a, b, lab) for a, b, lab in [
             ("protsent_late_35m_prop_late", "protsent_late_35m_prop_dense",
              "MaxSim − pooled cosine (identical weights)"),
-            ("protsent_late_35m_prop_late", "proj128_late", "31k steps − 4k steps"),
+            ("protsent_late_35m_prop_late", "proj128_late",
+             "phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count)"),
         ] if a in m and b in m]
         if pairs:
             w("| paired comparison | Δ | 95% CI |")
@@ -148,6 +149,15 @@ else:
     w("Full coverage: every variant of every assay, 1024-residue context, aggregated the way the")
     w("leaderboard does (mean within each `coarse_selection_type` group, then the mean of those).")
     w("")
+w("The second paired row is **not a step-count contrast**, despite once being labelled as one.")
+w("`protsent_late_35m_prop` continues from `protsent_late_proj128`, but changes five things at")
+w("once: sampler (round-robin → proportional), pool (2.0M/2.0M → 19.0M AFDB / 15.0M STRING),")
+w("world size (1 → 2, so effective batch 128 → 256), attention (sdpa → vllm-flash-attn3) and")
+w("`--compile`. Both `runtime.json` files record this. Decisively, the 15.5x extra pairs bought")
+w("**1.04x** the Pfam exposure (170,667 → 177,441 pairs): round-robin gave Pfam a third of every")
+w("batch, proportional gives it 2.24%. The extra training is ~all AFDB and STRING. Read the row")
+w("as a cost of the phase-2 mixture, not evidence that training longer hurts.")
+w("")
 w("For the clinical variants the score is **negated** before the AUC: the label is pathogenicity,")
 w("and a variant that looks more like the wild type should be less pathogenic.")
 w("")

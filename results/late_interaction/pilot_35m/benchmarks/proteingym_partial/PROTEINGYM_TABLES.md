@@ -29,7 +29,7 @@ Paired deltas (identical group sets, bootstrap over groups; \* = 95% CI excludes
 | Trained 128-D head vs untrained 480-D MaxSim (ProtSent-V2 35M) | +0.0144 [+0.0088, +0.0202] \* |
 | ProtSent-V2 vs vanilla ESM-2, both untrained MaxSim | -0.0249 [-0.0384, -0.0116] \* |
 | ESM-2 late-trained vs untrained MaxSim | -0.0153 [-0.0277, -0.0032] \* |
-| 31k continuation vs 4k arm (both trained MaxSim) | -0.0051 [-0.0089, -0.0013] \* |
+| phase-2 proportional recipe vs phase-1 round-robin arm (5 confounds, NOT step count) | -0.0051 [-0.0089, -0.0013] \* |
 
 ### ProteinGym dms indels — mean Spearman across 63 assays
 
@@ -45,7 +45,7 @@ Paired deltas (identical group sets, bootstrap over groups; \* = 95% CI excludes
 | Comparison | Δ Spearman |
 |---|---|
 | MaxSim vs cosine, late-31k 35M (same weights) | +0.1973 [+0.1678, +0.2267] \* |
-| 31k continuation vs 4k arm (both trained MaxSim) | -0.0027 [-0.0095, +0.0041] |
+| phase-2 proportional recipe vs phase-1 round-robin arm (5 confounds, NOT step count) | -0.0027 [-0.0095, +0.0041] |
 
 ### ProteinGym clinical substitutions — mean AUC across 2226 protein groups
 
@@ -64,7 +64,7 @@ Paired deltas (identical group sets, bootstrap over groups; \* = 95% CI excludes
 | Comparison | Δ AUC |
 |---|---|
 | MaxSim vs cosine, late-31k 35M (same weights) | +0.0552 [+0.0483, +0.0626] \* |
-| 31k continuation vs 4k arm (both trained MaxSim) | -0.0129 [-0.0178, -0.0080] \* |
+| phase-2 proportional recipe vs phase-1 round-robin arm (5 confounds, NOT step count) | -0.0129 [-0.0178, -0.0080] \* |
 
 ### ProteinGym clinical indels — mean AUC across 53 protein groups
 
@@ -80,5 +80,5 @@ Paired deltas (identical group sets, bootstrap over groups; \* = 95% CI excludes
 | Comparison | Δ AUC |
 |---|---|
 | MaxSim vs cosine, late-31k 35M (same weights) | +0.1419 [+0.0497, +0.2369] \* |
-| 31k continuation vs 4k arm (both trained MaxSim) | -0.0125 [-0.0295, +0.0011] |
+| phase-2 proportional recipe vs phase-1 round-robin arm (5 confounds, NOT step count) | -0.0125 [-0.0295, +0.0011] |
 

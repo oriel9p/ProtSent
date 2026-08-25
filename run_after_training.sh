@@ -13,6 +13,12 @@ RES="$(pwd)/results/late_interaction"
 # Both sizes score into pilot_35m/: the 35M-vs-150M comparison only means anything if every arm
 # hit the same references in the same run, so they share one output dir despite the legacy name.
 ARMS="${ARMS:-protsent_late_35m_prop protsent_late_150m_prop}"
+# The phase-1 parents each continuation actually forked from. Scored in the SAME run so the
+# phase-1-vs-phase-2 delta is measured against identical references instead of being differenced
+# across two sweeps. protsent_late_150m_prop needs this especially: it asked for a 128-D head on a
+# parent that saved a 64-D one, so late_interaction kept a FRESH head ("keeping the fresh head",
+# logs/queue_b.log:1525) -- its own @0 is a random projection and is not a usable baseline.
+PARENTS="${PARENTS:-protsent_late_proj128 protsent_late_150m}"
 # proteingym is deliberately NOT in the default stages. The existing run is quarantined as PARTIAL
 # (results/late_interaction/pilot_35m/benchmarks/proteingym_partial/) and the full-coverage rerun
 # (~1.0 h/arm) is deferred while the scoring path is optimised in a separate session. Opt in only
@@ -46,7 +52,7 @@ stage_scope() {   # SCOPe-40 at fold/superfamily/family, MaxSim and pooled cosin
               --models "protsent_v2_zeroshot=zeroshot:GrimSqueaker/ProtSent-V2-35M"
               --models "protsent_v2_150m_dense=dense:GrimSqueaker/ProtSent-V2-150M"
               --models "protsent_v2_150m_zeroshot=zeroshot:GrimSqueaker/ProtSent-V2-150M")
-  for a in $ARMS; do for s in $(specs_for "$a"); do args+=(--models "$s"); done; done
+  for a in $ARMS $PARENTS; do for s in $(specs_for "$a"); do args+=(--models "$s"); done; done
   CUDA_VISIBLE_DEVICES=2 uv run --no-sync python late_interaction_eval.py scope \
     "${args[@]}" --n_boot 1000 --out_dir "$out"
 }
@@ -54,19 +60,18 @@ stage_scope() {   # SCOPe-40 at fold/superfamily/family, MaxSim and pooled cosin
 stage_cath() {    # CATH v4.3 midnight zone, with the paired McNemar over arms
   local out="$1"
   local args=()
-  for a in $ARMS; do for s in $(specs_for "$a"); do args+=(--models "$s"); done; done
+  for a in $ARMS $PARENTS; do for s in $(specs_for "$a"); do args+=(--models "$s"); done; done
   CUDA_VISIBLE_DEVICES=3 uv run --no-sync python late_interaction_eval.py cath \
     "${args[@]}" --mcnemar --out_dir "$out"
 }
 
 stage_proteingym() {  # MaxSim(mutant, WT) for the late view, pooled cosine for the dense view
-  # Substitutions only; indels are where raw MaxSim would be a length artifact. The cap is left at
-  # the 500 default deliberately: measured at 28.2M residues, that is ~23 min for the 35M pair and
-  # ~59 min for the 150M pair on a contended card, roughly half that on free ones. Passing 2000
-  # here (as this did) would have made it ~4.7 h to buy ~0.002 on the mean.
+  # Substitutions only; indels are where raw MaxSim would be a length artifact. The 500-variant
+  # default cap is what made the previous run PARTIAL (~4.3% coverage) -- pass
+  # --max_variants_per_assay 0 for leaderboard-comparable coverage, ~1.0 h/arm on a free card.
   local out="$1"
   local args=()
-  for a in $ARMS; do for s in $(specs_for "$a"); do args+=(--models "$s"); done; done
+  for a in $ARMS $PARENTS; do for s in $(specs_for "$a"); do args+=(--models "$s"); done; done
   CUDA_VISIBLE_DEVICES=2 uv run --no-sync python late_interaction_eval.py proteingym \
     "${args[@]}" --variant dms_substitutions --out_dir "$out"
 }

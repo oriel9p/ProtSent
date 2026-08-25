@@ -136,7 +136,8 @@ for v in VARIANTS:
         ("proj128_late", "v2_35m_maxsim_untrained",       "Trained 128-D head vs untrained 480-D MaxSim (ProtSent-V2 35M)"),
         ("v2_35m_maxsim_untrained", "esm2_35m_maxsim_untrained", "ProtSent-V2 vs vanilla ESM-2, both untrained MaxSim"),
         ("esm2_late_35m_maxsim", "esm2_35m_maxsim_untrained", "ESM-2 late-trained vs untrained MaxSim"),
-        ("protsent_late_35m_prop_late", "proj128_late",   "31k continuation vs 4k arm (both trained MaxSim)"),
+        ("protsent_late_35m_prop_late", "proj128_late",
+         "phase-2 proportional recipe vs phase-1 round-robin arm (5 confounds, NOT step count)"),
         ("v2_150m_maxsim_untrained", "esm2_150m_maxsim_untrained", "ProtSent-V2 vs vanilla ESM-2, untrained MaxSim, 150M"),
         ("protsent_late_150m_prop_late", "v2_150m_maxsim_untrained", "150M late-30k vs untrained MaxSim"),
     ]
