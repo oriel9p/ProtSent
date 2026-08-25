@@ -24,9 +24,11 @@ wait_for_pid() {
 # backend at load time and logs it); gather_across_devices is deliberately NOT passed, so
 # in-batch negatives stay per-rank at 255.
 run_stage() {
-  local RUN="$1" MODEL="$2" TARGET="$3" MARKS="$4" RESDIR="$5" PORT="$6" CHUNK="${7:---mini_batch_size 64}"
-  if [[ -f "$M/$RUN/runtime.json" ]]; then echo "[skip] $RUN already finished"; return 0; fi
-  echo "=== $(date +%H:%M) $RUN: $MODEL -> $TARGET steps (chunking: $CHUNK)"
+  local RUN="$1" MODEL="$2" TARGET="$3" MARKS="$4" RESDIR="$5" PORT="$6" \
+        CHUNK="${7:---mini_batch_size 64}" MAXSTEPS="${8:-$3}"
+  local done="logs/stage_${RUN}.done"
+  if [[ -f "$done" ]]; then echo "[skip] $RUN already finished"; return 0; fi
+  echo "=== $(date +%H:%M) $RUN: $MODEL -> stop at $TARGET of $MAXSTEPS budgeted (chunking: $CHUNK)"
 
   setsid nohup uv run --no-sync accelerate launch --num_processes 4 --mixed_precision bf16 \
     --main_process_port "$PORT" train_late_interaction.py \
@@ -36,7 +38,7 @@ run_stage() {
     --lr 5e-5 --proj_lr 0 --lr_scheduler constant_with_warmup --warmup_steps 500 \
     --multi_dataset_sampler proportional --max_pairs_per_file 0 --string_max_pairs 15000000 \
     --seed 42 --compile --save_steps 1000 --save_total_limit 2 \
-    --max_steps "$TARGET" --max_minutes 0 --dataloader_num_workers 4 \
+    --max_steps "$MAXSTEPS" --max_minutes 0 --dataloader_num_workers 4 \
     >> "logs/queue_${RUN}.log" 2>&1 &
 
   local pid="" i
@@ -67,6 +69,7 @@ run_stage() {
 
   RUN="$RUN" TARGET="$TARGET" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
     ./stop_at_and_bench.sh || echo "$(date +%H:%M) $RUN: sweep reported failures (see its logs)"
+  touch "$done"
   echo "=== $(date +%H:%M) $RUN complete"
 }
 
@@ -100,16 +103,74 @@ run_stage late-r2-protsentv2-150m GrimSqueaker/ProtSent-V2-150M 10000 "1000 4000
 # 4,000 mark, and costs ~3 h instead of ~8. If it wins, resume it -- nothing is thrown away.
 run_stage late-r2-esm2-150m       facebook/esm2_t30_150M_UR50D   4000 "1000 4000"       "$R/clean_150m" 29529 "$CHUNK150"
 
+
+# resume_stage <run> <from_step> <to_step> <marks> <resdir> <port> <chunk>
+# A true continuation: the arm was killed at its gate rather than finishing, so checkpoint-N still
+# has optimizer.pt and AdamW's moments carry over. That matters -- a fresh optimizer on a converged
+# model is the restart shock this campaign already suspects of costing phase 2 ~0.015 sfam.
+resume_stage() {
+  local RUN="$1" FROM="$2" TO="$3" MARKS="$4" RESDIR="$5" PORT="$6" CHUNK="$7"
+  local done="logs/stage_${RUN}_resume.done"
+  [[ -f "$done" ]] && { echo "[skip] $RUN resume already done"; return 0; }
+  [[ -d "$M/$RUN/checkpoint-$FROM" ]] || { echo "$RUN: no checkpoint-$FROM to resume from"; return 1; }
+  echo "=== $(date +%H:%M) $RUN: resuming $FROM -> $TO"
+
+  setsid nohup uv run --no-sync accelerate launch --num_processes 4 --mixed_precision bf16 \
+    --main_process_port "$PORT" train_late_interaction.py \
+    --model "$M/$RUN" --files $FILES \
+    --output_dir "$M/$RUN" --run_name "$RUN" --resume \
+    --proj_dim 128 --batch_size 256 $CHUNK --score_mini_batch_size 32 \
+    --lr 5e-5 --proj_lr 0 --lr_scheduler constant_with_warmup --warmup_steps 500 \
+    --multi_dataset_sampler proportional --max_pairs_per_file 0 --string_max_pairs 15000000 \
+    --seed 42 --compile --save_steps 1000 --save_total_limit 2 \
+    --max_steps "$TO" --max_minutes 0 --dataloader_num_workers 4 \
+    >> "logs/queue_${RUN}.log" 2>&1 &
+
+  local pid="" i
+  for i in $(seq 90); do
+    sleep 20
+    pid=$(pgrep -f "bin/python -u train_late_interaction.py.*$RUN" | head -1)
+    [[ -n "$pid" ]] && break
+  done
+  [[ -n "$pid" ]] || { echo "$RUN: resume never started"; return 1; }
+
+  setsid nohup ./snapshot_checkpoints.sh "$M/$RUN" > "logs/snap_${RUN}_resume.log" 2>&1 &
+  setsid nohup uv run --no-sync python late_interaction_eval.py watch_curve \
+      --run_dir "$M/$RUN" --name "$RUN" --out_dir "$RESDIR/scope" --batch_size 32 \
+      --device cuda:1 --follow_pid "$pid" --max_hours 40 > "logs/watch_${RUN}_resume.log" 2>&1 &
+
+  wait_for_pid "$pid"
+  sleep 30
+  if [[ -d "$M/$RUN/dense_view" && ! -e "$M/$RUN/snapshots/step-$TO-dense" ]]; then
+    ln -s ../dense_view "$M/$RUN/snapshots/step-$TO-dense"
+  fi
+  RUN="$RUN" TARGET="$TO" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
+    ./stop_at_and_bench.sh || echo "$(date +%H:%M) $RUN resume: sweep reported failures"
+  touch "$done"
+  echo "=== $(date +%H:%M) $RUN resume complete"
+}
+
+# Decide on the shared 4,000-step mark -- the only step both 150M arms reached under an identical
+# recipe -- then carry the winner to 15,000.
+WINNER="$(uv run --no-sync python gate_pick_winner.py "$R/clean_150m/scope/scope_checkpoint_curve.csv")"
+echo "$(date +%H:%M) GATE: 4,000-step winner is $WINNER"
+
+if [[ "$WINNER" == "late-r2-esm2-150m" ]]; then
+  resume_stage late-r2-esm2-150m 4000 15000 "10000 15000" "$R/clean_150m" 29530 "$CHUNK150"
+else
+  resume_stage late-r2-protsentv2-150m 10000 15000 "15000" "$R/clean_150m" 29531 "$CHUNK150"
+fi
+
 cat <<'GATE'
 
-=== DECISION GATE ===============================================================
+=== GATE RESOLVED ===============================================================
 late-r2-esm2-150m stopped at its 4,000-step gate. Compare it against
 late-r2-protsentv2-150m @4000 -- same recipe, same data, same step count -- on
 the cheap knn sweep (results/late_interaction/clean_150m/benchmarks/) and the
 SCOPe curve (clean_150m/scope/scope_checkpoint_curve.csv).
 
-  vanilla WINS  -> resume it:  --resume --max_steps 10000  (checkpoints are intact)
-  vanilla LOSES -> the parsimonious assumption holds; carry on with the V2 base.
+Resolved automatically on SCOPe superfamily eligible_MAP at the shared 4,000-step
+mark; the winner has been resumed to 15,000 with its optimizer state intact.
 =================================================================================
 GATE
 
