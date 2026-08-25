@@ -11,7 +11,10 @@ export HF_HOME="${HF_HOME:-/storage/models/hf_home}" TOKENIZERS_PARALLELISM=fals
 M="$(pwd)/models/late_interaction"
 RES="$(pwd)/results/late_interaction"
 ARMS="${ARMS:-protsent_late_35m_prop protsent_late_150m_prop}"
-STAGES="${STAGES:-scope cath bench_cheap proteingym bench_full}"
+# proteingym is deliberately NOT in the default stages: it is owned by a separate session, and two
+# sessions writing proteingym_maxsim.csv would corrupt each other. Opt in explicitly if you own it:
+#   STAGES="proteingym" ./run_after_training.sh
+STAGES="${STAGES:-scope cath bench_cheap bench_full}"
 MAX_WAIT_H="${MAX_WAIT_H:-24}"
 
 wait_for_runs() {
