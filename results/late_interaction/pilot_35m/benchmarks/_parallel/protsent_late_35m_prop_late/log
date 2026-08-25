@@ -1,0 +1,14 @@
+2026-08-25 12:31:31,561 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-25 12:31:31,571 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
+2026-08-25 12:31:31,746 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
+2026-08-25 12:31:35,199 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
+2026-08-25 12:31:35,371 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-08-25 12:31:35,549 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_indels%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
+2026-08-25 12:31:35,759 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_indels?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-25 12:31:35,937 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-25 12:31:36,142 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 26000 examples [00:00, 248242.42 examples/s]Generating train split: 83000 examples [00:00, 431085.65 examples/s]Generating train split: 148000 examples [00:00, 524068.19 examples/s]Generating train split: 213000 examples [00:00, 570046.97 examples/s]Generating train split: 272000 examples [00:00, 568563.63 examples/s]Generating train split: 287207 examples [00:00, 308425.96 examples/s]
+2026-08-25 12:32:34,903 - INFO - dms_indels: 66 assays, 287207 sequences to encode per model (0 variants dropped as invisible past the 1022-residue truncation)
+2026-08-25 12:32:34,907 - INFO - No device provided, using cuda:0
+2026-08-25 12:32:34,908 - INFO - Loading MultiVectorEncoder model from /opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/late.
+Loading weights:   0%|          | 0/200 [00:00<?, ?it/s]Loading weights: 100%|██████████| 200/200 [00:00<00:00, 4816.14it/s]

@@ -43,3 +43,33 @@ context. Deferred: the scoring path is being optimised in a separate session. Wh
     STAGES=proteingym ./run_after_training.sh    # writes to ../ , not here
 
 Delete this directory once the full-coverage numbers exist.
+
+## One arm here must not be re-run at all
+
+Everything else in this directory is quarantined for *coverage* and can be recovered by rescoring.
+`proteingym_dms_substitutions_v2p5_35m_cosine.npz` cannot: ProtSent-V2.5 is trained on ProteinGym.
+
+`/storage/users/ddofer/data/dms_cosent.parquet` is built from this benchmark — `data_prep.py:2452`
+writes `sentence_0 = mutated_sequence` and `sentence_1 = target_seq`, the same column the evaluation
+uses as the wild type — and it sits outside the decontaminated `protsent-data-dc40/` bundle. Only
+`GB1_*` and `GFP_AEQVI_*` are excluded, and its 20% held-out fold is not the subset we score, so
+about 80% of each remaining assay's variants were trained on as `(variant, wild type)` pairs with
+the fitness score as the target. That is structurally the object this benchmark asks a model to rank.
+
+| model family | trained on dms_cosent | usable on ProteinGym |
+|---|---|---|
+| ESM-2, any size | no | yes |
+| ProtSent-V2 | no — `train_v2.sh`: "No DMS in joint interleave" | yes |
+| late-interaction arms | no — `train_late_interaction.py` has no DMS path | yes |
+| **ProtSent-V2.5** | **yes**, unconditionally (`train_esm2_35m_v2p5.sh:43,146`), ~6.5% of the epoch | **no** |
+| ESM-C-300M-V2 | yes, unless `DMS_FILE=""` | no |
+
+Every other arm scored here is clean, and that follows from the V2 base rather than from anything we
+arranged. V2.5 stays usable on SCOPe, CATH and the pooled suite — ProteinGym is the one benchmark
+its training data overlaps.
+
+Unresolved, and worth tracing before the cleanliness claim is relied on in a paper:
+`run_benchmarks_cath.sh:74` maps `GrimSqueaker/ProtSent-V2-35M` to a local
+`protsent_esm2_35m_v3/final`. A `v3` directory behind a `V2` label is not self-explaining.
+
+(Established by reading `data_prep.py` and the training scripts. The parquet itself was not opened.)
