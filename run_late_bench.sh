@@ -36,17 +36,13 @@ EMBED_CACHE="${EMBED_CACHE:-/storage/users/ddofer/protbench_cache}"
 export HF_HOME="${HF_HOME:-/storage/models/hf_home}"
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 
-# Task presets:
-#   cheap  -> ProtBench --very-fast minus conservation_flip (its curated low-variance scout set)
-#   paper  -> the 22 suite tasks the ProtSent paper reports (SCOPe, its 23rd, is scored by
-#             late_interaction_eval.py scope instead, on the multi-vector model itself)
-#   full   -> paper + ppi_bernett (pair-level, the closest task to what late interaction trains)
-#   fast   -> ProtBench's own --fast; kept as an escape hatch, not used by the campaign
-# conservation_flip and disprot are dropped everywhere: residue-level, ~30 min/arm each, and
-# absent from the paper's 23. ss3 is the one residue-level probe kept -- late interaction trains
-# per-residue representations and token_classification is the only family that reads them
-# directly instead of collapsing them into a pooled vector.
-CHEAP_TASKS="remote_homology solubility metal_ion_binding fluorescence stability beta_lactamase_peer ss3"
+# Per-protein tasks only, run UNCAPPED. Two deliberate exclusions:
+#   conservation_flip, ss3 -- residue-level, absent from the ProtSent paper's 23 reported tasks,
+#   and the expensive ones: uncapped ss3 is 10,792 sequences of CPU logistic regression, ~1h20m
+#   per model-probe. They probe the backbone's residues, not the 128-D MaxSim space.
+# No --max_samples: a cap invented here matches no existing row and makes arms incomparable.
+# ProtBench's presets differ (--very-fast caps at 100k, --fast runs full), so pin the set here.
+CHEAP_TASKS="remote_homology solubility metal_ion_binding fluorescence stability beta_lactamase_peer"
 PAPER_TASKS="aav_flip antibiotic_resistance binary_subcellular_localization cloning_clf \
 ec_classification enzyme_catalytic_efficiency fluorescence go_mf material_production \
 metal_ion_binding optimal_ph peptide_hla profet_np_sp_cleaved remote_homology signalp_binary \
@@ -54,6 +50,9 @@ solubility stability subcellular_loc temperature_stability thermostability varia
 beta_lactamase_peer"
 
 case "${TASKS:-cheap}" in
+  # --max_samples matters here: the token-classification cap (2,000 seqs) is only applied when
+  # max_samples is set, which the --very-fast/--fast PRESETS do and an explicit -t list does not.
+  # Without it ss3 runs on 10,792 sequences of CPU logistic regression instead of 2,000.
   cheap)      TASK_ARGS=(-t $CHEAP_TASKS) ;;
   paper)      TASK_ARGS=(-t $PAPER_TASKS) ;;
   full)       TASK_ARGS=(-t $PAPER_TASKS ppi_bernett) ;;

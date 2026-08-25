@@ -217,3 +217,23 @@ def test_scores_are_length_invariant_at_every_length(tiny_models):
     assert len(long) > 2 * len(short)
     for seq in (short, long):
         assert li.maxsim_against_one(mve, seq, [seq])[0] == pytest.approx(1.0, abs=1e-3)
+
+
+def test_bench_presets_share_one_sampling_regime():
+    """cheap and full must sample the same way, or their numbers cannot be compared.
+
+    ProtBench's own presets disagree (--very-fast caps at 100k, --fast runs full data), and the
+    cap silently changed when ProtBench was upgraded -- pilot rows say Samples=20000, new rows say
+    Full. Pinning explicit task lists with no --max_samples keeps every arm on one regime.
+    """
+    import re
+
+    script = (Path(__file__).resolve().parent.parent / "run_late_bench.sh").read_text()
+    presets = dict(re.findall(r"^\s*(cheap|full|proteingym)\)\s*TASK_ARGS=\((.*?)\)\s*;;",
+                              script, re.M | re.S))
+    assert {"cheap", "full"} <= set(presets), f"missing presets: {sorted(presets)}"
+    for name in ("cheap", "full"):
+        assert "--max_samples" not in presets[name], (
+            f"{name} sets an invented cap: {presets[name]}")
+        assert "--very-fast" not in presets[name] and "--fast" not in presets[name], (
+            f"{name} inherits a ProtBench preset whose cap changed across versions: {presets[name]}")

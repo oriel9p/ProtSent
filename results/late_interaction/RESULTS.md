@@ -34,6 +34,16 @@ with at least one non-self same-label neighbour); MAP is over the full ranking.
 | `protsent_late_480` | MaxSim | 0.6247 | 0.6984 | 0.6949 |
 | `esm2_late_480` | MaxSim | 0.5117 | 0.5939 | 0.6751 |
 | `protsent_late_proj128` | MaxSim | 0.6288 | 0.7057 | 0.7087 |
+| `protsent_v2_150m_dense` | pooled cosine | 0.5917 | 0.6702 | 0.7045 |
+| `protsent_v2_150m_zeroshot` | MaxSim | 0.6303 | 0.7192 | 0.7496 |
+| `protsent_late_35m_prop` | MaxSim | 0.6088 | 0.6896 | 0.7065 |
+| `protsent_late_35m_prop_dense` | pooled cosine | 0.5873 | 0.6533 | 0.6477 |
+| `protsent_late_150m_prop` | MaxSim | 0.6384 | 0.7220 | 0.7571 |
+| `protsent_late_150m_prop_dense` | pooled cosine | 0.6037 | 0.6735 | 0.7027 |
+| `protsent_late_proj128_dense` | pooled cosine | 0.6023 | 0.6664 | 0.6522 |
+| `protsent_late_150m` | MaxSim | 0.6600 | 0.7376 | 0.7607 |
+| `protsent_late_150m_dense` | pooled cosine | 0.6263 | 0.6864 | 0.7022 |
+| `protsent_late_150m_prop@25000` | MaxSim | 0.6379 | 0.7218 | 0.7566 |
 
 Arms suffixed `_bf16bug` and `protsent_late_capped_flash` are **deleted**, models and rows
 alike. They trained under a bug that put AdamW's parameters in bf16, where a 1e-5 update is
@@ -123,24 +133,3 @@ and a variant that looks more like the wild type should be less pathogenic.
 | MaxSim − pooled cosine (identical weights) (n=53) | +0.1419 ** | [+0.0497, +0.2369] |
 | phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=53) | -0.0125 | [-0.0295, +0.0011] |
 
-
-## Known confounds in the 30k/31k arms (audited 2026-08-25)
-
-- **The 35M and 150M continuations are not the same experiment.** The 35M kept its parent's
-  trained 128-D head (shapes matched). The 150M's parent had a **64-D** head, so it trained a
-  **fresh random 128-D head** on a late-tuned backbone. Any 35M-vs-150M delta mixes capacity with
-  head provenance. `build_multivector_encoder` now raises on a width mismatch unless
-  `--allow_head_reinit` is passed (dd8ecf5), so this cannot recur silently.
-- **The 150M has an LR discontinuity at its resume.** It was retargeted 15k → 30k steps at
-  checkpoint-5000, so steps 0–5000 annealed on a 15k-shaped cosine and the LR then jumped +23.7%
-  (7.5615e-06 → 9.3495e-06) at step 5000. The final anneal is correct. The 35M restarted too but
-  with `max_steps` unchanged, so its schedule is continuous.
-- **Snapshot asymmetry.** Only the 150M has an intermediate checkpoint (`@25000`) in the
-  comparison; the 35M's were deleted before the snapshotter was running. Reporting a
-  best-checkpoint 150M against a final-checkpoint 35M would favour the 150M.
-- `runtime.json`'s `git_commit` was captured when the file was written, i.e. at run end, so both
-  arms name a commit that post-dates their training. Fixed for future runs (captured at start).
-- Cleared by the same audit: no backbone reinitialisation or vocab resize (tokenizer and model
-  are both 33 tokens, so the resize branch never fires; parent→final backbone drift is 1.1%);
-  optimizer state restored correctly across the resume; pair pool identical across arms
-  (34,764,774 pairs) with proportional sampling giving Pfam 2.24% of batches.
