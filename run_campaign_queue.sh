@@ -27,7 +27,7 @@ run_stage() {
   local RUN="$1" MODEL="$2" TARGET="$3" MARKS="$4" RESDIR="$5" PORT="$6" \
         CHUNK="${7:---mini_batch_size 64}" MAXSTEPS="${8:-$3}"
   local done="logs/stage_${RUN}.done"
-  if [[ -f "$done" ]]; then echo "[skip] $RUN already finished"; return 0; fi
+  if [[ -f "$done" || -f "$M/$RUN/runtime.json" ]]; then echo "[skip] $RUN already finished"; return 0; fi
   echo "=== $(date +%H:%M) $RUN: $MODEL -> stop at $TARGET of $MAXSTEPS budgeted (chunking: $CHUNK)"
 
   setsid nohup uv run --no-sync accelerate launch --num_processes 4 --mixed_precision bf16 \
@@ -47,7 +47,8 @@ run_stage() {
     pid=$(pgrep -f "bin/python -u train_late_interaction.py.*$RUN" | head -1)
     [[ -n "$pid" ]] && break
   done
-  [[ -n "$pid" ]] || { echo "$RUN: trainer never appeared; skipping stage"; return 1; }
+  [[ -n "$pid" ]] || { echo "$RUN: trainer never appeared; killing the orphan and skipping";
+                       pkill -f -- "--run_name $RUN " 2>/dev/null; return 1; }
   echo "$(date +%H:%M) $RUN training pid $pid"
 
   setsid nohup ./snapshot_checkpoints.sh "$M/$RUN" > "logs/snap_${RUN}.log" 2>&1 &
@@ -56,6 +57,7 @@ run_stage() {
       --device cuda:1 --follow_pid "$pid" --max_hours 40 > "logs/watch_${RUN}.log" 2>&1 &
 
   wait_for_pid "$pid"
+  while pgrep -f -- "--run_name $RUN " >/dev/null 2>&1; do sleep 30; done
   sleep 30
   grep -m1 -oE "attention backend:.*" "logs/queue_${RUN}.log" || echo "(no attention-backend line logged)"
 
@@ -67,9 +69,19 @@ run_stage() {
     ln -s ../dense_view "$M/$RUN/snapshots/step-$TARGET-dense"
   fi
 
-  RUN="$RUN" TARGET="$TARGET" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
-    ./stop_at_and_bench.sh || echo "$(date +%H:%M) $RUN: sweep reported failures (see its logs)"
-  touch "$done"
+  if RUN="$RUN" TARGET="$TARGET" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
+       ./stop_at_and_bench.sh; then
+    touch "$done"
+  else
+    echo "$(date +%H:%M) $RUN: sweep reported failures (see its logs); NOT marking the stage done"
+  fi
+
+  # C5: the watcher polls every 120s and the gate checkpoint can outlive it by seconds, so the
+  # step the gate reads was never scored -- both 150M pilots have @4500 then @final, no @5000.
+  # One synchronous catch-up pass now the GPUs are free; it scores whatever is unscored and exits.
+  uv run --no-sync python late_interaction_eval.py watch_curve \
+      --run_dir "$M/$RUN" --name "$RUN" --out_dir "$RESDIR/scope" --batch_size 32 \
+      --device cuda:0 --follow_pid "$pid" --max_hours 1 >> "logs/watch_${RUN}.log" 2>&1 || true
   echo "=== $(date +%H:%M) $RUN complete"
 }
 
@@ -90,18 +102,19 @@ run_stage late-r2-protsentv2-35m  GrimSqueaker/ProtSent-V2-35M  10000 "1000 4000
 # The 150M pair reads its mini_batch at stage start rather than having it baked in, so the value
 # can be set from stage 1's measurement without editing this script while bash is executing it
 # (bash reads scripts lazily by byte offset -- editing a live one corrupts it).
-CHUNK150="$(cat .chunk150 2>/dev/null || echo '--mini_batch_size 64')"
+CHUNK150="$(cat .chunk150 2>/dev/null)"
+[[ -n "$CHUNK150" ]] || CHUNK150="--mini_batch_size 64"
 echo "$(date +%H:%M) 150M stages chunking: $CHUNK150 (from .chunk150; default is the known-safe fixed 64)"
 # 10k, not 15k: the marks then match the 35M arms exactly (1000/4000/10000), so every arm in the
 # campaign is comparable at the same three steps. Resumable to any longer budget later --
 # --resume finds the latest checkpoint and the constant LR means no schedule distortion.
-run_stage late-r2-protsentv2-150m GrimSqueaker/ProtSent-V2-150M 10000 "1000 4000 10000" "$R/clean_150m" 29528 "$CHUNK150"
+run_stage late-r2-protsentv2-150m GrimSqueaker/ProtSent-V2-150M 10000 "1000 4000 10000" "$R/clean_150m" 29528 "$CHUNK150" 30000
 
 # The vanilla 150M arm stops at the SECOND mark and is benchmarked there as a decision gate.
 # The parsimonious prior is that it does worse than the ProtSent-V2 base (that is what every 35M
 # comparison has shown); 4,000 steps is enough to confirm or refute that against the V2 arm's own
 # 4,000 mark, and costs ~3 h instead of ~8. If it wins, resume it -- nothing is thrown away.
-run_stage late-r2-esm2-150m       facebook/esm2_t30_150M_UR50D   4000 "1000 4000"       "$R/clean_150m" 29529 "$CHUNK150"
+run_stage late-r2-esm2-150m       facebook/esm2_t30_150M_UR50D   4000 "1000 4000"       "$R/clean_150m" 29529 "$CHUNK150" 30000
 
 
 # resume_stage <run> <from_step> <to_step> <marks> <resdir> <port> <chunk>
@@ -117,7 +130,7 @@ resume_stage() {
 
   setsid nohup uv run --no-sync accelerate launch --num_processes 4 --mixed_precision bf16 \
     --main_process_port "$PORT" train_late_interaction.py \
-    --model "$M/$RUN" --files $FILES \
+    --model "$M/$RUN/late" --files $FILES \
     --output_dir "$M/$RUN" --run_name "$RUN" --resume \
     --proj_dim 128 --batch_size 256 $CHUNK --score_mini_batch_size 32 \
     --lr 5e-5 --proj_lr 0 --lr_scheduler constant_with_warmup --warmup_steps 500 \
@@ -132,7 +145,8 @@ resume_stage() {
     pid=$(pgrep -f "bin/python -u train_late_interaction.py.*$RUN" | head -1)
     [[ -n "$pid" ]] && break
   done
-  [[ -n "$pid" ]] || { echo "$RUN: resume never started"; return 1; }
+  [[ -n "$pid" ]] || { echo "$RUN: resume never started; killing the orphan";
+                       pkill -f -- "--run_name $RUN " 2>/dev/null; return 1; }
 
   setsid nohup ./snapshot_checkpoints.sh "$M/$RUN" > "logs/snap_${RUN}_resume.log" 2>&1 &
   setsid nohup uv run --no-sync python late_interaction_eval.py watch_curve \
@@ -140,8 +154,10 @@ resume_stage() {
       --device cuda:1 --follow_pid "$pid" --max_hours 40 > "logs/watch_${RUN}_resume.log" 2>&1 &
 
   wait_for_pid "$pid"
+  while pgrep -f -- "--run_name $RUN " >/dev/null 2>&1; do sleep 30; done
   sleep 30
   if [[ -d "$M/$RUN/dense_view" && ! -e "$M/$RUN/snapshots/step-$TO-dense" ]]; then
+    mkdir -p "$M/$RUN/snapshots"
     ln -s ../dense_view "$M/$RUN/snapshots/step-$TO-dense"
   fi
   RUN="$RUN" TARGET="$TO" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
@@ -159,6 +175,11 @@ if [[ "$WINNER" == "late-r2-esm2-150m" ]]; then
   resume_stage late-r2-esm2-150m 4000 15000 "10000 15000" "$R/clean_150m" 29530 "$CHUNK150"
 else
   resume_stage late-r2-protsentv2-150m 10000 15000 "15000" "$R/clean_150m" 29531 "$CHUNK150"
+fi
+RESUME_RC=$?
+if [[ $RESUME_RC -ne 0 ]]; then
+  echo "$(date +%H:%M) GATE: resume FAILED for $WINNER (rc=$RESUME_RC) -- NOT resumed to 15,000"
+  exit 1
 fi
 
 cat <<'GATE'

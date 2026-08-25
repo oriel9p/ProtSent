@@ -18,7 +18,7 @@ RUN = "testrun"
 MARKS = "1000 4000"
 
 
-def _fixture(tmp_path: Path, *, bench_exit: int = 0) -> Path:
+def _fixture(tmp_path: Path, *, bench_exit: int = 0, uv_exit: int = 0) -> Path:
     """A miniature repo: the real script, fake tools, and a complete target checkpoint."""
     shutil.copy(SCRIPT, tmp_path / "stop_at_and_bench.sh")
     os.chmod(tmp_path / "stop_at_and_bench.sh", 0o755)
@@ -34,13 +34,15 @@ def _fixture(tmp_path: Path, *, bench_exit: int = 0) -> Path:
 
     # Fake run_late_bench.sh: records the OUT it was handed, then exits as configured.
     bench = tmp_path / "run_late_bench.sh"
-    bench.write_text(f'#!/usr/bin/env bash\necho "$OUT" >> "{tmp_path}/outs.txt"\nexit {bench_exit}\n')
+    bench.write_text(f'#!/usr/bin/env bash\necho "$OUT" >> "{tmp_path}/outs.txt"\n'
+                     f'echo "$CUDA_VISIBLE_DEVICES" >> "{tmp_path}/gpus.txt"\nexit {bench_exit}\n')
     os.chmod(bench, 0o755)
 
     # Fake `uv`: the script calls `uv run --no-sync python - <snap> <dense>`; just make the dir.
     binp = tmp_path / "bin"
     binp.mkdir()
-    (binp / "uv").write_text('#!/usr/bin/env bash\nmkdir -p "${@: -1}"\n')
+    (binp / "uv").write_text(f'#!/usr/bin/env bash\n'
+                             f'[ {uv_exit} -eq 0 ] && mkdir -p "${{@: -1}}"\nexit {uv_exit}\n')
     os.chmod(binp / "uv", 0o755)
     return tmp_path
 
@@ -122,3 +124,33 @@ def test_a_fast_sweep_is_not_flagged(tmp_path):
     t = _fixture(tmp_path, bench_exit=0)
     r = _run(t, SWEEP_WARN_S="99999")
     assert "WARN: sweep took" not in r.stdout
+
+
+def test_a_mark_whose_dense_view_failed_aborts_instead_of_silently_shrinking_the_sweep(tmp_path):
+    """A failed dense-view build used to drop its mark from the sweep without touching the failure
+    counter, so a sweep that ran ZERO benchmarks still printed "all marks benchmarked" and
+    exited 0 -- the exact regression the per-pid wait was added to prevent, alive on another path.
+    """
+    t = _fixture(tmp_path, uv_exit=1)
+    r = _run(t)
+    assert r.returncode != 0, "reported success with no dense views built"
+    assert "all marks benchmarked" not in r.stdout
+    assert "ABORT" in r.stdout, r.stdout
+    assert not (t / "outs.txt").exists(), "ran benchmarks despite missing dense views"
+
+
+def test_each_mark_gets_its_own_gpu(tmp_path):
+    """Two marks sharing a card makes those two slower than the rest -- unequal load behind
+    equal-looking numbers, the measurement mistake this campaign has already made twice."""
+    t = _fixture(tmp_path)
+    r = _run(t)
+    assert r.returncode == 0, r.stdout
+    gpus = (t / "gpus.txt").read_text().split()
+    assert len(gpus) == len(set(gpus)) == len(MARKS.split()), f"GPU assignment collided: {gpus}"
+
+
+def test_it_refuses_when_there_are_more_marks_than_gpus(tmp_path):
+    t = _fixture(tmp_path)
+    r = _run(t, NGPU="1")
+    assert r.returncode != 0
+    assert "ABORT" in r.stdout and "GPUs" in r.stdout

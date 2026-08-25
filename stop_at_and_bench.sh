@@ -51,11 +51,12 @@ if kill -0 "$TRAIN_PID" 2>/dev/null; then
     echo "$(date +%H:%M) ABORT: training pid $TRAIN_PID survived the stop; not benchmarking on busy GPUs"
     exit 1
   fi
+  # Only meaningful when we actually stopped a trainer; outside this branch it fires on every
+  # invocation, which made the test suite kill any live mark-follower on the host.
+  pkill -f "bench_marks_clean.sh" 2>/dev/null && echo "$(date +%H:%M) stopped the sequential mark-follower"
+  sleep 3
 fi
 
-# The sequential mark-follower would otherwise claim a GPU for its own mark mid-sweep.
-pkill -f "bench_marks_clean.sh" 2>/dev/null && echo "$(date +%H:%M) stopped the sequential mark-follower"
-sleep 3
 echo "$(date +%H:%M) GPUs free ($NGPU); benchmarking marks: $MARKS"
 
 # Dense views first (CPU, cheap) so the GPU stage is pure benchmarking.
@@ -63,7 +64,7 @@ for N in $MARKS; do
   snap="$D/snapshots/step-$N"; dense="$snap-dense"
   [[ -d "$snap" ]] || { echo "no snapshot for $N, skipping"; continue; }
   [[ -d "$dense" ]] && continue
-  uv run --no-sync python - "$snap" "$dense" <<'PY'
+  if ! uv run --no-sync python - "$snap" "$dense" <<'PY'
 import sys
 import late_interaction as li
 snap, dense = sys.argv[1], sys.argv[2]
@@ -71,18 +72,37 @@ mve, st = li.build_multivector_encoder(snap, proj_dim=128, max_seq_length=512, d
 st.save(dense)
 print(f"dense view -> {dense}")
 PY
+  then
+    echo "$(date +%H:%M) dense view FAILED for mark $N"
+  fi
 done
 
 # One checkpoint per GPU, identical task set and probes so the marks stay comparable.
+# Every requested mark must have a dense view, or the sweep is silently partial -- which is the
+# same "reported success while producing nothing" failure this script exists to prevent.
+requested=(); for N in $MARKS; do requested+=("$N"); done
+ready=(); for N in $MARKS; do [[ -d "$D/snapshots/step-$N-dense" ]] && ready+=("$N"); done
+if [[ ${#ready[@]} -ne ${#requested[@]} ]]; then
+  echo "$(date +%H:%M) ABORT: only ${#ready[@]}/${#requested[@]} marks have a dense view (have: ${ready[*]:-none})"
+  exit 1
+fi
+
+# One benchmark per card, strictly. Round-robin past NGPU would co-schedule two on one GPU and
+# quietly make those two marks slower than the rest -- comparable-looking numbers, unequal load,
+# which is the measurement mistake this campaign has already made twice. Refuse instead.
+if [[ ${#ready[@]} -gt $NGPU ]]; then
+  echo "$(date +%H:%M) ABORT: ${#ready[@]} marks but only $NGPU GPUs; run them in separate invocations"
+  exit 1
+fi
+
 sweep_start=$(date +%s)
 pids=(); marks_run=(); gpu=0
-for N in $MARKS; do
-  dense="$D/snapshots/step-$N-dense"
-  [[ -d "$dense" ]] || continue
+for N in "${ready[@]}"; do
   CUDA_VISIBLE_DEVICES=$gpu TASKS=cheap PROBES="$PROBES" OUT="$OUTDIR" \
-    ./run_late_bench.sh "${RUN}_s${N}=$(pwd)/$dense" > "logs/bench_${RUN}_s${N}.log" 2>&1 &
+    ./run_late_bench.sh "${RUN}_s${N}=$(pwd)/$D/snapshots/step-$N-dense" \
+    > "logs/bench_${RUN}_s${N}.log" 2>&1 &
   pids+=("$!"); marks_run+=("$N")
-  gpu=$(( (gpu + 1) % NGPU ))
+  gpu=$(( gpu + 1 ))
 done
 
 fail=0
