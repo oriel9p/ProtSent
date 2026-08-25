@@ -244,7 +244,7 @@ def cmd_fewshot_rh(args) -> None:
                 "runtime_s": round(time.time() - t0, 2),
             })
             logger.info("%s N=%d: acc=%.4f", name, budget, rows[-1]["accuracy"])
-        del scorer, fast
+        del scorer
         torch.cuda.empty_cache()  # 8 arms in one invocation, each holding a corpus
     append_csv(Path(args.out_dir) / "late_fewshot_knn.csv", rows)
 
@@ -298,7 +298,10 @@ def cmd_proteingym(args) -> None:
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     cfg = PROTEINGYM_VARIANTS[args.variant]
-    ds = load_dataset("OATML-Markslab/ProteinGym_v1", data_dir=cfg["data_dir"], split="train")
+    # Pin the snapshot: ProteinGym has had releases since the paper, and an unpinned load silently
+    # re-keys every number to whatever the hub served that day.
+    ds = load_dataset("OATML-Markslab/ProteinGym_v1", data_dir=cfg["data_dir"], split="train",
+                      revision=args.dataset_revision or None)
 
     groups: dict = {}
     for i, g in enumerate(ds[cfg["group_by"]]):  # one bulk column read, not 2.5M row lookups
@@ -352,6 +355,9 @@ def cmd_proteingym(args) -> None:
     for spec in args.models:
         name, kind, path = parse_model_spec(spec)
         scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
+        # Provenance from the CLI spec, so an arm's identity lives in the results file instead of a
+        # hand-typed table in the report script. dense/zeroshot have no projection by construction.
+        proj_dim = 0 if kind in ("dense", "zeroshot") else (args.proj_dim_note or -1)
         # ProteinGym scores ONE document (the wild type) against many queries. maxsim_matrix is
         # shaped for all-vs-all and spends ~64% of its time outside the forward pass, materialising
         # query embeddings and round-tripping them GPU->host->GPU. The streamed path is 2.3x faster
@@ -371,8 +377,16 @@ def cmd_proteingym(args) -> None:
                                          max_seq_length=args.max_seq_length)
                    if fast is not None else
                    scorer([wt], queries=mut, bs=args.batch_size, ce=args.chunk_elements)[:, 0])
-            lens = np.array([min(len(s), args.max_seq_length - 2) for s in mut], dtype=float)
-            score = sim / lens
+            # Divide ONLY for MaxSim. maxsim_against_one returns a sum over query residues, so
+            # dividing by length gives mean-MaxSim. Cosine is already length-invariant
+            # (cosine_matrix normalizes), so dividing it by length is not a normalisation, it is a
+            # corruption -- harmless where every variant in a group has the same length
+            # (substitutions), destructive where they do not (indels).
+            if scoring == "maxsim":
+                lens = np.array([min(len(s), args.max_seq_length - 2) for s in mut], dtype=float)
+                score = sim / lens
+            else:
+                score = sim
             if cfg["metric"] == "auc":
                 # The label is pathogenicity, but the score is similarity to wild type: a variant
                 # that looks MORE like the WT should be LESS pathogenic. Negate, so an AUC above
@@ -409,6 +423,9 @@ def cmd_proteingym(args) -> None:
                          "n_variants_scored": int(sum(len(s) for s in pooled_scores)),
                          "runtime_s": round(time.time() - t0, 1)})
         rows.append({"model": name, "scoring": scoring, "variant": args.variant,
+                     "kind": kind, "path": path, "proj_dim": proj_dim_of(scorer_model),
+                     "dataset_revision": args.dataset_revision or "unpinned",
+                     "n_boot": args.n_boot,
                      "metric": cfg["metric"], "aggregation": "per_group_mean",
                      "mean_score": float(rhos.mean()),
                      "corrected_average": round(corrected, 4),
@@ -599,6 +616,11 @@ def main() -> None:
                     help="Seeded subsample per assay; 0 = all variants (the comparable setting). "
                          "A 500 cap scores only 4.3%% of ProteinGym and fully covers 15/217 assays")
     pg.add_argument("--n_boot", type=int, default=1000)
+    pg.add_argument("--proj_dim_note", type=int, default=0,
+                    help="Projection dim of any `late:` arms, recorded in the results row "
+                         "(dense/zeroshot are 0 by construction; -1 means unrecorded)")
+    pg.add_argument("--dataset_revision", default="",
+                    help="Pin the ProteinGym snapshot; blank means whatever the hub serves today")
     pg.set_defaults(fn=cmd_proteingym)
 
     pcath = sub.add_parser("cath", parents=[common])
