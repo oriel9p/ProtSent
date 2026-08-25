@@ -1,4 +1,0 @@
-aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
-per_group_mean,0,"[0.4513, 0.5307]",nan,unpinned,dense,0.4904248567700596,spearman,protsent_v2_dense,66,1000,0,287207,GrimSqueaker/ProtSent-V2-35M,0,1728.6,cosine,dms_indels
-pooled,0,,,,,0.697160962697625,auc,protsent_v2_dense,410,,,1409,,,17.7,cosine,clinical_indels
-per_group_mean,0,"[0.6169, 0.7892]",nan,unpinned,dense,0.7015398886827459,auc,protsent_v2_dense,77,1000,34,358,GrimSqueaker/ProtSent-V2-35M,0,17.7,cosine,clinical_indels

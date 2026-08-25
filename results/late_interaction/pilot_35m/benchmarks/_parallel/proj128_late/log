@@ -1,16 +1,0 @@
-2026-08-25 13:31:06,710 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
-2026-08-25 13:31:06,719 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
-2026-08-25 13:31:06,886 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
-2026-08-25 13:31:10,226 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
-2026-08-25 13:31:10,396 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
-2026-08-25 13:31:10,563 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/clinical_indels%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
-2026-08-25 13:31:10,738 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/clinical_indels?recursive=false&expand=false "HTTP/1.1 200 OK"
-2026-08-25 13:31:10,910 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
-2026-08-25 13:31:11,123 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
-2026-08-25 13:31:14,370 - INFO - clinical_indels: 410 assays, 1409 sequences to encode per model (164 variants dropped as invisible past the 1022-residue truncation)
-2026-08-25 13:31:14,375 - INFO - No device provided, using cuda:0
-2026-08-25 13:31:14,376 - INFO - Loading MultiVectorEncoder model from /opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_proj128/late.
-Loading weights:   0%|          | 0/200 [00:00<?, ?it/s]Loading weights: 100%|██████████| 200/200 [00:00<00:00, 4656.43it/s]
-2026-08-25 13:31:28,466 - WARNING - corrected average unavailable for these 77 groups: none matched DMS_substitutions.csv, which covers DMS_substitutions only. The row's mean_score still holds the plain mean.
-2026-08-25 13:31:28,470 - INFO - proj128_late clinical_indels: mean auc 0.8545 (corrected avg nan) over 77 groups in 14s
-2026-08-25 13:31:28,471 - INFO - wrote 2 rows -> results/late_interaction/pilot_35m/benchmarks/_parallel/proj128_late/proteingym_maxsim.csv

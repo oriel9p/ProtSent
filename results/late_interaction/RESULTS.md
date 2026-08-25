@@ -91,20 +91,6 @@ and a variant that looks more like the wild type should be less pathogenic.
 | MaxSim − pooled cosine (identical weights) (n=210) | +0.0258 ** | [+0.0191, +0.0322] |
 | phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=210) | -0.0051 ** | [-0.0089, -0.0013] |
 
-### dms_indels — spearman, 63 groups
-
-| arm | scoring | spearman | 95% CI |
-|---|---|---|---|
-| `proj128_late` | MaxSim | 0.5258 | [0.4883, 0.5648] |
-| `protsent_late_35m_prop_late` | MaxSim | 0.5231 | [0.4863, 0.5626] |
-| `protsent_v2_dense` | pooled cosine | 0.3455 | [0.3067, 0.3842] |
-| `protsent_late_35m_prop_dense` | pooled cosine | 0.3258 | [0.2857, 0.3629] |
-
-| paired comparison | Δ | 95% CI |
-|---|---|---|
-| MaxSim − pooled cosine (identical weights) (n=63) | +0.1973 ** | [+0.1678, +0.2267] |
-| phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=63) | -0.0027 | [-0.0095, +0.0041] |
-
 ### clinical_substitutions — auc, 2226 groups
 
 | arm | scoring | auc | 95% CI |
@@ -118,18 +104,4 @@ and a variant that looks more like the wild type should be less pathogenic.
 |---|---|---|
 | MaxSim − pooled cosine (identical weights) (n=2226) | +0.0552 ** | [+0.0483, +0.0626] |
 | phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=2226) | -0.0129 ** | [-0.0178, -0.0080] |
-
-### clinical_indels — auc, 53 groups
-
-| arm | scoring | auc | 95% CI |
-|---|---|---|---|
-| `proj128_late` | MaxSim | 0.8125 | [0.7227, 0.8963] |
-| `protsent_late_35m_prop_late` | MaxSim | 0.8000 | [0.7092, 0.8900] |
-| `protsent_late_35m_prop_dense` | pooled cosine | 0.6580 | [0.5514, 0.7625] |
-| `protsent_v2_dense` | pooled cosine | 0.6299 | [0.5219, 0.7417] |
-
-| paired comparison | Δ | 95% CI |
-|---|---|---|
-| MaxSim − pooled cosine (identical weights) (n=53) | +0.1419 ** | [+0.0497, +0.2369] |
-| phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=53) | -0.0125 | [-0.0295, +0.0011] |
 

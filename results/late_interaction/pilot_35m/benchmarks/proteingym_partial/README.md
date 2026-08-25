@@ -1,4 +1,18 @@
-# ProteinGym — PARTIAL, quarantined
+# ProteinGym — PARTIAL, quarantined (substitutions only)
+
+**Deleted 2026-08-25**, recoverable from git at `eb82c2e`:
+
+- **All indel files.** Superseded by a full-coverage rescore in the parent directory, with the
+  length-division bug fixed. Keeping both meant two different values for the same arm and variant
+  sitting side by side — the exact thing that trips someone up.
+- **`v2p5_35m_cosine`.** ProtSent-V2.5 trains on ProteinGym, so that arm is invalid at any coverage
+  and rescoring cannot rescue it. See the contamination table below.
+
+What is left is **substitutions only**, and it is the only copy we have: 9 DMS arms and 7 clinical,
+including the untrained-MaxSim controls that carry the headline "the gain is the scoring geometry,
+not our training". Delete this directory once a full-coverage substitutions rerun supersedes it
+(~1.1 h per arm, and the cards are currently busy).
+
 
 Quarantined 2026-08-25. These files are **not results**. They are kept because the *paired*
 comparisons inside them are still sound and because re-deriving them costs GPU time.
