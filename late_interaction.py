@@ -15,6 +15,15 @@ so a "dense view" of any late-trained backbone is just that module + mean Poolin
 from __future__ import annotations
 
 import os
+
+# MUST precede any third-party import: sentence_transformers pulls in datasets, which freezes its
+# cache path at import time. Home is on a 96%-full volume and an ad-hoc call that forgets these
+# writes GBs there. `or`, not setdefault, so an empty value is replaced too. Models use the shared
+# hub cache; datasets are per-user and get their own space.
+os.environ["HF_HOME"] = os.environ.get("HF_HOME") or "/storage/models/hf_home"
+os.environ["HF_DATASETS_CACHE"] = (os.environ.get("HF_DATASETS_CACHE")
+                                   or "/storage/users/ddofer/hf_datasets")
+
 import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple

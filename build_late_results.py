@@ -18,6 +18,11 @@ from bootstrap_ci import boot_ci  # noqa: E402
 ROOT = Path(__file__).resolve().parent
 RES = ROOT / "results/late_interaction"
 B, S = RES / "pilot_35m/benchmarks", RES / "pilot_35m/scope"
+# ProteinGym is quarantined as PARTIAL (500-variant cap, 512 truncation). See its README. A
+# full-coverage rerun writes to B, so prefer that the moment it exists rather than silently
+# re-publishing the partial numbers forever.
+PARTIAL = not (B / "proteingym_maxsim.csv").exists()
+PG = B / "proteingym_partial" if PARTIAL else B
 out: list[str] = []
 w = out.append
 
@@ -49,7 +54,7 @@ def scope_table() -> None:
 
 
 def proteingym_tables() -> None:
-    f = B / "proteingym_maxsim.csv"
+    f = PG / "proteingym_maxsim.csv"
     if not f.exists():
         return
     byvar: dict = {}
@@ -79,7 +84,7 @@ def proteingym_tables() -> None:
             w("|---|---|---|")
             for a, b, lab in pairs:
                 try:
-                    za, zb = (np.load(B / f"proteingym_{var}_{x}.npz") for x in (a, b))
+                    za, zb = (np.load(PG / f"proteingym_{var}_{x}.npz") for x in (a, b))
                     ka, kb = dict(zip(za["assay"], za["score"])), dict(zip(zb["assay"], zb["score"]))
                     common = sorted(set(ka) & set(kb))
                     d = np.array([ka[k] - kb[k] for k in common])
@@ -122,19 +127,27 @@ w("trained under a bug that put AdamW's parameters in bf16, where a 1e-5 update 
 w("representable spacing, so only 2.4% of backbone elements could move. They are kept on disk as")
 w("evidence and analysed in RUNS.md, but they are not results.")
 w("")
-w("## ProteinGym")
-w("")
-w("> **Not comparable to the ProteinGym leaderboard.** The leaderboard's zero-shot score is an LM")
-w("> log-likelihood ratio; ours is similarity to the wild type, which these models can produce and")
-w("> that one they cannot. We also subsample to 500 variants per group, truncate at 512 residues,")
-w("> and take a plain mean over groups where the leaderboard aggregates by UniProt ID and then by")
-w("> function category. Use these numbers to rank *our* arms against each other, nothing else.")
-w("")
-w("Variants whose mutation falls beyond the 512-residue truncation are dropped: the truncated")
-w("mutant is byte-identical to the truncated wild type, so its score is the self-similarity — a")
-w("block of exact ties that drags the correlation toward zero. 55 of 217 substitution assays have")
-w("a wild type longer than 510 aa and ~4.7% of mutations land past the cut.")
-w("")
+if PARTIAL:
+    w("## ProteinGym — PARTIAL, quarantined")
+    w("")
+    w("> **Absolute numbers here are not results.** Scored at `--max_variants_per_assay 500` (~4.3%")
+    w("> of the 2.47M variants) and truncated at 512 residues, with a plain mean over groups instead")
+    w("> of the leaderboard's corrected average. Files live in")
+    w("> `pilot_35m/benchmarks/proteingym_partial/`; that directory's README lists every limitation")
+    w("> and the rerun cost (~1.0 h/arm at full coverage). A full-coverage rerun is deferred while")
+    w("> the scoring path is optimised.")
+    w("")
+    w("Only the **paired** rows below survive the caveat: both sides ran under the same cap, the")
+    w("same truncation and the same assay set, so a delta is a scoring or weights effect rather")
+    w("than a protocol artifact. The per-arm means above each delta table are for internal ranking")
+    w("only and must not be placed next to a published ProteinGym score.")
+    w("")
+else:
+    w("## ProteinGym")
+    w("")
+    w("Full coverage: every variant of every assay, 1024-residue context, aggregated the way the")
+    w("leaderboard does (mean within each `coarse_selection_type` group, then the mean of those).")
+    w("")
 w("For the clinical variants the score is **negated** before the AUC: the label is pathogenicity,")
 w("and a variant that looks more like the wild type should be less pathogenic.")
 w("")

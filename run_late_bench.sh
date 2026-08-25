@@ -10,7 +10,8 @@
 # Usage:
 #   ./run_late_bench.sh                          # the long-run arms, cheap task set
 #   ./run_late_bench.sh name=path [name=path ...]
-#   TASKS=full ./run_late_bench.sh               # everything --fast covers
+#   TASKS=paper ./run_late_bench.sh              # the paper's 22 suite tasks
+#   TASKS=full ./run_late_bench.sh               # paper + ppi_bernett
 #   TASKS=proteingym ./run_late_bench.sh          # the 8 ProteinGym tasks (slow)
 #   TASKS="remote_homology ec_classification" ./run_late_bench.sh
 #
@@ -31,22 +32,28 @@ PROBES="${PROBES:-knn linear}"
 export HF_HOME="${HF_HOME:-/storage/models/hf_home}"
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 
-# Task presets are ProtBench's own, not a third curation maintained here:
-#   cheap -> --very-fast   (its curated low-variance scout subset)
-#   full  -> --fast        (the 20-task set the pilot arms were scored on)
-# SCOPe and CATH are deliberately absent from both: retrieval is already covered per-checkpoint
-# by `late_interaction_eval.py watch_curve` (MaxSim) and `scope` (dense cosine), which score the
-# multi-vector model itself rather than its pooled view.
-# ProtBench's --very-fast minus conservation_flip. Dropped on 2026-08-25: it is not among the 23
-# tasks the ProtSent paper reports (which contains no residue-level task at all), and it costs
-# ~30 min per arm. ss3 is kept as the one residue-level probe -- late interaction trains per-residue
-# representations, and token_classification is the only family of tasks that reads them directly
-# rather than collapsing them into a pooled vector.
+# Task presets:
+#   cheap  -> ProtBench --very-fast minus conservation_flip (its curated low-variance scout set)
+#   paper  -> the 22 suite tasks the ProtSent paper reports (SCOPe, its 23rd, is scored by
+#             late_interaction_eval.py scope instead, on the multi-vector model itself)
+#   full   -> paper + ppi_bernett (pair-level, the closest task to what late interaction trains)
+#   fast   -> ProtBench's own --fast; kept as an escape hatch, not used by the campaign
+# conservation_flip and disprot are dropped everywhere: residue-level, ~30 min/arm each, and
+# absent from the paper's 23. ss3 is the one residue-level probe kept -- late interaction trains
+# per-residue representations and token_classification is the only family that reads them
+# directly instead of collapsing them into a pooled vector.
 CHEAP_TASKS="remote_homology solubility metal_ion_binding fluorescence stability beta_lactamase_peer ss3"
+PAPER_TASKS="aav_flip antibiotic_resistance binary_subcellular_localization cloning_clf \
+ec_classification enzyme_catalytic_efficiency fluorescence go_mf material_production \
+metal_ion_binding optimal_ph peptide_hla profet_np_sp_cleaved remote_homology signalp_binary \
+solubility stability subcellular_loc temperature_stability thermostability variant_effect \
+beta_lactamase_peer"
 
 case "${TASKS:-cheap}" in
   cheap)      TASK_ARGS=(-t $CHEAP_TASKS) ;;
-  full)       TASK_ARGS=(--fast) ;;
+  paper)      TASK_ARGS=(-t $PAPER_TASKS) ;;
+  full)       TASK_ARGS=(-t $PAPER_TASKS ppi_bernett) ;;
+  fast)       TASK_ARGS=(--fast) ;;
   proteingym) TASK_ARGS=(--proteingym) ;;   # the 8 ProteinGym tasks; large and slow
   *)          TASK_ARGS=(-t ${TASKS}) ;;
 esac

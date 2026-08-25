@@ -7,6 +7,7 @@
 # The new step budget comes from run_experiment_queue.sh's own defaults, so set it there.
 set -uo pipefail
 cd "$(dirname "$0")"
+export HF_HOME="${HF_HOME:-/storage/models/hf_home}"
 Q="${1:?queue letter}" NAME="${2:?run name}"
 D="models/late_interaction/$NAME"
 LOG="logs/retarget_$NAME.log"

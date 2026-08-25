@@ -1,3 +1,7 @@
+> **PARTIAL — quarantined 2026-08-25.** 500-variant cap (~4.3% coverage), 512-residue
+> truncation, plain group mean. Paired deltas are sound; absolute values are internal
+> ranking only. See `README.md` in this directory.
+
 # ProteinGym: MaxSim vs pooled cosine
 
 **Result.** On substitutions, residue-level MaxSim beats pooled cosine on *identical weights*:

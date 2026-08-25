@@ -14,6 +14,7 @@
 # Usage: ./snapshot_checkpoints.sh [run_dir ...]     (default: the four long-run dirs)
 set -uo pipefail
 cd "$(dirname "$0")"
+export HF_HOME="${HF_HOME:-/storage/models/hf_home}"
 MODELS="${MODELS:-models/late_interaction}"
 INTERVAL="${INTERVAL:-120}"
 MAX_HOURS="${MAX_HOURS:-24}"

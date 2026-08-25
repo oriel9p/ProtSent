@@ -40,18 +40,19 @@ trained under a bug that put AdamW's parameters in bf16, where a 1e-5 update is 
 representable spacing, so only 2.4% of backbone elements could move. They are kept on disk as
 evidence and analysed in RUNS.md, but they are not results.
 
-## ProteinGym
+## ProteinGym — PARTIAL, quarantined
 
-> **Not comparable to the ProteinGym leaderboard.** The leaderboard's zero-shot score is an LM
-> log-likelihood ratio; ours is similarity to the wild type, which these models can produce and
-> that one they cannot. We also subsample to 500 variants per group, truncate at 512 residues,
-> and take a plain mean over groups where the leaderboard aggregates by UniProt ID and then by
-> function category. Use these numbers to rank *our* arms against each other, nothing else.
+> **Absolute numbers here are not results.** Scored at `--max_variants_per_assay 500` (~4.3%
+> of the 2.47M variants) and truncated at 512 residues, with a plain mean over groups instead
+> of the leaderboard's corrected average. Files live in
+> `pilot_35m/benchmarks/proteingym_partial/`; that directory's README lists every limitation
+> and the rerun cost (~1.0 h/arm at full coverage). A full-coverage rerun is deferred while
+> the scoring path is optimised.
 
-Variants whose mutation falls beyond the 512-residue truncation are dropped: the truncated
-mutant is byte-identical to the truncated wild type, so its score is the self-similarity — a
-block of exact ties that drags the correlation toward zero. 55 of 217 substitution assays have
-a wild type longer than 510 aa and ~4.7% of mutations land past the cut.
+Only the **paired** rows below survive the caveat: both sides ran under the same cap, the
+same truncation and the same assay set, so a delta is a scoring or weights effect rather
+than a protocol artifact. The per-arm means above each delta table are for internal ranking
+only and must not be placed next to a published ProteinGym score.
 
 For the clinical variants the score is **negated** before the AUC: the label is pathogenicity,
 and a variant that looks more like the wild type should be less pathogenic.
