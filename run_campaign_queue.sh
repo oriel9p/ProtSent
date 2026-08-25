@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Overnight campaign queue: train -> stop at target -> cheap knn sweep, one stage at a time.
+# Survives disconnect (setsid the whole thing). Resumable: a stage whose runtime.json exists is
+# skipped, so re-running the queue after a crash picks up where it stopped.
+#
+#   setsid nohup ./run_campaign_queue.sh > logs/campaign_queue.log 2>&1 &
+set -uo pipefail
+cd "$(dirname "$0")"
+export HF_HOME="${HF_HOME:-/storage/models/hf_home}" TOKENIZERS_PARALLELISM=false
+DATA=/storage/users/ddofer/data/protsent-data-dc40
+FILES="$DATA/pfam_sorted.parquet $DATA/afdb_sorted.parquet $DATA/stringdb_train_15M.parquet"
+M="models/late_interaction"
+R="$(pwd)/results/late_interaction"
+
+# Wait for a pid to disappear (the in-flight vanilla-35M sweep, on the first pass).
+wait_for_pid() {
+  [[ -n "${1:-}" ]] || return 0
+  while kill -0 "$1" 2>/dev/null; do sleep 120; done
+}
+
+# run_stage <run_name> <base_model> <target_steps> <marks> <results_dir> <port>
+# max_steps == target, so training ends on its own and exports late/ + dense_view/ + runtime.json;
+# nothing has to be killed. Flash + compile are on (attn defaults to auto, which verifies the
+# backend at load time and logs it); gather_across_devices is deliberately NOT passed, so
+# in-batch negatives stay per-rank at 255.
+run_stage() {
+  local RUN="$1" MODEL="$2" TARGET="$3" MARKS="$4" RESDIR="$5" PORT="$6"
+  if [[ -f "$M/$RUN/runtime.json" ]]; then echo "[skip] $RUN already finished"; return 0; fi
+  echo "=== $(date +%H:%M) $RUN: $MODEL -> $TARGET steps"
+
+  setsid nohup uv run --no-sync accelerate launch --num_processes 4 --mixed_precision bf16 \
+    --main_process_port "$PORT" train_late_interaction.py \
+    --model "$MODEL" --files $FILES \
+    --output_dir "$M/$RUN" --run_name "$RUN" \
+    --proj_dim 128 --batch_size 256 --mini_batch_size 64 --score_mini_batch_size 32 \
+    --lr 5e-5 --proj_lr 0 --lr_scheduler constant_with_warmup --warmup_steps 500 \
+    --multi_dataset_sampler proportional --max_pairs_per_file 0 --string_max_pairs 15000000 \
+    --seed 42 --compile --save_steps 1000 --save_total_limit 2 \
+    --max_steps "$TARGET" --max_minutes 0 --dataloader_num_workers 4 \
+    >> "logs/queue_${RUN}.log" 2>&1 &
+
+  local pid="" i
+  for i in $(seq 90); do
+    sleep 20
+    pid=$(pgrep -f "bin/python -u train_late_interaction.py.*$RUN" | head -1)
+    [[ -n "$pid" ]] && break
+  done
+  [[ -n "$pid" ]] || { echo "$RUN: trainer never appeared; skipping stage"; return 1; }
+  echo "$(date +%H:%M) $RUN training pid $pid"
+
+  setsid nohup ./snapshot_checkpoints.sh "$M/$RUN" > "logs/snap_${RUN}.log" 2>&1 &
+  setsid nohup uv run --no-sync python late_interaction_eval.py watch_curve \
+      --run_dir "$M/$RUN" --name "$RUN" --out_dir "$RESDIR/scope" --batch_size 32 \
+      --device cuda:1 --follow_pid "$pid" --max_hours 40 > "logs/watch_${RUN}.log" 2>&1 &
+
+  wait_for_pid "$pid"
+  sleep 30
+  grep -m1 -oE "attention backend:.*" "logs/queue_${RUN}.log" || echo "(no attention-backend line logged)"
+
+  # The endpoint mark comes from the run's own final export; the snapshotter may not have caught
+  # the last checkpoint before the trainer cleaned it up. A symlink, so the sweep's own cleanup
+  # (rm -rf *-dense) removes the link and leaves dense_view/ intact.
+  if [[ -d "$M/$RUN/dense_view" && ! -e "$M/$RUN/snapshots/step-$TARGET-dense" ]]; then
+    mkdir -p "$M/$RUN/snapshots"
+    ln -s ../dense_view "$M/$RUN/snapshots/step-$TARGET-dense"
+  fi
+
+  RUN="$RUN" TARGET="$TARGET" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
+    ./stop_at_and_bench.sh || echo "$(date +%H:%M) $RUN: sweep reported failures (see its logs)"
+  echo "=== $(date +%H:%M) $RUN complete"
+}
+
+# Stage 0: let the in-flight vanilla-35M stop-and-sweep finish first.
+echo "$(date +%H:%M) waiting for the in-flight vanilla35m_clean sweep (pid ${WAIT_PID:-none})"
+wait_for_pid "${WAIT_PID:-}"
+
+# Marks share 1000/4000/10000 across every arm so all four runs are comparable at matched steps;
+# the 150M pair adds 15000 as its endpoint.
+run_stage late-r2-protsentv2-35m  GrimSqueaker/ProtSent-V2-35M       10000 "1000 4000 10000"       "$R/clean_35m"  29527
+run_stage late-r2-protsentv2-150m GrimSqueaker/ProtSent-V2-150M      15000 "1000 4000 10000 15000" "$R/clean_150m" 29528
+run_stage late-r2-esm2-150m       facebook/esm2_t30_150M_UR50D       15000 "1000 4000 10000 15000" "$R/clean_150m" 29529
+
+echo "$(date +%H:%M) campaign queue finished"
