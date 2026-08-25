@@ -107,3 +107,18 @@ def test_it_refuses_to_benchmark_while_training_still_holds_the_gpus(tmp_path):
         assert "all marks benchmarked" not in r.stdout
     finally:
         proc.kill()
+
+
+def test_a_slow_sweep_is_flagged(tmp_path):
+    """Marks already run one per GPU, so a slow sweep is a per-mark cost, not a scheduling
+    problem -- but it has to be visible in an unattended overnight log to be actionable."""
+    t = _fixture(tmp_path, bench_exit=0)
+    r = _run(t, SWEEP_WARN_S="-1")  # fake bench is instant; elapsed is 0s
+    assert "WARN: sweep took" in r.stdout, r.stdout
+    assert "sweep wall clock:" in r.stdout
+
+
+def test_a_fast_sweep_is_not_flagged(tmp_path):
+    t = _fixture(tmp_path, bench_exit=0)
+    r = _run(t, SWEEP_WARN_S="99999")
+    assert "WARN: sweep took" not in r.stdout

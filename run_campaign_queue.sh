@@ -24,15 +24,15 @@ wait_for_pid() {
 # backend at load time and logs it); gather_across_devices is deliberately NOT passed, so
 # in-batch negatives stay per-rank at 255.
 run_stage() {
-  local RUN="$1" MODEL="$2" TARGET="$3" MARKS="$4" RESDIR="$5" PORT="$6"
+  local RUN="$1" MODEL="$2" TARGET="$3" MARKS="$4" RESDIR="$5" PORT="$6" CHUNK="${7:---mini_batch_size 64}"
   if [[ -f "$M/$RUN/runtime.json" ]]; then echo "[skip] $RUN already finished"; return 0; fi
-  echo "=== $(date +%H:%M) $RUN: $MODEL -> $TARGET steps"
+  echo "=== $(date +%H:%M) $RUN: $MODEL -> $TARGET steps (chunking: $CHUNK)"
 
   setsid nohup uv run --no-sync accelerate launch --num_processes 4 --mixed_precision bf16 \
     --main_process_port "$PORT" train_late_interaction.py \
     --model "$MODEL" --files $FILES \
     --output_dir "$M/$RUN" --run_name "$RUN" \
-    --proj_dim 128 --batch_size 256 --mini_batch_size 64 --score_mini_batch_size 32 \
+    --proj_dim 128 --batch_size 256 $CHUNK --score_mini_batch_size 32 \
     --lr 5e-5 --proj_lr 0 --lr_scheduler constant_with_warmup --warmup_steps 500 \
     --multi_dataset_sampler proportional --max_pairs_per_file 0 --string_max_pairs 15000000 \
     --seed 42 --compile --save_steps 1000 --save_total_limit 2 \
@@ -76,8 +76,20 @@ wait_for_pid "${WAIT_PID:-}"
 
 # Marks share 1000/4000/10000 across every arm so all four runs are comparable at matched steps;
 # the 150M pair adds 15000 as its endpoint.
-run_stage late-r2-protsentv2-35m  GrimSqueaker/ProtSent-V2-35M       10000 "1000 4000 10000"       "$R/clean_35m"  29527
-run_stage late-r2-protsentv2-150m GrimSqueaker/ProtSent-V2-150M      15000 "1000 4000 10000 15000" "$R/clean_150m" 29528
-run_stage late-r2-esm2-150m       facebook/esm2_t30_150M_UR50D       15000 "1000 4000 10000 15000" "$R/clean_150m" 29529
+# Stage 1 is a clean A/B against stage 0's fixed --mini_batch_size 64: same architecture, same
+# data, same 4 GPUs, back to back with nothing else on the cards. It budgets by tokens instead,
+# at 32768 = the 64x512 worst case stage 0 already survives, so every chunk becomes the size of
+# stage 0's unluckiest one rather than its average -- more work per chunk at the same peak VRAM.
+# GradCache is gradient-equivalent across chunkings, so this moves speed and memory only and the
+# arms stay comparable. runtime.json reports steps_per_s and peak_vram_bytes for both.
+run_stage late-r2-protsentv2-35m  GrimSqueaker/ProtSent-V2-35M  10000 "1000 4000 10000" "$R/clean_35m" 29527 "--mini_batch_num_tokens 32768"
+
+# The 150M pair reads its mini_batch at stage start rather than having it baked in, so the value
+# can be set from stage 1's measurement without editing this script while bash is executing it
+# (bash reads scripts lazily by byte offset -- editing a live one corrupts it).
+CHUNK150="$(cat .chunk150 2>/dev/null || echo '--mini_batch_size 64')"
+echo "$(date +%H:%M) 150M stages chunking: $CHUNK150 (from .chunk150; default is the known-safe fixed 64)"
+run_stage late-r2-protsentv2-150m GrimSqueaker/ProtSent-V2-150M 15000 "1000 4000 10000 15000" "$R/clean_150m" 29528 "$CHUNK150"
+run_stage late-r2-esm2-150m       facebook/esm2_t30_150M_UR50D  15000 "1000 4000 10000 15000" "$R/clean_150m" 29529 "$CHUNK150"
 
 echo "$(date +%H:%M) campaign queue finished"

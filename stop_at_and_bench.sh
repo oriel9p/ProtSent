@@ -15,6 +15,7 @@ TARGET="${TARGET:-10000}"
 MARKS="${MARKS:-1000 4000 10000}"
 PROBES="${PROBES:-knn}"   # knn is the primary probe; linear doubles the sweep for a view nothing reads
 SETTLE="${SETTLE:-60}"    # grace after the checkpoint files appear, before killing the writer
+SWEEP_WARN_S="${SWEEP_WARN_S:-4500}"   # 1.25 h: marks run in parallel, so this is wall clock for all of them
 POLL="${POLL:-120}"
 TRAIN_PID="${TRAIN_PID:?rank0 pid of the training process}"
 D="models/late_interaction/$RUN"
@@ -73,6 +74,7 @@ PY
 done
 
 # One checkpoint per GPU, identical task set and probes so the marks stay comparable.
+sweep_start=$(date +%s)
 pids=(); marks_run=(); gpu=0
 for N in $MARKS; do
   dense="$D/snapshots/step-$N-dense"
@@ -92,6 +94,14 @@ for i in "${!pids[@]}"; do
     fail=$((fail + 1))
   fi
 done
+
+elapsed=$(( $(date +%s) - sweep_start ))
+echo "$(date +%H:%M) sweep wall clock: $((elapsed / 60)) min for ${#pids[@]} marks in parallel"
+if [[ $elapsed -gt $SWEEP_WARN_S ]]; then
+  echo "$(date +%H:%M) WARN: sweep took $((elapsed / 60)) min, over the $((SWEEP_WARN_S / 60)) min threshold." \
+       "Marks already run one-per-GPU, so this is a per-mark cost, not a scheduling problem;" \
+       "ss3 is the residue-level task and the usual culprit."
+fi
 
 if [[ $fail -gt 0 ]]; then
   echo "$(date +%H:%M) $fail of ${#pids[@]} marks failed; keeping dense views so a retry can reuse them"

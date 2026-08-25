@@ -54,9 +54,16 @@ SCOPE_LEVELS: Dict[str, int] = {"fold": 2, "superfamily": 3, "family": 4}
 #     STRING pairs   91.4 -> 135.6 pairs/s (1.48x), peak 11.88 -> 8.49 GB
 # Most of that is input unpadding, which Sentence Transformers enables
 # automatically whenever flash attention is active (1.30x of the STRING gain;
-# the kernel itself is the other 1.14x). That is also why mini_batch_num_tokens
-# does not help here: unpadding has already removed the padding work that token
-# packing exists to reclaim.
+# the kernel itself is the other 1.14x).
+#
+# That unpadding removes the COMPUTE that mini_batch_num_tokens would reclaim, but
+# not the memory variance, which is the other half of what a token budget buys and
+# the half that matters here. A fixed mini_batch_size of 64 spans 6.4k real tokens
+# on short proteins and 32.8k on a chunk of 512-residue ones, so peak VRAM is set
+# by the unluckiest chunk and every chunk below it wastes headroom. Budgeting by
+# tokens makes each chunk the same size, so the budget can be raised to the current
+# peak instead of the current average. The two features compose; they do not
+# substitute.
 FLASH_ATTENTION = "kernels-community/vllm-flash-attn3"
 
 
