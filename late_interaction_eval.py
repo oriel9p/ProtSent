@@ -39,11 +39,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger("late_interaction_eval")
 
 # Mirrors ProtBench's _PROTEINGYM_VARIANTS so the two report on identical data and grouping.
+# Label map matches ProtBench's _CLINICAL_LABEL_MAP so the two agree on encoding.
+_CLINICAL = {"Pathogenic": 1.0, "Benign": 0.0, "0": 0.0, "1": 1.0}
 PROTEINGYM_VARIANTS = {
-    "dms_substitutions": {"data_dir": "DMS_substitutions", "label": "DMS_score",
+    "dms_substitutions": {"data_dir": "DMS_substitutions", "label": "DMS_score", "metric": "spearman",
                           "group_by": "DMS_id", "mutant": "mutated_sequence", "wt": "target_seq"},
-    "dms_indels": {"data_dir": "DMS_indels", "label": "DMS_score",
+    "dms_indels": {"data_dir": "DMS_indels", "label": "DMS_score", "metric": "spearman",
                    "group_by": "DMS_id", "mutant": "mutated_sequence", "wt": "target_seq"},
+    "clinical_substitutions": {"data_dir": "clinical_substitutions", "label": "annotation",
+                               "metric": "auc", "map": _CLINICAL,
+                               "group_by": "protein_id", "mutant": "mutated_sequence", "wt": "target_seq"},
+    "clinical_indels": {"data_dir": "clinical_indels", "label": "annotation",
+                        "metric": "auc", "map": _CLINICAL,
+                        "group_by": "protein_id", "mutant": "mutated_sequence", "wt": "target_seq"},
 }
 
 
@@ -255,6 +263,7 @@ def cmd_proteingym(args) -> None:
     """
     from datasets import load_dataset
     from scipy.stats import spearmanr
+    from sklearn.metrics import roc_auc_score
 
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -278,7 +287,9 @@ def cmd_proteingym(args) -> None:
         if args.max_variants_per_assay and len(idx) > args.max_variants_per_assay:
             idx = rng.choice(idx, args.max_variants_per_assay, replace=False).tolist()
         sub = ds.select(sorted(int(i) for i in idx))
-        y = np.asarray(sub[cfg["label"]], dtype=float)
+        raw = sub[cfg["label"]]
+        y = (np.asarray([cfg["map"].get(str(v), np.nan) for v in raw], dtype=float)
+             if "map" in cfg else np.asarray(raw, dtype=float))
         mut, wt = sub[cfg["mutant"]], sub[0][cfg["wt"]]
         # A mutation past max_seq_length leaves the truncated mutant byte-identical to the
         # truncated WT, so its score is exactly the self-similarity: not noise, a block of exact
@@ -292,8 +303,13 @@ def cmd_proteingym(args) -> None:
             continue
         mut = [mut[i] for i in visible]
         y = y[visible]
+        ok = np.isfinite(y)
+        if ok.sum() < 2:
+            continue
+        mut = [m for m, k in zip(mut, ok) if k]
+        y = y[ok]
         if len(np.unique(y)) < 2:
-            continue  # constant labels have no rank correlation; averaging a NaN in would poison the mean
+            continue  # a constant label has neither a rank correlation nor an AUC
         work.append((a, mut, wt, y, n_silent))
     n_silent_total = sum(w[4] for w in work)
     logger.info("%s: %d assays, %d sequences to encode per model (%d variants dropped as "
@@ -309,27 +325,35 @@ def cmd_proteingym(args) -> None:
         for a, mut, wt, y, n_silent in work:
             sim = scorer([wt], queries=mut, bs=args.batch_size, ce=args.chunk_elements)[:, 0]
             lens = np.array([min(len(s), args.max_seq_length - 2) for s in mut], dtype=float)
-            rho = spearmanr(sim / lens, y).statistic
-            if np.isfinite(rho):
-                per_assay.append({"assay": a, "spearman": float(rho), "n": len(mut),
+            score = sim / lens
+            if cfg["metric"] == "auc":
+                # The label is pathogenicity, but the score is similarity to wild type: a variant
+                # that looks MORE like the WT should be LESS pathogenic. Negate, so an AUC above
+                # 0.5 means the expected direction rather than an accidental inversion.
+                val = roc_auc_score(y, -score)
+            else:
+                val = spearmanr(score, y).statistic
+            if np.isfinite(val):
+                per_assay.append({"assay": a, "score": float(val), "n": len(mut),
                                   "n_silent": n_silent})
         del scorer
         torch.cuda.empty_cache()
         if not per_assay:
             logger.warning("%s: no scoreable assay", name)
             continue
-        rhos = np.array([r["spearman"] for r in per_assay])
+        rhos = np.array([r["score"] for r in per_assay])
         _, lo, hi = boot_ci(rhos, n_boot=args.n_boot, seed=args.seed)
         rows.append({"model": name, "scoring": scoring, "variant": args.variant,
-                     "mean_spearman": float(rhos.mean()), "ci95": f"[{lo:.4f}, {hi:.4f}]",
+                     "metric": cfg["metric"], "mean_score": float(rhos.mean()),
+                     "ci95": f"[{lo:.4f}, {hi:.4f}]",
                      "n_assays": len(per_assay), "cap": args.max_variants_per_assay,
                      "n_variants_scored": int(sum(r["n"] for r in per_assay)),
                      "n_variants_dropped_truncated": int(sum(r["n_silent"] for r in per_assay)),
                      "runtime_s": round(time.time() - t0, 1)})
-        logger.info("%s %s: mean Spearman %.4f over %d assays in %.0fs", name, args.variant,
-                    rhos.mean(), len(per_assay), time.time() - t0)
+        logger.info("%s %s: mean %s %.4f over %d groups in %.0fs", name, args.variant,
+                    cfg["metric"], rhos.mean(), len(per_assay), time.time() - t0)
         np.savez_compressed(out / f"proteingym_{args.variant}_{name.replace('/', '_')}.npz",
-                            assay=np.array([r["assay"] for r in per_assay]), spearman=rhos)
+                            assay=np.array([r["assay"] for r in per_assay]), score=rhos)
     append_csv(out / "proteingym_maxsim.csv", rows)
 
 

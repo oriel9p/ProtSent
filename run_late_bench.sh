@@ -37,8 +37,15 @@ export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 # SCOPe and CATH are deliberately absent from both: retrieval is already covered per-checkpoint
 # by `late_interaction_eval.py watch_curve` (MaxSim) and `scope` (dense cosine), which score the
 # multi-vector model itself rather than its pooled view.
+# ProtBench's --very-fast minus conservation_flip. Dropped on 2026-08-25: it is not among the 23
+# tasks the ProtSent paper reports (which contains no residue-level task at all), and it costs
+# ~30 min per arm. ss3 is kept as the one residue-level probe -- late interaction trains per-residue
+# representations, and token_classification is the only family of tasks that reads them directly
+# rather than collapsing them into a pooled vector.
+CHEAP_TASKS="remote_homology solubility metal_ion_binding fluorescence stability beta_lactamase_peer ss3"
+
 case "${TASKS:-cheap}" in
-  cheap)      TASK_ARGS=(--very-fast) ;;
+  cheap)      TASK_ARGS=(-t $CHEAP_TASKS) ;;
   full)       TASK_ARGS=(--fast) ;;
   proteingym) TASK_ARGS=(--proteingym) ;;   # the 8 ProteinGym tasks; large and slow
   *)          TASK_ARGS=(-t ${TASKS}) ;;
