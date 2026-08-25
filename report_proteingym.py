@@ -18,9 +18,13 @@ from bootstrap_ci import boot_ci  # noqa: E402
 from late_interaction_eval import corrected_average  # noqa: E402
 
 _B = Path(__file__).resolve().parent / "results/late_interaction/pilot_35m/benchmarks"
-# The quarantined PARTIAL run, unless a full-coverage rerun has landed in the benchmarks dir.
+# Which directory is authoritative must be decided the SAME way build_late_results.py decides it.
+# Keying on Path.exists() disagreed with it the moment a partial rerun dropped a CSV in the
+# benchmarks dir: one script called that full coverage, the other still called it partial.
+from build_late_results import _proteingym_is_full  # noqa: E402
+
 D = Path(os.environ["PG_DIR"]) if os.environ.get("PG_DIR") else (
-    _B if (_B / "proteingym_maxsim.csv").exists() else _B / "proteingym_partial")
+    _B if _proteingym_is_full(_B / "proteingym_maxsim.csv") else _B / "proteingym_partial")
 VARIANTS = ("dms_substitutions", "dms_indels", "clinical_substitutions", "clinical_indels")
 METRIC = {"dms_substitutions": "Spearman", "dms_indels": "Spearman",
           "clinical_substitutions": "AUC", "clinical_indels": "AUC"}

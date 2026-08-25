@@ -43,7 +43,7 @@ with at least one non-self same-label neighbour); MAP is over the full ranking.
 | `protsent_late_proj128_dense` | pooled cosine | 0.6023 | 0.6664 | 0.6522 |
 | `protsent_late_150m` | MaxSim | 0.6600 | 0.7376 | 0.7607 |
 | `protsent_late_150m_dense` | pooled cosine | 0.6263 | 0.6864 | 0.7022 |
-| `protsent_late_150m_prop@25000` | MaxSim | 0.6379 | 0.7218 | 0.7566 |
+| `protsent_late_150m_prop@25000` | MaxSim | 0.6383 | 0.7222 | 0.7567 |
 
 Arms suffixed `_bf16bug` and `protsent_late_capped_flash` are **deleted**, models and rows
 alike. They trained under a bug that put AdamW's parameters in bf16, where a 1e-5 update is
