@@ -5,6 +5,49 @@ their standing. Read this before trusting, citing, or rerunning anything here.
 
 Last reviewed 2026-08-25 (evening).
 
+
+## Run naming convention (adopted 2026-08-25)
+
+**`late-r{N}-{base}-{size}`** — recipe version, base model, parameter count.
+
+| field | values |
+|---|---|
+| `r{N}` | **r1** = original recipe: cosine schedule, LR 1e-5 backbone / 1e-4 head (two param groups), `combinations` pair sampling. **r2** = clean recipe: `constant_with_warmup`, single LR group at 5e-5, `disjoint` pair sampling, per-rank negatives at batch 256. |
+| `{base}` | `esm2` = vanilla `facebook/esm2_t12_35M_UR50D` (identical weights to `Synthyra/ESM2-35M`). `protsentv2` = `GrimSqueaker/ProtSent-V2-*`. |
+| `{size}` | `35m`, `150m` |
+
+Example: `late-r2-protsentv2-35m` = clean recipe, ProtSent-V2 base, 35M.
+
+The two runs predating this convention keep their names (renaming a live run breaks its
+trainer, watcher, snapshotter and mark-bench at once); the legend below maps every run to what
+it actually is. **Use the convention for every new run.**
+
+## Run legend — what each name on disk actually is
+
+| run dir | recipe | base | size | steps | standing |
+|---|---|---|---|---|---|
+| `vanilla35m_clean` *(= `late-r2-esm2-35m`)* | **r2** | vanilla ESM-2 | 35M | 30,000 planned | **RUNNING** |
+| *(not yet created)* `late-r2-protsentv2-35m` | **r2** | ProtSent-V2 | 35M | — | **planned next**, matched-step comparison vs the above |
+| `protsent_late_proj128` | r1 | ProtSent-V2 | 35M | 4,000 | phase-1 reference, sfam 0.7057 |
+| `protsent_late` | r1 | ProtSent-V2 | 35M | 2,000 | early pilot |
+| `protsent_late_swap` | r1 | ProtSent-V2 | 35M | 4,000 | pair-symmetry ablation |
+| `protsent_late_35m_prop` | r1 phase 2 | *continues* `protsent_late_proj128` | 35M | 31,000 | mixture-confounded, see retraction above |
+| `esm2_late` | r1 | vanilla ESM-2 | 35M | 2,000 | vanilla-base reference, fold 0.6000 |
+| `protsent_late_150m` | r1 | ProtSent-V2 | 150M | 5,000 | phase-1 150M, sfam 0.7376 — **best 150M late model** |
+| `protsent_late_150m_prop` | r1 phase 2 | *continues* `protsent_late_150m` | 150M | 30,000 | head-reinit confounded, see above |
+| `esm2_late_150m` | r1 | vanilla ESM-2 | 150M | 5,000 | vanilla-base 150M reference |
+
+Results directories follow the same split: `clean_35m/` holds r2 output, `pilot_35m/` and
+`pilot_150m/` hold r1. Per-query npz are prefixed with the run name, so they never collide.
+
+## Log caveat
+
+`logs/queue_clean.log` contains **two** runs concatenated: a `--gather_across_devices` variant
+launched 13:42 and killed at ~step 150 (its 5.18 s/it figures are not the current config), then
+the current run from 14:26. The gathered variant left no checkpoints, no `runtime.json` and no
+result rows — verified — so only the log is shared. It was not split because the live trainer
+holds an open fd at a byte offset in it.
+
 ## In flight
 
 **`vanilla35m_clean`** — the corrected recipe from vanilla `facebook/esm2_t12_35M_UR50D`
