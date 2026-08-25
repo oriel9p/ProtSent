@@ -218,9 +218,17 @@ def cmd_fewshot_rh(args) -> None:
     for spec in args.models:
         name, kind, path = parse_model_spec(spec)
         scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
-        # One permutation, sliced per budget, so the budgets are nested and the query side is
-        # encoded once instead of once per budget. rng.choice per budget gave three unrelated
-        # galleries, which meant re-encoding all 3,244 test sequences for each one.
+        # One permutation, sliced per budget, so the budgets are NESTED: the 100-gallery is a
+        # prefix of the 500, which is a prefix of the 1000. rng.choice per budget gave three
+        # unrelated galleries, so a budget curve mixed gallery size with gallery identity.
+        #
+        # Nesting does not save any encoding, despite what this comment used to claim. scorer()
+        # is called inside the budget loop and cosine_matrix/maxsim_matrix encode both sides on
+        # every call, so the 3,244 test sequences are encoded once per budget regardless. Fixing
+        # that means splitting load_scorer into an encode half and a score half -- ST's
+        # similarity() takes precomputed embeddings, so the scoring side needs no new code -- but
+        # it buys ~90s per full sweep against a 4-minute subcommand, and costs a seam plus a
+        # runtime_s column that would no longer mean what the existing rows mean. Not worth it.
         perm = np.random.default_rng(args.seed).permutation(len(tr_seqs))
         for budget in args.budgets:
             sub = perm[: min(budget, len(tr_seqs))]
