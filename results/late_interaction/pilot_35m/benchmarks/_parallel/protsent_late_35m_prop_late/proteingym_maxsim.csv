@@ -1,2 +1,4 @@
 aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
 per_group_mean,0,"[0.4820, 0.5568]",nan,unpinned,late,0.5192281896175553,spearman,protsent_late_35m_prop_late,66,1000,0,287207,/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/late,-1,755.6,maxsim,dms_indels
+pooled,0,,,,,0.8318360114894575,auc,protsent_late_35m_prop_late,410,,,1409,,,13.6,maxsim,clinical_indels
+per_group_mean,0,"[0.7825, 0.9107]",nan,unpinned,late,0.8488095238095238,auc,protsent_late_35m_prop_late,77,1000,34,358,/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/late,-1,13.6,maxsim,clinical_indels

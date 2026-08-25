@@ -1,0 +1,7 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,EmbeddingNorm,CodeVersion,BenchmarkSeed,Accuracy,F1_Macro,BalancedAccuracy,MCC,F1_Weighted,ProbeFitSec,F1,AUC,AP,Spearman,Pearson,MSE,MAE,R2
+facebook/esm2_t30_150M_UR50D,Remote Homology (Fold),Full,2026-08-25,linear,standard,test,test_split,none,ba5a4bf,42,0.68342,0.37424,0.458,0.6797,0.66783,49.53391,,,,,,,,
+facebook/esm2_t30_150M_UR50D,Solubility (DeepSol),Full,2026-08-25,linear,standard,test,test_split,none,ba5a4bf,42,0.66017,0.65119,0.66009,0.33799,,2.71059,0.59524,0.72096,0.70405,,,,,
+facebook/esm2_t30_150M_UR50D,Metal Ion Binding,Full,2026-08-25,linear,standard,test,test_split,none,ba5a4bf,42,0.71997,0.71996,0.71997,0.43998,,0.16602,0.71807,0.79262,0.80695,,,,,
+facebook/esm2_t30_150M_UR50D,Fluorescence (TAPE),Full,2026-08-25,linear,standard,test,test_split,none,ba5a4bf,42,,,,,,0.25793,,,,0.57906,0.61086,1.00564,0.75166,-0.05962
+facebook/esm2_t30_150M_UR50D,Stability (Biomap),Full,2026-08-25,linear,standard,test,test_split,none,ba5a4bf,42,,,,,,0.58034,,,,0.70346,0.68847,0.1522,0.32733,0.0889
+facebook/esm2_t30_150M_UR50D,beta-lactamase-PEER,Full,2026-08-25,linear,standard,test,test_split_column,none,ba5a4bf,42,,,,,,0.04538,,,,0.81226,0.85773,0.0278,0.12715,0.73054

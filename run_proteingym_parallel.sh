@@ -47,6 +47,16 @@ out = Path(sys.argv[1]); target = out / "proteingym_maxsim.csv"
 rows = list(csv.DictReader(target.open())) if target.exists() else []
 for f in sorted(out.glob("_parallel/*/proteingym_maxsim.csv")):
     rows += list(csv.DictReader(f.open()))
+# Keep the last row per (variant, model): the freshly written per-arm CSVs are appended after the
+# existing file, so a rerun supersedes its own earlier row instead of sitting beside it. Without
+# this the file accumulates stale values -- a rescore at different coverage leaves both, and the
+# npz next to it holds only the new one.
+dedup = {}
+for r in rows:
+    dedup[(r.get("variant"), r.get("model"))] = r
+if len(dedup) != len(rows):
+    print(f"superseded {len(rows) - len(dedup)} stale row(s)")
+rows = list(dedup.values())
 if rows:
     keys = sorted({k for r in rows for k in r})
     with target.open("w", newline="") as fh:

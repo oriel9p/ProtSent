@@ -1,0 +1,7 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,EmbeddingNorm,CodeVersion,BenchmarkSeed,Accuracy,F1_Macro,BalancedAccuracy,MCC,F1_Weighted,ProbeFitSec,F1,AUC,AP,Spearman,Pearson,MSE,MAE,R2
+/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/dense_view,Remote Homology (Fold),Full,2026-08-25,knn,standard,test,test_split,none,ba5a4bf,42,0.65999,0.39307,0.48104,0.65623,0.65194,0.01523,,,,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/dense_view,Solubility (DeepSol),Full,2026-08-25,knn,standard,test,test_split,none,ba5a4bf,42,0.52724,0.52359,0.52719,0.05523,,0.01321,0.48193,0.54521,0.53077,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/dense_view,Metal Ion Binding,Full,2026-08-25,knn,standard,test,test_split,none,ba5a4bf,42,0.75751,0.75742,0.75751,0.51538,,0.00226,0.76197,0.82242,0.77645,,,,,
+/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/dense_view,Fluorescence (TAPE),Full,2026-08-25,knn,standard,test,test_split,none,ba5a4bf,42,,,,,,0.00467,,,,0.46497,0.49717,1.52062,0.90657,-0.60224
+/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/dense_view,Stability (Biomap),Full,2026-08-25,knn,standard,test,test_split,none,ba5a4bf,42,,,,,,0.00976,,,,0.60904,0.59225,0.1326,0.27824,0.20623
+/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/dense_view,beta-lactamase-PEER,Full,2026-08-25,knn,standard,test,test_split_column,none,ba5a4bf,42,,,,,,0.00113,,,,0.74468,0.80768,0.03604,0.12737,0.65065
