@@ -272,6 +272,17 @@ def backbone_and_projection_params(mve: MultiVectorEncoder):
     return backbone, proj
 
 
+def param_groups_for(mve: MultiVectorEncoder, *, lr: float, proj_lr: float) -> list:
+    """Optimizer param groups. ``proj_lr <= 0`` means one group at ``lr`` — the default for the
+    clean runs. The 10x head group was fine-tuning folklore rather than sentence-transformers
+    practice (ST and PyLate train backbone + fresh projection at a single LR, and Adam adapts
+    per-parameter anyway); it stays available for reproducing the pilot arms."""
+    backbone, proj = backbone_and_projection_params(mve)
+    if proj_lr <= 0 or not proj:
+        return [{"params": backbone + proj, "lr": lr}]
+    return [{"params": backbone, "lr": lr}, {"params": proj, "lr": proj_lr}]
+
+
 # --------------------------------------------------------------------------- scoring
 def maxsim_matrix(
     mve: MultiVectorEncoder,

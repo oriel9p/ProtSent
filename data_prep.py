@@ -812,7 +812,7 @@ class DataPrep:
 
         df = df.rechunk()
         df.write_parquet(path)
-        logger.info("Saved: %s (SORTED - do not shuffle during training)", path)
+        logger.info("Saved: %s (SORTED for streaming pair building; training shuffles the built pairs)", path)
 
     def prep_nvidia(self, limit_gb: int = 5):
         logger.info("ETL: Nvidia UniRef | Limit: %s GB", limit_gb)

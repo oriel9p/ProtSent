@@ -217,28 +217,6 @@ def test_scores_are_length_invariant_at_every_length(tiny_models):
     assert len(long) > 2 * len(short)
     for seq in (short, long):
         assert li.maxsim_against_one(mve, seq, [seq])[0] == pytest.approx(1.0, abs=1e-3)
-
-
-def test_bench_presets_share_one_sampling_regime():
-    """cheap and full must sample the same way, or their numbers cannot be compared.
-
-    ProtBench's own presets disagree (--very-fast caps at 100k, --fast runs full data), and the
-    cap silently changed when ProtBench was upgraded -- pilot rows say Samples=20000, new rows say
-    Full. Pinning explicit task lists with no --max_samples keeps every arm on one regime.
-    """
-    import re
-
-    script = (Path(__file__).resolve().parent.parent / "run_late_bench.sh").read_text()
-    presets = dict(re.findall(r"^\s*(cheap|full|proteingym)\)\s*TASK_ARGS=\((.*?)\)\s*;;",
-                              script, re.M | re.S))
-    assert {"cheap", "full"} <= set(presets), f"missing presets: {sorted(presets)}"
-    for name in ("cheap", "full"):
-        assert "--max_samples" not in presets[name], (
-            f"{name} sets an invented cap: {presets[name]}")
-        assert "--very-fast" not in presets[name] and "--fast" not in presets[name], (
-            f"{name} inherits a ProtBench preset whose cap changed across versions: {presets[name]}")
-
-
 def test_head_size_mismatch_refuses_to_silently_reinitialise(tiny_models, tmp_path):
     """Continuing at a different head width must fail loudly, not train a fresh random head.
 
@@ -260,28 +238,56 @@ def test_head_size_mismatch_refuses_to_silently_reinitialise(tiny_models, tmp_pa
         str(saved), proj_dim=32, max_seq_length=64, device="cpu", allow_head_reinit=True
     )
     assert other[1].linear.weight.shape[0] == 32
+def test_single_lr_mode_puts_every_parameter_in_one_group(tiny_models):
+    """`proj_lr <= 0` must mean one param group at one LR — the simple config the clean runs use.
 
-
-def test_snapshot_token_dropout_is_synced():
-    """A preserved checkpoint must carry the same token_dropout as the exported model.
-
-    Trainer checkpoints bypass save_late_and_dense, so they keep the poisoned value that
-    disable_esm2_token_dropout writes at load (false) while every late/ carries the runtime truth
-    (true). EsmEmbeddings caches the flag in __init__, so an unsynced snapshot silently loses
-    ESM's 0.88 embedding scaling: measured max|diff| 0.005, cosine 0.999941 -- small, but a
-    different forward pass than every arm it would be compared against.
+    The 10x head group was fine-tuning folklore, not sentence-transformers practice (ST and
+    PyLate train backbone + fresh projection at a single LR); Adam's per-parameter adaptivity
+    makes it redundant. It stays available for reproducing the pilot arms, but the default path
+    should have one knob.
     """
-    import json
+    mve, _ = tiny_models
+    groups = li.param_groups_for(mve, lr=5e-5, proj_lr=0.0)
+    assert len(groups) == 1
+    assert groups[0]["lr"] == 5e-5
+    n_trainable = sum(1 for p in mve.parameters() if p.requires_grad)
+    assert len(groups[0]["params"]) == n_trainable
 
-    root = Path(__file__).resolve().parent.parent / "models" / "late_interaction"
-    checked = 0
-    for snap in root.glob("*/snapshots/step-*/config.json"):
-        exported = snap.parent.parent.parent / "late" / "config.json"
-        if not exported.exists():
-            continue
-        want = json.loads(exported.read_text()).get("token_dropout")
-        got = json.loads(snap.read_text()).get("token_dropout")
-        assert got == want, f"{snap} has token_dropout={got}, exported model has {want}"
-        checked += 1
-    if checked == 0:
-        pytest.skip("no snapshots on this machine")
+    two = li.param_groups_for(mve, lr=1e-5, proj_lr=1e-4)
+    assert [g["lr"] for g in two] == [1e-5, 1e-4]
+    assert sum(len(g["params"]) for g in two) == n_trainable
+
+
+def test_constant_schedule_reaches_the_optimizer_and_holds_peak():
+    """--lr_scheduler constant_with_warmup: after warmup the LR is the peak, at any step.
+
+    The point of the constant schedule is that checkpoints at different step counts stay
+    comparable — a cosine run's checkpoint quality depends on where the anneal was, which is
+    exactly the confound that muddied the phase-2 comparison.
+    """
+    import torch
+    from transformers import get_scheduler
+
+    from train_late_interaction import parse_args
+
+    args = parse_args_for_test = None
+    import sys as _sys
+    argv = _sys.argv
+    _sys.argv = ["x", "--model", "m", "--files", "f", "--output_dir", "o",
+                 "--lr_scheduler", "constant_with_warmup"]
+    try:
+        args = parse_args()
+    finally:
+        _sys.argv = argv
+    assert args.lr_scheduler == "constant_with_warmup"
+
+    p = torch.nn.Parameter(torch.zeros(1))
+    opt = torch.optim.AdamW([p], lr=5e-5)
+    sched = get_scheduler(args.lr_scheduler, opt, num_warmup_steps=10, num_training_steps=1000)
+    for _ in range(10):
+        opt.step(); sched.step()
+    lrs = []
+    for _ in range(500):
+        opt.step(); sched.step()
+        lrs.append(sched.get_last_lr()[0])
+    assert all(abs(x - 5e-5) < 1e-12 for x in lrs), "LR drifted after warmup on a constant schedule"

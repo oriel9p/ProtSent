@@ -65,8 +65,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max_steps", type=int, default=2000)
     p.add_argument("--max_minutes", type=int, default=165, help="Hard wall-clock stop (<2h45m default)")
     p.add_argument("--lr", type=float, default=1e-5, help="Backbone learning rate")
-    p.add_argument("--proj_lr", type=float, default=1e-4, help="Projection learning rate")
+    p.add_argument("--proj_lr", type=float, default=1e-4,
+                   help="Projection learning rate; <=0 trains everything in one group at --lr")
     p.add_argument("--warmup_steps", type=int, default=100)
+    p.add_argument("--lr_scheduler", default="cosine",
+                   choices=["cosine", "linear", "constant_with_warmup"],
+                   help="constant_with_warmup keeps checkpoints comparable at any step count; "
+                        "cosine (the pilot default) ties a checkpoint's quality to where the "
+                        "anneal was when it saved")
     p.add_argument("--save_steps", type=int, default=250)
     p.add_argument("--max_pairs_per_cluster", type=int, default=8)
     p.add_argument("--max_pairs_per_file", type=int, default=2_000_000,
@@ -172,7 +178,7 @@ def main() -> None:
         bf16=True,
         learning_rate=args.lr,
         warmup_steps=args.warmup_steps,
-        lr_scheduler_type="cosine",
+        lr_scheduler_type=args.lr_scheduler,
         batch_sampler=BatchSamplers.BATCH_SAMPLER,  # NO_DUPLICATES hangs on cluster-sorted corpora
         multi_dataset_batch_sampler=(MultiDatasetBatchSamplers.PROPORTIONAL
                                      if args.multi_dataset_sampler == "proportional"
@@ -222,10 +228,7 @@ def main() -> None:
         score_mini_batch_size=args.score_mini_batch_size,
         gather_across_devices=args.gather_across_devices,
     )
-    backbone, proj = li.backbone_and_projection_params(mve)
-    param_groups = [{"params": backbone, "lr": args.lr}]
-    if proj:
-        param_groups.append({"params": proj, "lr": args.proj_lr})
+    param_groups = li.param_groups_for(mve, lr=args.lr, proj_lr=args.proj_lr)
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr, weight_decay=0.01)
 
     trainer = MultiVectorEncoderTrainer(
@@ -269,6 +272,7 @@ def main() -> None:
         runtime = {
             "model": args.model,
             "proj_dim": args.proj_dim,
+            "lr_scheduler": args.lr_scheduler,
             "head_reinit": args.allow_head_reinit,
             "max_seq_length": args.max_seq_length,
             "per_device_batch_size": args.batch_size,

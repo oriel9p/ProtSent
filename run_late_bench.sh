@@ -59,7 +59,6 @@ case "${TASKS:-cheap}" in
   cheap)      TASK_ARGS=(-t $CHEAP_TASKS) ;;
   paper)      TASK_ARGS=(-t $PAPER_TASKS) ;;
   full)       TASK_ARGS=(-t $PAPER_TASKS ppi_bernett) ;;
-  fast)       TASK_ARGS=(--fast) ;;
   proteingym) TASK_ARGS=(--proteingym) ;;   # the 8 ProteinGym tasks; large and slow
   *)          TASK_ARGS=(-t ${TASKS}) ;;
 esac

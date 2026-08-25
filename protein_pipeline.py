@@ -7,10 +7,13 @@ A modular pipeline for downloading data and training Protein Sentence Transforme
 using Contrastive Learning and the sentence-transformers library.
 
 ## Key Features
-1.  **Hierarchical Hard Negatives**:
-    -   Implements "Clade-Aware" sorting (Clan -> Family) for Pfam.
-    -   Ensures structurally similar but functionally distinct proteins (Hard Negatives)
-        appear in the same batch, forcing the model to learn fine-grained evolutionary signals.
+1.  **Cluster-sorted corpora** (Clan -> Family for Pfam, cluster for AFDB):
+    -   Sorting exists so `_build_pair_dataset` can stream pairs from consecutive same-group
+        rows in O(1) memory. It does NOT shape batches: every training path shuffles the built
+        pair Dataset (``--pair_dataset_shuffle`` default True) and ST's default batch sampler
+        draws via RandomSampler. An earlier version of this docstring claimed the sorting put
+        related families in the same batch as hard negatives -- no run ever did that
+        (audited 2026-08-25).
 
 2.  **Native Multi-Dataset Training**:
     -   Uses sentence-transformers' native `dict[str, Dataset]` multi-dataset support
