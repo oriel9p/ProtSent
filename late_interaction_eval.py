@@ -92,6 +92,7 @@ def save_per_query(out: Path, name: str, pq: dict) -> Path:
     identity strata, McNemar), so its name and key layout live here rather than being
     restated at each call site -- they had already started to drift.
     """
+    out.mkdir(parents=True, exist_ok=True)  # cmd_watch_curve never creates out_dir; every write goes through here
     path = out / f"per_query_{name.replace('/', '_')}.npz"
     np.savez_compressed(path, **{f"{lvl}_{k}": v for lvl, d in pq.items() for k, v in d.items()})
     return path

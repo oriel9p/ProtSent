@@ -291,3 +291,23 @@ def test_constant_schedule_reaches_the_optimizer_and_holds_peak():
         opt.step(); sched.step()
         lrs.append(sched.get_last_lr()[0])
     assert all(abs(x - 5e-5) < 1e-12 for x in lrs), "LR drifted after warmup on a constant schedule"
+
+
+def test_save_per_query_creates_its_own_output_dir(tmp_path):
+    """cmd_watch_curve never mkdir's out_dir (cmd_scope does); the write must not depend on the
+    caller having created it, or a live watcher silently drops every checkpoint's scores.
+
+    This is exactly what happened during the vanilla35m_clean run 2026-08-25: the watcher ran
+    for 30+ minutes across 3 checkpoints, encoding 2,207 SCOPe sequences each time, before the
+    caught-and-logged FileNotFoundError was noticed -- pure GPU time with zero output.
+    """
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import late_interaction_eval as lev
+
+    out = tmp_path / "does" / "not" / "exist" / "yet"
+    assert not out.exists()
+    pq = {"fold": {"ap": np.array([0.5, 0.6])}}
+    path = lev.save_per_query(out, "arm", pq)
+    assert path.exists()
+    assert out.exists()
