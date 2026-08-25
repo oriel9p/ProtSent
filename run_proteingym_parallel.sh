@@ -1,43 +1,45 @@
 #!/usr/bin/env bash
-# Score ProteinGym arms in parallel, one arm per free GPU.
-#
-# Assays are independent and so are arms, but the per-arm .npz files are uniquely named while the
-# CSV is read-rewrite -- concurrent writers would clobber it. So each arm gets its own out_dir and
-# the results are merged at the end. That keeps the Python single-threaded and unchanged.
+# Score ProteinGym arms in parallel, one arm per idle GPU.
 #
 #   ./run_proteingym_parallel.sh <variant> <out_dir> name=kind:path [name=kind:path ...]
 #
-# With one arm, or one free GPU, this degrades to exactly the serial behaviour.
+# Per-arm .npz names are unique but the CSV is read-rewrite, so each arm writes to its own out_dir
+# and the rows are merged at the end. One arm or one idle card degrades to the serial path.
 set -uo pipefail
 cd "$(dirname "$0")"
 export HF_HOME=${HF_HOME:-/storage/models/hf_home} TOKENIZERS_PARALLELISM=false
 
 VARIANT="${1:?variant}"; OUT="${2:?out_dir}"; shift 2
 ARGS=${PGYM_ARGS:-"--max_seq_length 1024 --batch_size 256"}
+IDLE_UTIL=${IDLE_UTIL:-10} IDLE_MB=${IDLE_MB:-2000}
 
-# Only cards that are actually idle: the campaign's training arms and bench stages hold others, and
-# sharing a card is slower than queueing for one.
+# Sharing a card is slower than queueing for one, and the training queue holds cards for hours.
 mapfile -t FREE < <(nvidia-smi --query-gpu=index,utilization.gpu,memory.used --format=csv,noheader,nounits |
-  awk -F', *' '$2 < 10 && $3 < 2000 {print $1}')
+  awk -F', *' -v u="$IDLE_UTIL" -v m="$IDLE_MB" '$2 < u && $3 < m {print $1}')
 [[ ${#FREE[@]} -eq 0 ]] && { echo "no idle GPU; refusing to contend" >&2; exit 1; }
 echo "idle GPUs: ${FREE[*]}   arms: $#"
 
-i=0
+declare -A busy                       # gpu -> pid of the arm running on it
+failed=0
 for spec in "$@"; do
-  name="${spec%%=*}"
-  gpu="${FREE[$((i % ${#FREE[@]}))]}"
-  d="$OUT/_parallel/$name"; mkdir -p "$d"
-  CUDA_VISIBLE_DEVICES="$gpu" uv run --no-sync python late_interaction_eval.py proteingym \
-    --models "$spec" --variant "$VARIANT" $ARGS --out_dir "$d" \
-    > "$d/log" 2>&1 &
-  echo "  $name -> gpu $gpu"
-  i=$((i + 1))
-  # Keep at most one job per idle card in flight.
-  (( i % ${#FREE[@]} == 0 )) && wait
+  # Take the first card with no live job. Waiting on a whole wave would let one slow arm (the
+  # cosine arms take ~2.5x the maxsim ones) hold up every card behind it.
+  while :; do
+    for g in "${FREE[@]}"; do
+      [[ -z ${busy[$g]:-} ]] && { slot=$g; break 2; }
+      kill -0 "${busy[$g]}" 2>/dev/null || { wait "${busy[$g]}" || failed=1; unset "busy[$g]"; slot=$g; break 2; }
+    done
+    sleep 2
+  done
+  name="${spec%%=*}"; d="$OUT/_parallel/$name"; mkdir -p "$d"
+  CUDA_VISIBLE_DEVICES="$slot" uv run --no-sync python late_interaction_eval.py proteingym \
+    --models "$spec" --variant "$VARIANT" $ARGS --out_dir "$d" > "$d/log" 2>&1 &
+  busy[$slot]=$!
+  echo "  $name -> gpu $slot"
 done
-wait
+for pid in "${busy[@]}"; do wait "$pid" || failed=1; done
+(( failed )) && echo "WARNING: at least one arm exited non-zero; check */log" >&2
 
-# Merge: .npz names are already unique per arm, the CSV needs its rows concatenated under one header.
 mkdir -p "$OUT"
 find "$OUT/_parallel" -name '*.npz' -exec mv -t "$OUT" {} +
 uv run --no-sync python - "$OUT" <<'PY'
@@ -47,20 +49,12 @@ out = Path(sys.argv[1]); target = out / "proteingym_maxsim.csv"
 rows = list(csv.DictReader(target.open())) if target.exists() else []
 for f in sorted(out.glob("_parallel/*/proteingym_maxsim.csv")):
     rows += list(csv.DictReader(f.open()))
-# Keep the last row per (variant, model): the freshly written per-arm CSVs are appended after the
-# existing file, so a rerun supersedes its own earlier row instead of sitting beside it. Without
-# this the file accumulates stale values -- a rescore at different coverage leaves both, and the
-# npz next to it holds only the new one.
-dedup = {}
-for r in rows:
-    dedup[(r.get("variant"), r.get("model"))] = r
-if len(dedup) != len(rows):
-    print(f"superseded {len(rows) - len(dedup)} stale row(s)")
-rows = list(dedup.values())
+# Last row per (variant, model) wins: fresh per-arm rows are appended after any existing ones.
+rows = list({(r["variant"], r["model"]): r for r in rows}.values())
 if rows:
     keys = sorted({k for r in rows for k in r})
     with target.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=keys, restval=""); w.writeheader(); w.writerows(rows)
     print(f"merged {len(rows)} rows into {target}")
 PY
-echo "done"
+exit $failed

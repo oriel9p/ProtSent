@@ -34,16 +34,9 @@ def test_mask_drops_special_tokens_and_normalises(tiny_models):
 
 
 def test_scoring_one_document_matches_the_all_vs_all_scorer(tiny_models):
-    """The streamed one-document path must agree with `maxsim_matrix`, which it replaces.
+    """The fast path must agree with `maxsim_matrix`, which it replaces.
 
-    `maxsim_against_one` exists purely as a faster route to a number `maxsim_matrix` already
-    computes, and its docstring claims they match. Nothing asserted that, so the claim was load
-    bearing and unguarded: every ProteinGym score now comes from the fast path, and a silent
-    divergence would move published results with no test failing.
-
-    Substitution-shaped inputs on purpose -- same length as the document, differing in one residue
-    -- because that is the regime the benchmark actually scores and the regime where the two paths
-    are most likely to drift.
+    Substitution-shaped inputs: that is the regime ProteinGym scores.
     """
     mve, _ = tiny_models
     wt = SEQS[1]
@@ -56,10 +49,9 @@ def test_scoring_one_document_matches_the_all_vs_all_scorer(tiny_models):
     raw = li.maxsim_matrix(mve, [wt], queries=mutants, chunk_elements=1_000_000)[:, 0]
     reference = raw / np.array([len(m) for m in mutants], dtype=float)
 
-    assert fast.shape == (len(mutants),)
+    assert fast.shape == (len(mutants),)      # allclose broadcasts; shape must be checked first
     assert np.allclose(fast, reference, atol=1e-3), np.abs(fast - reference).max()
-    # Ranking is what Spearman consumes, so agreement on order matters more than on magnitude.
-    assert list(np.argsort(fast)) == list(np.argsort(reference))
+    assert list(np.argsort(fast)) == list(np.argsort(reference))   # Spearman consumes the ranking
 
 
 def test_zero_shot_control_uses_native_hidden_size():
@@ -206,11 +198,7 @@ def test_continuing_from_a_saved_model_keeps_its_trained_head(tiny_models, tmp_p
 def test_scores_are_length_invariant_at_every_length(tiny_models):
     """A sequence scored against itself is 1.0, whatever its length.
 
-    This replaces a guard against dividing cosine by sequence length -- a bug that was invisible on
-    substitutions (equal lengths, constant divisor) and destroyed the indel baseline (varying
-    lengths reorder). The division now happens inside the scorer, normalised by the real unmasked
-    token count, so the invariant is stronger and catches the same class of error: divide twice and
-    a self-score becomes 1/L, which this pins at two very different lengths.
+    Divide by length twice and a self-score becomes 1/L; two very different lengths pin that.
     """
     mve, _ = tiny_models
     short, long = SEQS[2], SEQS[1]
@@ -270,8 +258,8 @@ def test_constant_schedule_reaches_the_optimizer_and_holds_peak():
 
     from train_late_interaction import parse_args
 
-    args = parse_args_for_test = None
     import sys as _sys
+
     argv = _sys.argv
     _sys.argv = ["x", "--model", "m", "--files", "f", "--output_dir", "o",
                  "--lr_scheduler", "constant_with_warmup"]

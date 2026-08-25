@@ -304,56 +304,40 @@ def maxsim_matrix(
     return scores.float().cpu().numpy()
 
 
+# Query embeddings for one chunk stay resident; 8192 keeps that under ~1 GB at 128-D.
+_QUERY_CHUNK = 8192
+_CHUNK_ELEMENTS = 25_000_000
+
+
 def maxsim_against_one(
     mve: MultiVectorEncoder,
     document: str,
     queries: Sequence[str],
     *,
     batch_size: int = 256,
-    chunk_queries: int = 8192,
-    chunk_elements: int = 25_000_000,
 ) -> np.ndarray:
     """Mean-MaxSim of every query against ONE document.
 
-    ``maxsim_matrix`` is built for all-vs-all and converts the corpus to numpy, which is right for a
-    69k-domain lookup set and wrong for "score 2.4M variants against a single wild type". Here the
-    document is encoded once and every query batch is scored while it is still on the GPU.
-
-    This is a thin wrapper over the library: ``encode_*`` keeps embeddings on the device (that is
-    the ST 6 default), and ``similarity`` takes a bare 2-D left operand as a batch of one and bounds
-    its own token-token intermediate via ``chunk_elements``. Hand-rolling those was both more code
-    and, without chunking, an OOM at any interesting batch size.
-
-    Returns **mean**-MaxSim (``length_normalize=True``), so the divisor is the real unmasked token
-    count rather than an estimate from the string length, and a sequence scored against itself is
-    1.0. Note this differs from ``maxsim_matrix``, which returns the raw sum.
+    Returns the mean, not the raw sum `maxsim_matrix` returns, so a sequence scored against itself
+    is 1.0 and the caller must not divide again.
     """
-    mve.eval()
-    use_bf16 = mve.device.type == "cuda"
+    # bf16 forward, fp32 scoring: 2.35x faster, costs 0.002 mean Spearman. Scoring stays fp32
+    # because ST upcasts only AFTER the token-token matmul.
+    bf16 = dict(device_type="cuda", dtype=torch.bfloat16, enabled=mve.device.type == "cuda")
+    enc = dict(convert_to_numpy=False, show_progress_bar=False)
 
-    def encode(fn, texts: List[str]):
-        # bf16 forward, fp32 scoring: measured 2.35x faster than fp32 throughout, for 0.0020 mean
-        # (0.0051 max) on the per-assay Spearman we report -- which averages down across assays to
-        # ~0.0002 on the headline, against effects of 0.014-0.093. Scoring stays fp32 because ST
-        # upcasts only AFTER the token-token matmul, so bf16 there would quantize each per-residue
-        # maximum before the sum.
-        with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16, enabled=use_bf16):
-            return fn(list(texts), convert_to_numpy=False, show_progress_bar=False)
-
-    doc = encode(mve.encode_document, [document])[0].float()
+    with torch.no_grad(), torch.autocast(**bf16):
+        doc = mve.encode_document([document], **enc)[0].float()
     scores = []
-    for i in range(0, len(queries), chunk_queries):
-        qs = encode(
-            lambda x, **kw: mve.encode_query(x, batch_size=batch_size, **kw),
-            queries[i : i + chunk_queries],
-        )
+    for i in range(0, len(queries), _QUERY_CHUNK):
+        chunk = list(queries[i : i + _QUERY_CHUNK])
+        with torch.no_grad(), torch.autocast(**bf16):
+            qs = mve.encode_query(chunk, batch_size=batch_size, **enc)
         with torch.no_grad():
-            sim = mve.similarity(
-                [q.float() for q in qs], [doc],
-                chunk_elements=chunk_elements, length_normalize=True,
-            )
+            sim = mve.similarity([q.float() for q in qs], [doc],
+                                 chunk_elements=_CHUNK_ELEMENTS, length_normalize=True)
         scores.append(sim[:, 0].float().cpu().numpy())
-    return np.concatenate(scores) if scores else np.empty(0)
+    return np.concatenate(scores) if scores else np.empty(0, dtype=np.float64)
 
 
 def cosine_matrix(st: SentenceTransformer, seqs: Sequence[str], *, batch_size: int = 64,
