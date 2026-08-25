@@ -85,12 +85,6 @@ def load_scorer(kind: str, path: str, *, max_seq_length: int, device):
     )
 
 
-def variant_scores(sim: np.ndarray, lens: np.ndarray, scoring: str) -> np.ndarray:
-    """Per-variant score. MaxSim sums over query residues so it becomes mean-MaxSim; cosine is
-    already length-invariant and must be left alone (dividing it reorders indel sets)."""
-    return sim / lens if scoring == "maxsim" else sim
-
-
 def save_per_query(out: Path, name: str, pq: dict) -> Path:
     """Write the per-query vectors that every paired test downstream reads.
 
@@ -360,16 +354,19 @@ def cmd_proteingym(args) -> None:
     rows = []
     for spec in args.models:
         name, kind, path = parse_model_spec(spec)
-        scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
         # Provenance from the CLI spec: arm identity belongs in the results file, not a table in
         # the report script. dense/zeroshot have no projection by construction.
         proj_dim = 0 if kind in ("dense", "zeroshot") else (args.proj_dim_note or -1)
-        # ProteinGym scores ONE document (the wild type) against many queries. maxsim_matrix is
-        # shaped for all-vs-all and spends ~64% of its time outside the forward pass, materialising
-        # query embeddings and round-tripping them GPU->host->GPU. The streamed path is 2.3x faster
-        # and preserves the ranking (Spearman 0.9996 against it; Spearman is what we report).
-        fast = None
-        if scoring == "maxsim":
+        # ProteinGym scores ONE document (the wild type) against many queries, so the maxsim arms
+        # use the streamed one-document scorer rather than the all-vs-all matrix. Build whichever
+        # encoder that arm needs ONCE: loading via load_scorer as well left two backbones resident
+        # for the whole run, and for maxsim arms the first was never called.
+        scorer = fast = None
+        if kind == "dense":
+            scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length,
+                                          device=args.device)
+        else:
+            scoring = "maxsim"
             fast = (li.load_multivector_encoder(path, device=args.device) if kind == "late"
                     else li.build_multivector_encoder(path, proj_dim=0,
                                                       max_seq_length=args.max_seq_length,
@@ -379,11 +376,12 @@ def cmd_proteingym(args) -> None:
         per_assay = []
         pooled_scores, pooled_y = [], []
         for a, mut, wt, y, n_silent in work:
-            sim = (li.maxsim_against_one(fast, wt, mut, batch_size=max(args.batch_size, 256))
-                   if fast is not None else
-                   scorer([wt], queries=mut, bs=args.batch_size, ce=args.chunk_elements)[:, 0])
-            lens = np.array([min(len(s), args.max_seq_length - 2) for s in mut], dtype=float)
-            score = variant_scores(sim, lens, scoring)
+            # Both scorers are already length-invariant: maxsim_against_one returns mean-MaxSim
+            # (normalised by the real unmasked token count) and cosine is normalised by definition.
+            # Dividing here is what corrupted the indel baseline.
+            score = (li.maxsim_against_one(fast, wt, mut, batch_size=max(args.batch_size, 256))
+                     if fast is not None else
+                     scorer([wt], queries=mut, bs=args.batch_size, ce=args.chunk_elements)[:, 0])
             if cfg["metric"] == "auc":
                 # The label is pathogenicity, but the score is similarity to wild type: a variant
                 # that looks MORE like the WT should be LESS pathogenic. Negate, so an AUC above

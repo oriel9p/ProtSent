@@ -303,46 +303,50 @@ def maxsim_against_one(
     queries: Sequence[str],
     *,
     batch_size: int = 256,
+    chunk_queries: int = 8192,
+    chunk_elements: int = 25_000_000,
 ) -> np.ndarray:
-    """MaxSim of every query against ONE document, streamed.
+    """Mean-MaxSim of every query against ONE document.
 
-    ``maxsim_matrix`` is built for all-vs-all: it materialises every query's per-residue
-    embeddings and round-trips them GPU->host->GPU. That is the right shape for a 69k-domain
-    lookup set, and the wrong one for "score 2.4M variants against a single wild type", where the
-    corpus is one sequence and the queries are the whole benchmark. Measured on a real assay, only
-    36% of that path's time was the forward pass.
+    ``maxsim_matrix`` is built for all-vs-all and converts the corpus to numpy, which is right for a
+    69k-domain lookup set and wrong for "score 2.4M variants against a single wild type". Here the
+    document is encoded once and every query batch is scored while it is still on the GPU.
 
-    Here the document is encoded once and kept on the GPU, and each query batch is scored the
-    moment it is embedded, so nothing but a scalar per query survives the batch. Scores match
-    ``maxsim_matrix`` to float tolerance.
+    This is a thin wrapper over the library: ``encode_*`` keeps embeddings on the device (that is
+    the ST 6 default), and ``similarity`` takes a bare 2-D left operand as a batch of one and bounds
+    its own token-token intermediate via ``chunk_elements``. Hand-rolling those was both more code
+    and, without chunking, an OOM at any interesting batch size.
+
+    Returns **mean**-MaxSim (``length_normalize=True``), so the divisor is the real unmasked token
+    count rather than an estimate from the string length, and a sequence scored against itself is
+    1.0. Note this differs from ``maxsim_matrix``, which returns the raw sum.
     """
     mve.eval()
-    device = mve.device
+    use_bf16 = mve.device.type == "cuda"
 
-    def embed(texts: List[str]):
-        feats = mve.tokenize(list(texts))
-        feats = {k: (v.to(device) if hasattr(v, "to") else v) for k, v in feats.items()}
-        with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16,
-                                             enabled=(device.type == "cuda")):
-            out = mve(feats)
-        emb = out["token_embeddings"].float()
-        # MultiVectorMask zeroes the skiplisted positions rather than removing them, so the mask
-        # is what says which residues count -- summing without it would add <cls>/<eos>/<pad>.
-        mask = out.get("attention_mask")
-        if mask is None:
-            mask = feats.get("attention_mask")
-        return emb, mask.to(emb.dtype)
+    def encode(fn, texts: List[str]):
+        # bf16 forward, fp32 scoring: measured 2.35x faster than fp32 throughout, for 0.0020 mean
+        # (0.0051 max) on the per-assay Spearman we report -- which averages down across assays to
+        # ~0.0002 on the headline, against effects of 0.014-0.093. Scoring stays fp32 because ST
+        # upcasts only AFTER the token-token matmul, so bf16 there would quantize each per-residue
+        # maximum before the sum.
+        with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16, enabled=use_bf16):
+            return fn(list(texts), convert_to_numpy=False, show_progress_bar=False)
 
-    doc_emb, doc_mask = embed([document])
-    doc = doc_emb[0][doc_mask[0].bool()]                      # [Ld, d], valid residues only
-    scores = np.empty(len(queries), dtype=np.float64)
-    for i in range(0, len(queries), batch_size):
-        q_emb, q_mask = embed(list(queries[i:i + batch_size]))
+    doc = encode(mve.encode_document, [document])[0].float()
+    scores = []
+    for i in range(0, len(queries), chunk_queries):
+        qs = encode(
+            lambda x, **kw: mve.encode_query(x, batch_size=batch_size, **kw),
+            queries[i : i + chunk_queries],
+        )
         with torch.no_grad():
-            sim = torch.einsum("bqd,kd->bqk", q_emb, doc)     # [B, Lq, Ld]
-            best = sim.max(dim=-1).values * q_mask            # best document match per residue
-            scores[i:i + q_emb.shape[0]] = best.sum(dim=1).cpu().numpy()
-    return scores
+            sim = mve.similarity(
+                [q.float() for q in qs], [doc],
+                chunk_elements=chunk_elements, length_normalize=True,
+            )
+        scores.append(sim[:, 0].float().cpu().numpy())
+    return np.concatenate(scores) if scores else np.empty(0)
 
 
 def cosine_matrix(st: SentenceTransformer, seqs: Sequence[str], *, batch_size: int = 64,

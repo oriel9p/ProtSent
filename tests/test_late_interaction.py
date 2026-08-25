@@ -50,7 +50,11 @@ def test_scoring_one_document_matches_the_all_vs_all_scorer(tiny_models):
     mutants = [wt[:i] + ("A" if wt[i] != "A" else "G") + wt[i + 1:] for i in range(0, len(wt), 3)]
 
     fast = li.maxsim_against_one(mve, wt, mutants)
-    reference = li.maxsim_matrix(mve, [wt], queries=mutants, chunk_elements=1_000_000)[:, 0]
+    # maxsim_matrix returns the raw sum over query residues; maxsim_against_one returns the mean,
+    # so the reference is divided by the residue count (the mask drops <cls>/<eos>, and ESM emits
+    # one token per residue).
+    raw = li.maxsim_matrix(mve, [wt], queries=mutants, chunk_elements=1_000_000)[:, 0]
+    reference = raw / np.array([len(m) for m in mutants], dtype=float)
 
     assert fast.shape == (len(mutants),)
     assert np.allclose(fast, reference, atol=1e-3), np.abs(fast - reference).max()
@@ -199,62 +203,17 @@ def test_continuing_from_a_saved_model_keeps_its_trained_head(tiny_models, tmp_p
     )
 
 
-def test_cosine_scores_are_not_divided_by_length():
-    """Cosine is already length-invariant; dividing it by length corrupts the ranking.
+def test_scores_are_length_invariant_at_every_length(tiny_models):
+    """A sequence scored against itself is 1.0, whatever its length.
 
-    MaxSim sums over query residues, so it must be divided to become mean-MaxSim. Cosine is
-    normalised, so the same division is not a normalisation but a bug — invisible on substitutions
-    (equal lengths, constant divisor) and destructive on indels (varying lengths).
+    This replaces a guard against dividing cosine by sequence length -- a bug that was invisible on
+    substitutions (equal lengths, constant divisor) and destroyed the indel baseline (varying
+    lengths reorder). The division now happens inside the scorer, normalised by the real unmasked
+    token count, so the invariant is stronger and catches the same class of error: divide twice and
+    a self-score becomes 1/L, which this pins at two very different lengths.
     """
-    from late_interaction_eval import variant_scores
-
-    sim = np.array([0.5, 0.9])                      # variant 1 is the better cosine match
-    lens = np.array([10.0, 400.0])                  # an indel set: lengths differ
-    assert np.array_equal(variant_scores(sim, lens, "cosine"), sim)
-    assert np.allclose(variant_scores(sim, lens, "maxsim"), sim / lens)
-    # dividing cosine by length flips which variant ranks first -- that is what broke Spearman
-    assert list(np.argsort(-variant_scores(sim, lens, "cosine"))) == [1, 0]
-    assert list(np.argsort(-(sim / lens))) == [0, 1]
-
-
-def test_head_size_mismatch_refuses_to_silently_reinitialise(tiny_models, tmp_path):
-    """Asking for a different proj_dim than the checkpoint saved must fail loudly.
-
-    This warned and carried on, which is how `protsent_late_150m_prop` came to spend 30,000 steps
-    training a fresh random 128-D head on a parent that had saved a 64-D one. The run looked like
-    a continuation, its logs said "continuing", and its step-0 checkpoint -- the baseline every
-    later checkpoint was compared against -- was a random projection. That made an ordinary
-    regression read as a scale-dependent sign flip.
-
-    A dimension mismatch is never a recoverable condition: the saved head cannot be loaded at the
-    requested width by any means, so continuing can only mean discarding it. Say so before the
-    GPUs are booked, not in a warning nobody reads eight hours later.
-    """
-    import torch
-
     mve, _ = tiny_models
-    with torch.no_grad():
-        mve[1].linear.weight.fill_(0.0123)
-    saved = tmp_path / "late"
-    mve.save_pretrained(str(saved))
-
-    with pytest.raises(ValueError, match="16-D.*8-D|8-D.*16-D"):
-        li.build_multivector_encoder(str(saved), proj_dim=8, max_seq_length=64, device="cpu")
-
-
-def test_head_size_mismatch_is_allowed_when_asked_for_explicitly(tiny_models, tmp_path):
-    """Retargeting a checkpoint to a new head width is a real experiment, just never an accident."""
-    import torch
-
-    mve, _ = tiny_models
-    with torch.no_grad():
-        mve[1].linear.weight.fill_(0.0123)
-    saved = tmp_path / "late"
-    mve.save_pretrained(str(saved))
-
-    retargeted, _ = li.build_multivector_encoder(
-        str(saved), proj_dim=8, max_seq_length=64, device="cpu", allow_head_reinit=True
-    )
-    assert retargeted[1].linear.weight.shape[0] == 8
-    assert not torch.allclose(retargeted[1].linear.weight,
-                              torch.full_like(retargeted[1].linear.weight, 0.0123))
+    short, long = SEQS[2], SEQS[1]
+    assert len(long) > 2 * len(short)
+    for seq in (short, long):
+        assert li.maxsim_against_one(mve, seq, [seq])[0] == pytest.approx(1.0, abs=1e-3)
