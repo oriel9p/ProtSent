@@ -51,10 +51,6 @@ if kill -0 "$TRAIN_PID" 2>/dev/null; then
     echo "$(date +%H:%M) ABORT: training pid $TRAIN_PID survived the stop; not benchmarking on busy GPUs"
     exit 1
   fi
-  # Only meaningful when we actually stopped a trainer; outside this branch it fires on every
-  # invocation, which made the test suite kill any live mark-follower on the host.
-  pkill -f "bench_marks_clean.sh" 2>/dev/null && echo "$(date +%H:%M) stopped the sequential mark-follower"
-  sleep 3
 fi
 
 echo "$(date +%H:%M) GPUs free ($NGPU); benchmarking marks: $MARKS"

@@ -97,7 +97,7 @@ wait_for_pid "${WAIT_PID:-}"
 # stage 0's unluckiest one rather than its average -- more work per chunk at the same peak VRAM.
 # GradCache is gradient-equivalent across chunkings, so this moves speed and memory only and the
 # arms stay comparable. runtime.json reports steps_per_s and peak_vram_bytes for both.
-run_stage late-r2-protsentv2-35m  GrimSqueaker/ProtSent-V2-35M  10000 "1000 4000 10000" "$R/clean_35m" 29527 "--mini_batch_num_tokens 32768"
+run_stage late-r2-protsentv2-35m  GrimSqueaker/ProtSent-V2-35M  10000 "1000 4000 10000" "$R/clean_35m" 29527 "--mini_batch_num_tokens 32768" 30000
 
 # The 150M pair reads its mini_batch at stage start rather than having it baked in, so the value
 # can be set from stage 1's measurement without editing this script while bash is executing it
