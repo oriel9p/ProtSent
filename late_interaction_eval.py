@@ -276,7 +276,17 @@ def corrected_average(per_group: dict) -> float:
     per_fn: dict = {}
     for (_, fn), scores in per_uf.items():
         per_fn.setdefault(fn, []).append(float(np.mean(scores)))   # UniProt mean within function
-    return float(np.mean([np.mean(v) for v in per_fn.values()])) if per_fn else float("nan")
+    if not per_fn:
+        # ProtBench ships a reference for DMS_substitutions only, so indel assay IDs match nothing.
+        # A bare nan in a results column reads as a failed computation rather than an unavailable
+        # one, and the difference matters: the corrected average is undefined for indels here, not
+        # broken. ProteinGym does define one upstream (Table A2 groups the 66 indel assays too);
+        # we simply do not have the file that maps them.
+        logger.warning("corrected average unavailable for these %d groups: none matched %s, which "
+                       "covers DMS_substitutions only. The row's mean_score still holds the plain mean.",
+                       len(per_group), PROTEINGYM_REF.name)
+        return float("nan")
+    return float(np.mean([np.mean(v) for v in per_fn.values()]))
 
 
 def cmd_proteingym(args) -> None:
