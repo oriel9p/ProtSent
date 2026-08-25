@@ -201,7 +201,7 @@ python validate_run.py models/late_interaction/<run>   # dtype + loss + drift fr
 ```
 
 Results, method notes and the caveats that go with them:
-[`results/late_interaction/pilot_35m/SUMMARY.md`](results/late_interaction/pilot_35m/SUMMARY.md).
+[`results/late_interaction/RESULTS.md`](results/late_interaction/RESULTS.md).
 
 ## Tests
 

@@ -8,7 +8,7 @@ GPU, then reuses the same matrices for a zero-extra-cost analysis: two-stage ret
 a pooled-cosine shortlist of the top-k with a MaxSim rerank inside it -- the standard way
 late interaction is deployed at scale.
 
-(A symmetrised-MaxSim arm lived here too. Its answer is in SUMMARY.md and it is negative --
+(A symmetrised-MaxSim arm lived here too. Its answer is in results/late_interaction/RESULTS.md and it is negative --
 raw ``(S + S.T) / 2`` biases toward long documents, and the scale-free MeanMaxSim variant
 cannot reorder a row at all -- so the code went rather than being carried forward.)
 

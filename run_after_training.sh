@@ -110,4 +110,6 @@ wait
 # and ProteinGym is not competing with them for a card.
 for s in proteingym bench_full; do in_stages "$s" && run_stage "$s" & done
 wait
+# Regenerate the write-up from whatever landed, so RESULTS.md can never lag the CSVs.
+uv run --no-sync python build_late_results.py
 echo "all stages finished; markers in logs/after_*.done"

@@ -13,7 +13,7 @@ Layout (files appear as stages run):
     scope/per_query_*.npz              per-query hit/AP vectors
     training/                          runtime.json + train_log.csv per arm
     benchmarks/knn|linear/             ProtBench --fast, --eval_split test, seed 42
-    SUMMARY.md                         written after all runs; matched comparisons only
+    ../RESULTS.md                      generated from these CSVs; the current source
 
 Ground rules baked into the tooling:
 - `scope40_retrieval` (family, legacy) is separate from `_superfamily` / `_fold`;
