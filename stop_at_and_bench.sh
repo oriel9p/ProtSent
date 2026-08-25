@@ -9,7 +9,7 @@ export HF_HOME="${HF_HOME:-/storage/models/hf_home}"
 RUN="${RUN:-vanilla35m_clean}"
 TARGET="${TARGET:-10000}"
 MARKS="${MARKS:-1000 4000 7000 10000}"  # even spacing: early / mid / late trend
-PROBES="${PROBES:-knn linear}"
+PROBES="${PROBES:-knn}"   # knn is the primary probe; linear doubles the sweep for a second view we do not need here
 TRAIN_PID="${TRAIN_PID:?rank0 pid of the training process}"
 D="models/late_interaction/$RUN"
 OUTDIR="$(pwd)/results/late_interaction/clean_35m/benchmarks"
@@ -66,4 +66,8 @@ for N in $MARKS; do
   gpu=$(( (gpu + 1) % 4 ))
 done
 wait
+
+# The dense views are a disposable adapter -- 129 MB per checkpoint whose only job is to give
+# the pooled benchmark something it can consume. The snapshots they were derived from stay.
+rm -rf "$D"/snapshots/*-dense
 echo "$(date +%H:%M) all marks benchmarked; results in $OUTDIR"
