@@ -33,6 +33,31 @@ def test_mask_drops_special_tokens_and_normalises(tiny_models):
     assert np.allclose(np.diag(sim), [len(s) for s in SEQS], atol=1e-2)
 
 
+def test_scoring_one_document_matches_the_all_vs_all_scorer(tiny_models):
+    """The streamed one-document path must agree with `maxsim_matrix`, which it replaces.
+
+    `maxsim_against_one` exists purely as a faster route to a number `maxsim_matrix` already
+    computes, and its docstring claims they match. Nothing asserted that, so the claim was load
+    bearing and unguarded: every ProteinGym score now comes from the fast path, and a silent
+    divergence would move published results with no test failing.
+
+    Substitution-shaped inputs on purpose -- same length as the document, differing in one residue
+    -- because that is the regime the benchmark actually scores and the regime where the two paths
+    are most likely to drift.
+    """
+    mve, _ = tiny_models
+    wt = SEQS[1]
+    mutants = [wt[:i] + ("A" if wt[i] != "A" else "G") + wt[i + 1:] for i in range(0, len(wt), 3)]
+
+    fast = li.maxsim_against_one(mve, wt, mutants)
+    reference = li.maxsim_matrix(mve, [wt], queries=mutants, chunk_elements=1_000_000)[:, 0]
+
+    assert fast.shape == (len(mutants),)
+    assert np.allclose(fast, reference, atol=1e-3), np.abs(fast - reference).max()
+    # Ranking is what Spearman consumes, so agreement on order matters more than on magnitude.
+    assert list(np.argsort(fast)) == list(np.argsort(reference))
+
+
 def test_zero_shot_control_uses_native_hidden_size():
     try:
         mve, st = li.build_multivector_encoder(TINY, proj_dim=0, max_seq_length=64, device="cpu")
