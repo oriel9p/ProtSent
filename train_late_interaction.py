@@ -51,6 +51,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--files", nargs="+", required=True, help="Pair parquet files (cluster or seq1/seq2 schema)")
     p.add_argument("--output_dir", required=True)
     p.add_argument("--proj_dim", type=int, default=64)
+    p.add_argument("--allow_head_reinit", action="store_true",
+                   help="Continue from a checkpoint whose projection head is a different width, "
+                        "training a fresh head on its backbone. Without this the mismatch is an "
+                        "error, because the run would otherwise look like a continuation while "
+                        "measuring a from-scratch head.")
     p.add_argument("--max_seq_length", type=int, default=512)
     p.add_argument("--batch_size", type=int, default=32, help="Per-device contrastive batch")
     p.add_argument("--mini_batch_size", type=int, default=16, help="GradCache embedding chunk")
@@ -193,6 +198,7 @@ def main() -> None:
     attn = li.resolve_attention(args.attn_implementation, args.model)
     mve, dense_st = li.build_multivector_encoder(
         args.model, proj_dim=args.proj_dim, max_seq_length=args.max_seq_length, device=device,
+        allow_head_reinit=args.allow_head_reinit,
         attn_implementation=attn,
     )
     if args.compile:
@@ -257,6 +263,7 @@ def main() -> None:
         runtime = {
             "model": args.model,
             "proj_dim": args.proj_dim,
+            "head_reinit": args.allow_head_reinit,
             "max_seq_length": args.max_seq_length,
             "per_device_batch_size": args.batch_size,
             "mini_batch_size": args.mini_batch_size,

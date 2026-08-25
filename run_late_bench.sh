@@ -29,6 +29,10 @@ PROTBENCH_DIR="${PROTBENCH_DIR:-/opt/hpc/ddofer/ProtBench}"
 OUT="${OUT:-$(pwd)/results/late_interaction/pilot_35m/benchmarks}"
 PY="$(pwd)/.venv/bin/python"
 PROBES="${PROBES:-knn linear}"
+# ProtBench defaults --embed_cache_dir to a RELATIVE "embed_cache", which lands inside the
+# ProtBench checkout on the 96%-full /opt/hpc. Point it at the per-user cache on /storage, which
+# already holds this exact per-model layout.
+EMBED_CACHE="${EMBED_CACHE:-/storage/users/ddofer/protbench_cache}"
 export HF_HOME="${HF_HOME:-/storage/models/hf_home}"
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 
@@ -79,7 +83,7 @@ for probe in $PROBES; do
     echo "=== ${arm%%=*} ($probe) $model"
     (cd "$PROTBENCH_DIR" && "$PY" protein_benchmark_suite.py \
         -m "$model" "${TASK_ARGS[@]}" --eval_split test -p "$probe" --knn_k 3 \
-        --seed 42 --output_dir "$OUT/$probe")
+        --seed 42 --embed_cache_dir "$EMBED_CACHE" --output_dir "$OUT/$probe")
   done
 done
 echo "collect with: $PY $PROTBENCH_DIR/collect_bench_results.py $OUT/knn (and .../linear)"

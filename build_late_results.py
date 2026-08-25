@@ -31,7 +31,8 @@ def scope_table() -> None:
     f = S / "scope_hierarchy.csv"
     if not f.exists():
         return
-    # Arms kept on disk as evidence of the bf16 master-weights bug, not as results.
+    # The bf16 master-weights arms are deleted; this guard only stops an old CSV, restored
+    # from git or a backup, from quietly reintroducing them.
     EXCLUDE = ("_bf16bug", "capped_flash")
     seen, tab = set(), {}
     for r in csv.DictReader(f.open()):
@@ -123,10 +124,11 @@ w("All-vs-all over 2,207 domains at three SCCS levels. Metrics are eligible-quer
 w("with at least one non-self same-label neighbour); MAP is over the full ranking.")
 w("")
 scope_table()
-w("Excluded from the table: arms suffixed `_bf16bug` and `protsent_late_capped_flash`. Those")
-w("trained under a bug that put AdamW's parameters in bf16, where a 1e-5 update is below the")
-w("representable spacing, so only 2.4% of backbone elements could move. They are kept on disk as")
-w("evidence and analysed in RUNS.md, but they are not results.")
+w("Arms suffixed `_bf16bug` and `protsent_late_capped_flash` are **deleted**, models and rows")
+w("alike. They trained under a bug that put AdamW's parameters in bf16, where a 1e-5 update is")
+w("below the representable spacing, so only 2.4% of backbone elements could move. The analysis")
+w("survives in RUNS.md; the artifacts do not, and `build_late_results.py` still filters the names")
+w("so a CSV restored from git cannot reintroduce them.")
 w("")
 if PARTIAL:
     w("## ProteinGym — PARTIAL, quarantined")

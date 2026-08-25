@@ -71,7 +71,9 @@ scope_rows() {  # scope_rows <gpu> <out_dir> <specs...>
 # Two arms, two cards each, continuing existing late training. Data is the V2 paper recipe: whole
 # dc40 corpus, k=8, uncapped, PROPORTIONAL -- 34.76M pairs (Pfam 0.78M / AFDB 19.0M / STRING 15M).
 # Step budgets are set from measured rates so the cosine schedule anneals inside ~8 h.
-PHASE2_ARGS=(--proj_dim 128 --max_pairs_per_file 0 --string_max_pairs 15000000 --seed 42
+# --allow_head_reinit: protsent_late_150m saved a 64-D head and phase 2 asks for 128-D, so its
+# head cannot be carried over. That is now an error by default; this arm opts in knowingly.
+PHASE2_ARGS=(--proj_dim 128 --allow_head_reinit --max_pairs_per_file 0 --string_max_pairs 15000000 --seed 42
              --multi_dataset_sampler proportional --compile)
 P2_STEPS="${P2_STEPS:-31000}"          # 35M:  x 256 pairs/step = 7.9M pairs, ~8.0 h
 P2_STEPS_150M="${P2_STEPS_150M:-30000}"  # x 256 = 7.7M pairs, ~17.5 h at 2.10 s/it

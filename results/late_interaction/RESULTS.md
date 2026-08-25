@@ -35,10 +35,11 @@ with at least one non-self same-label neighbour); MAP is over the full ranking.
 | `esm2_late_480` | MaxSim | 0.5117 | 0.5939 | 0.6751 |
 | `protsent_late_proj128` | MaxSim | 0.6288 | 0.7057 | 0.7087 |
 
-Excluded from the table: arms suffixed `_bf16bug` and `protsent_late_capped_flash`. Those
-trained under a bug that put AdamW's parameters in bf16, where a 1e-5 update is below the
-representable spacing, so only 2.4% of backbone elements could move. They are kept on disk as
-evidence and analysed in RUNS.md, but they are not results.
+Arms suffixed `_bf16bug` and `protsent_late_capped_flash` are **deleted**, models and rows
+alike. They trained under a bug that put AdamW's parameters in bf16, where a 1e-5 update is
+below the representable spacing, so only 2.4% of backbone elements could move. The analysis
+survives in RUNS.md; the artifacts do not, and `build_late_results.py` still filters the names
+so a CSV restored from git cannot reintroduce them.
 
 ## ProteinGym — PARTIAL, quarantined
 
