@@ -172,3 +172,21 @@ def test_continuing_from_a_saved_model_keeps_its_trained_head(tiny_models, tmp_p
     assert torch.allclose(continued[1].linear.weight, mve[1].linear.weight), (
         "continuation discarded the trained projection head"
     )
+
+
+def test_cosine_scores_are_not_divided_by_length():
+    """Cosine is already length-invariant; dividing it by length corrupts the ranking.
+
+    MaxSim sums over query residues, so it must be divided to become mean-MaxSim. Cosine is
+    normalised, so the same division is not a normalisation but a bug — invisible on substitutions
+    (equal lengths, constant divisor) and destructive on indels (varying lengths).
+    """
+    from late_interaction_eval import variant_scores
+
+    sim = np.array([0.5, 0.9])                      # variant 1 is the better cosine match
+    lens = np.array([10.0, 400.0])                  # an indel set: lengths differ
+    assert np.array_equal(variant_scores(sim, lens, "cosine"), sim)
+    assert np.allclose(variant_scores(sim, lens, "maxsim"), sim / lens)
+    # dividing cosine by length flips which variant ranks first -- that is what broke Spearman
+    assert list(np.argsort(-variant_scores(sim, lens, "cosine"))) == [1, 0]
+    assert list(np.argsort(-(sim / lens))) == [0, 1]

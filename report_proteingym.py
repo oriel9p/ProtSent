@@ -4,7 +4,6 @@
 Regenerate after any rerun so tables can never drift from the data:
     uv run --no-sync python report_proteingym.py > results/late_interaction/pilot_35m/benchmarks/PROTEINGYM_TABLES.md
 """
-import csv
 import sys
 from pathlib import Path
 

@@ -85,6 +85,12 @@ def load_scorer(kind: str, path: str, *, max_seq_length: int, device):
     )
 
 
+def variant_scores(sim: np.ndarray, lens: np.ndarray, scoring: str) -> np.ndarray:
+    """Per-variant score. MaxSim sums over query residues so it becomes mean-MaxSim; cosine is
+    already length-invariant and must be left alone (dividing it reorders indel sets)."""
+    return sim / lens if scoring == "maxsim" else sim
+
+
 def save_per_query(out: Path, name: str, pq: dict) -> Path:
     """Write the per-query vectors that every paired test downstream reads.
 
@@ -355,8 +361,8 @@ def cmd_proteingym(args) -> None:
     for spec in args.models:
         name, kind, path = parse_model_spec(spec)
         scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
-        # Provenance from the CLI spec, so an arm's identity lives in the results file instead of a
-        # hand-typed table in the report script. dense/zeroshot have no projection by construction.
+        # Provenance from the CLI spec: arm identity belongs in the results file, not a table in
+        # the report script. dense/zeroshot have no projection by construction.
         proj_dim = 0 if kind in ("dense", "zeroshot") else (args.proj_dim_note or -1)
         # ProteinGym scores ONE document (the wild type) against many queries. maxsim_matrix is
         # shaped for all-vs-all and spends ~64% of its time outside the forward pass, materialising
@@ -373,20 +379,11 @@ def cmd_proteingym(args) -> None:
         per_assay = []
         pooled_scores, pooled_y = [], []
         for a, mut, wt, y, n_silent in work:
-            sim = (li.maxsim_against_one(fast, wt, mut, batch_size=max(args.batch_size, 256),
-                                         max_seq_length=args.max_seq_length)
+            sim = (li.maxsim_against_one(fast, wt, mut, batch_size=max(args.batch_size, 256))
                    if fast is not None else
                    scorer([wt], queries=mut, bs=args.batch_size, ce=args.chunk_elements)[:, 0])
-            # Divide ONLY for MaxSim. maxsim_against_one returns a sum over query residues, so
-            # dividing by length gives mean-MaxSim. Cosine is already length-invariant
-            # (cosine_matrix normalizes), so dividing it by length is not a normalisation, it is a
-            # corruption -- harmless where every variant in a group has the same length
-            # (substitutions), destructive where they do not (indels).
-            if scoring == "maxsim":
-                lens = np.array([min(len(s), args.max_seq_length - 2) for s in mut], dtype=float)
-                score = sim / lens
-            else:
-                score = sim
+            lens = np.array([min(len(s), args.max_seq_length - 2) for s in mut], dtype=float)
+            score = variant_scores(sim, lens, scoring)
             if cfg["metric"] == "auc":
                 # The label is pathogenicity, but the score is similarity to wild type: a variant
                 # that looks MORE like the WT should be LESS pathogenic. Negate, so an AUC above
@@ -423,7 +420,7 @@ def cmd_proteingym(args) -> None:
                          "n_variants_scored": int(sum(len(s) for s in pooled_scores)),
                          "runtime_s": round(time.time() - t0, 1)})
         rows.append({"model": name, "scoring": scoring, "variant": args.variant,
-                     "kind": kind, "path": path, "proj_dim": proj_dim_of(scorer_model),
+                     "kind": kind, "path": path, "proj_dim": proj_dim,
                      "dataset_revision": args.dataset_revision or "unpinned",
                      "n_boot": args.n_boot,
                      "metric": cfg["metric"], "aggregation": "per_group_mean",
@@ -563,7 +560,8 @@ def cath_mcnemar(out: Path) -> None:
     print(f"{'pair':52s} {'b':>3s} {'c':>3s} {'disc':>5s} {'chi2':>6s} {'p':>7s}")
     for a, b_ in itertools.combinations(arms, 2):
         x, y = arms[a]["correct"].astype(bool), arms[b_]["correct"].astype(bool)
-        b = int((x & ~y).sum()); c = int((~x & y).sum())
+        b = int((x & ~y).sum())
+        c = int((~x & y).sum())
         if b + c == 0:
             print(f"{a + ' vs ' + b_:52s} identical")
             continue

@@ -277,7 +277,6 @@ def maxsim_against_one(
     queries: Sequence[str],
     *,
     batch_size: int = 256,
-    max_seq_length: Optional[int] = None,
 ) -> np.ndarray:
     """MaxSim of every query against ONE document, streamed.
 
@@ -293,7 +292,6 @@ def maxsim_against_one(
     """
     mve.eval()
     device = mve.device
-    L = max_seq_length or mve.max_seq_length
 
     def embed(texts: List[str]):
         feats = mve.tokenize(list(texts))
