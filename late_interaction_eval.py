@@ -244,7 +244,7 @@ def cmd_fewshot_rh(args) -> None:
                 "runtime_s": round(time.time() - t0, 2),
             })
             logger.info("%s N=%d: acc=%.4f", name, budget, rows[-1]["accuracy"])
-        del scorer
+        del scorer, fast
         torch.cuda.empty_cache()  # 8 arms in one invocation, each holding a corpus
     append_csv(Path(args.out_dir) / "late_fewshot_knn.csv", rows)
 
@@ -352,11 +352,25 @@ def cmd_proteingym(args) -> None:
     for spec in args.models:
         name, kind, path = parse_model_spec(spec)
         scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
+        # ProteinGym scores ONE document (the wild type) against many queries. maxsim_matrix is
+        # shaped for all-vs-all and spends ~64% of its time outside the forward pass, materialising
+        # query embeddings and round-tripping them GPU->host->GPU. The streamed path is 2.3x faster
+        # and preserves the ranking (Spearman 0.9996 against it; Spearman is what we report).
+        fast = None
+        if scoring == "maxsim":
+            fast = (li.load_multivector_encoder(path, device=args.device) if kind == "late"
+                    else li.build_multivector_encoder(path, proj_dim=0,
+                                                      max_seq_length=args.max_seq_length,
+                                                      device=args.device)[0])
+            fast.max_seq_length = args.max_seq_length
         t0 = time.time()
         per_assay = []
         pooled_scores, pooled_y = [], []
         for a, mut, wt, y, n_silent in work:
-            sim = scorer([wt], queries=mut, bs=args.batch_size, ce=args.chunk_elements)[:, 0]
+            sim = (li.maxsim_against_one(fast, wt, mut, batch_size=max(args.batch_size, 256),
+                                         max_seq_length=args.max_seq_length)
+                   if fast is not None else
+                   scorer([wt], queries=mut, bs=args.batch_size, ce=args.chunk_elements)[:, 0])
             lens = np.array([min(len(s), args.max_seq_length - 2) for s in mut], dtype=float)
             score = sim / lens
             if cfg["metric"] == "auc":
