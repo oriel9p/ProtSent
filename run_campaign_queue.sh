@@ -195,4 +195,12 @@ mark; the winner has been resumed to 15,000 with its optimizer state intact.
 =================================================================================
 GATE
 
+# late-r2-protsentv2-35m's first attempt deadlocked under DDP: --mini_batch_num_tokens chunks
+# each rank's mini-batch by *that rank's own* token count, so ranks can end up doing a different
+# number of GradCache micro-steps -> DDP backward-hook mismatch -> NCCL collective-timeout hang
+# (confirmed in logs/queue_late-r2-protsentv2-35m.log: ranks stuck 30min apart at different
+# collective seq numbers). --mini_batch_size is fixed-count per rank regardless of sequence
+# length and has no such hazard (150M's stage has run it clean); retry with that instead.
+run_stage late-r2-protsentv2-35m GrimSqueaker/ProtSent-V2-35M 10000 "1000 4000 10000" "$R/clean_35m" 29527 "--mini_batch_size 64" 30000
+
 echo "$(date +%H:%M) campaign queue finished"
