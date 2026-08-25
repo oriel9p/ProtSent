@@ -125,17 +125,13 @@ def _restore_saved_projection(mve: MultiVectorEncoder, path: str, *,
                        saved, exc)
         return False
     if loaded.linear.weight.shape != dense.linear.weight.shape:
-        # Unlike a malformed dir, this is not recoverable: no amount of retrying loads a 64-D head
-        # at 128-D. Continuing can only mean discarding it, so make that the caller's decision and
-        # make it now, before the run books two GPUs for eight hours.
-        have, want = loaded.linear.weight.shape[0], dense.linear.weight.shape[0]
+        have, want = tuple(loaded.linear.weight.shape), tuple(dense.linear.weight.shape)
         if not allow_head_reinit:
             raise ValueError(
-                f"{path} saved a {have}-D projection head but this run asks for {want}-D, so the "
-                f"trained head cannot be carried over. Pass --proj_dim {have} to continue it, or "
-                f"--allow_head_reinit to deliberately train a fresh {want}-D head on this "
-                f"backbone. This silently warned and continued until 2026-08-25; see "
-                f"test_head_size_mismatch_refuses_to_silently_reinitialise.")
+                f"{path} saved a {have} projection head but this run asks for {want}, so the "
+                f"trained head cannot be carried over. Pass --proj_dim {have[0]} to continue it, "
+                f"or --allow_head_reinit to train a fresh head on this backbone.")
+        have, want = have[0], want[0]
         logger.warning("saved projection is %d-D but this run asks for %d-D; training a fresh head "
                        "on this backbone (--allow_head_reinit)", have, want)
         return False

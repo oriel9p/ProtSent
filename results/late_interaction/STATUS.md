@@ -3,7 +3,33 @@
 Hand-maintained ledger. `RESULTS.md` next to it is generated and holds the numbers; this holds
 their standing. Read this before trusting, citing, or rerunning anything here.
 
-Last reviewed 2026-08-25.
+Last reviewed 2026-08-25 (evening).
+
+## In flight
+
+**`vanilla35m_clean`** — the corrected recipe from vanilla `facebook/esm2_t12_35M_UR50D`
+(same weights as the Synthyra repackage, but the native load path that takes flash+compile):
+4-GPU DDP, batch 256/device (global 1024), `--gather_across_devices` (1023 in-batch negatives),
+LR **5e-5 single group** (`--proj_lr 0`), **constant_with_warmup** (500), proportional over the
+full uncapped mixture (34.76M pairs, disjoint sampling), seed 42, 6,500 steps ≈ 3 h.
+Constant LR ⇒ checkpoints comparable at any step. Next: `v2_35m_clean`, identical command from
+`GrimSqueaker/ProtSent-V2-35M`, compared at matched steps; if V2 leads, continue it.
+References: `esm2_late` 0.6000 fold (old recipe from the same vanilla base),
+`protsent_late_proj128` 0.7057 sfam, `esm2_zeroshot` 0.4735 floor.
+
+## Audited and settled 2026-08-25
+
+- **"Sorted corpora give semi-hard in-batch negatives, don't shuffle" — myth.** V2 shuffled
+  twice (`--pair_dataset_shuffle` default True + ST RandomSampler; `--batch_sampler none` means
+  "ST default", not "sequential"). Sorting is load-bearing only for the O(1)-memory streaming
+  pair builder. The docstring that claimed otherwise is corrected in place.
+- **NO_DUPLICATES hang**: cause is duplicate *multiplicity* (7 copies/sequence at k=8
+  combinations) × O(remaining) rescans in ST's sampler — not file sort order. The fix
+  (`027ef89`, stop auto-selecting) and the diversity fix (`5f2d408`, `--pair_sampling disjoint`,
+  2.6× distinct sequences at equal budget) are both pushed and default on this branch.
+  Neither is on `master`.
+- **No DMS contamination in the late-interaction path**: dc40 has no DMS file and V2-35M never
+  trained on `dms_cosent` (V2.5 did — see the ProteinGym contamination note in memory/RUNS).
 
 ## Usable as-is
 
