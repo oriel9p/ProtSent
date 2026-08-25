@@ -79,16 +79,25 @@ stage_cath() {    # CATH v4.3 midnight zone, with the paired McNemar over arms
     "${args[@]}" --mcnemar --out_dir "$out"
 }
 
-stage_proteingym() {  # MaxSim(mutant, WT) for the late view, pooled cosine for the dense view
-  # Substitutions only; indels are where raw MaxSim would be a length artifact. The 500-variant
-  # default cap is what made the previous run PARTIAL (~4.3% coverage) -- pass
-  # --max_variants_per_assay 0 for leaderboard-comparable coverage, ~1.0 h/arm on a free card.
+stage_proteingym() {  # MaxSim(mutant, WT) -- the late view only
+  # Late views only: the pooled-cosine arms are a scoring baseline, not something to recompute on
+  # every run, and they are now the slow half (~30 min against ~12 for MaxSim, because cosine still
+  # goes through the all-vs-all path that SCOPe and CATH share). Add "<arm>_dense=dense:..." by hand
+  # when a baseline is actually wanted.
+  #
+  # One arm per idle GPU rather than one card at a time. Full coverage by default: the old
+  # 500-variant cap scored ~4.3% of the benchmark and is what made the previous run PARTIAL.
+  #
+  # Indels are included now -- mean-MaxSim normalises by the real token count, so the length
+  # artifact that made raw MaxSim unusable on varying-length variants is gone.
   local out="$1"
   local args=()
-  for a in $ARMS $PARENTS; do for s in $(specs_for "$a"); do args+=(--models "$s"); done; done
-  CUDA_VISIBLE_DEVICES=2 uv run --no-sync python late_interaction_eval.py proteingym \
-    "${args[@]}" --variant dms_substitutions --out_dir "$out"
+  for a in $ARMS $PARENTS; do args+=("$a=late:$M/$a/late"); done
+  for v in dms_substitutions dms_indels; do
+    ./run_proteingym_parallel.sh "$v" "$out" "${args[@]}"
+  done
 }
+
 
 # Baselines at BOTH sizes: a 150M dense view scored only against 35M baselines would confound
 # "late training helped" with "the model is 4x bigger".
