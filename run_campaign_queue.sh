@@ -89,7 +89,28 @@ run_stage late-r2-protsentv2-35m  GrimSqueaker/ProtSent-V2-35M  10000 "1000 4000
 # (bash reads scripts lazily by byte offset -- editing a live one corrupts it).
 CHUNK150="$(cat .chunk150 2>/dev/null || echo '--mini_batch_size 64')"
 echo "$(date +%H:%M) 150M stages chunking: $CHUNK150 (from .chunk150; default is the known-safe fixed 64)"
-run_stage late-r2-protsentv2-150m GrimSqueaker/ProtSent-V2-150M 15000 "1000 4000 10000 15000" "$R/clean_150m" 29528 "$CHUNK150"
-run_stage late-r2-esm2-150m       facebook/esm2_t30_150M_UR50D  15000 "1000 4000 10000 15000" "$R/clean_150m" 29529 "$CHUNK150"
+# 10k, not 15k: the marks then match the 35M arms exactly (1000/4000/10000), so every arm in the
+# campaign is comparable at the same three steps. Resumable to any longer budget later --
+# --resume finds the latest checkpoint and the constant LR means no schedule distortion.
+run_stage late-r2-protsentv2-150m GrimSqueaker/ProtSent-V2-150M 10000 "1000 4000 10000" "$R/clean_150m" 29528 "$CHUNK150"
+
+# The vanilla 150M arm stops at the SECOND mark and is benchmarked there as a decision gate.
+# The parsimonious prior is that it does worse than the ProtSent-V2 base (that is what every 35M
+# comparison has shown); 4,000 steps is enough to confirm or refute that against the V2 arm's own
+# 4,000 mark, and costs ~3 h instead of ~8. If it wins, resume it -- nothing is thrown away.
+run_stage late-r2-esm2-150m       facebook/esm2_t30_150M_UR50D   4000 "1000 4000"       "$R/clean_150m" 29529 "$CHUNK150"
+
+cat <<'GATE'
+
+=== DECISION GATE ===============================================================
+late-r2-esm2-150m stopped at its 4,000-step gate. Compare it against
+late-r2-protsentv2-150m @4000 -- same recipe, same data, same step count -- on
+the cheap knn sweep (results/late_interaction/clean_150m/benchmarks/) and the
+SCOPe curve (clean_150m/scope/scope_checkpoint_curve.csv).
+
+  vanilla WINS  -> resume it:  --resume --max_steps 10000  (checkpoints are intact)
+  vanilla LOSES -> the parsimonious assumption holds; carry on with the V2 base.
+=================================================================================
+GATE
 
 echo "$(date +%H:%M) campaign queue finished"
