@@ -1,5 +1,19 @@
 # Late-interaction pilot (35M) — SUMMARY
 
+> **SUPERSEDED — corrected 2026-08-25.** This file describes the 35M pilot only, and a blind audit
+> found three of its claims contradicted by the CSVs in this same directory. They are struck
+> through below. **[`../RESULTS.md`](../RESULTS.md) is the current source**, generated from the
+> CSVs rather than hand-written, so it cannot drift from the data the way this file did.
+>
+> - "Best configuration = native 480-D" is **wrong**: `protsent_late_proj128` scores .7057
+>   superfamily against 480-D's .6984, paired **+.0074 [+.0035, +.0113]**, CI clear of zero.
+> - "Degraded neither" is **wrong**: the 64-D arm is −.0110 [−.0155, −.0067] against doing
+>   nothing, and 31k further steps at 35M cost −.0152 superfamily / −.0194 fold.
+> - "13 comparable tasks (5 excluded ... SS3)" is **wrong twice**: 20 − 5 = 15, and SS3 was not
+>   excluded. The two tasks that vanished (Residue Conservation, Intrinsic Disorder) produced
+>   **empty metric cells in all four arms** — an unreported failure, not an exclusion.
+
+
 Rendered report (same content, readable): `report.html`, published at
 https://claude.ai/code/artifact/17bbc760-13fd-492c-a9c7-06682e47eaa6
 
@@ -28,13 +42,13 @@ eligible AP, n = 2,020, every interval excluding zero:
 | ESM-2-Late (480-D) − ESM-2 + MaxSim | +.1204 | [+.1102, +.1306] |
 | ESM-2-Late (64-D) − ESM-2-Late (480-D) | +.0766 | [+.0690, +.0841] |
 
-**Late training improved both backbones and degraded neither.** The 64-D projection is *load-bearing* when
+~~**Late training improved both backbones and degraded neither.**~~ *(false — see banner)* Late training improved both backbones; the 64-D arm on ProtSent is significantly WORSE than not training. The 64-D projection is *load-bearing* when
 the backbone's residues have never been contrastively trained — it is the space the objective optimised — and
 *lossy* when they have, because it bottlenecks representations 34.8M pairs already shaped. Family level agrees
 on every sign; the only comparison that loses significance there is ProtSent-Late (64-D) − ProtSent-V2 +
 MaxSim, at −.0036 [−.0099, +.0030].
 
-**Best configuration measured: ProtSent-V2 + late training, scored at native 480-D** — superfamily eligible
+~~**Best configuration measured: ProtSent-V2 + late training, scored at native 480-D**~~ *(false — 128-D wins, see banner)* — superfamily eligible
 MAP .698, against .683 for the untouched backbone and .672 for the 64-D arm.
 
 ## A. Does MaxSim help without any training? Yes, on both backbones
@@ -80,7 +94,7 @@ See D. KNN and linear are reported side by side and never averaged.
 - **Cost.** Scoring the 2,207² SCOPe matrix: cosine 0.03 s, 64-D MaxSim 8.1 s, native 480-D MaxSim 41 s, on a
   shared 3–8 s encode. Storage per protein (mean domain ~154 residues): 480 numbers dense, 9,878 at 64-D
   (20.6×), 74,088 at 480-D (154×). Training is ~21% slower than dense (sdpa both).
-- **Flash attention was never enabled** — `kernels` 0.12.3 is below the 0.15.2 floor and `flash-attn` is
+- **Flash attention was never enabled** (inferred from the environment, NOT recorded: these pilot `runtime.json` files predate the `attn_implementation` field) — `kernels` 0.12.3 is below the 0.15.2 floor and `flash-attn` is
   absent, so every run silently used sdpa. FA3 measures 1.97× on Pfam, 1.48× on STRING (≈1.30× unpadding ×
   1.14× kernel), peak VRAM 10.7 → 4.2 GB. A paired quality A/B is running before any recipe change; the PR is
   held because it bundles a dependency floor with an optimiser-precision change.
@@ -110,7 +124,7 @@ slice of clusters. Built on V2, not the shipped V2.5. No PROTOCOL-benchmark comp
 
 ## Go / no-go: GO, with the recommendation changed
 
-1. **Ship ProtSent-V2 + late training scored at 480-D.** Best configuration measured, no new training needed
+1. ~~**Ship ProtSent-V2 + late training scored at 480-D.**~~ Superseded: ship the **128-D** head, no new training needed
    beyond the 1.5 GPU-h already spent, cost is index size.
 2. **The head-size ablation now has a sharp hypothesis:** 128-D should recover part of the .026 the 64-D head
    discards on a ProtSent backbone and should matter far less on ESM-2. Running.

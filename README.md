@@ -182,7 +182,11 @@ Outputs land in `--output_dir` as `late/` (the multi-vector model), `dense_view/
 (its mean-pooled equivalent), `step0/` (both, before training, as a parity control),
 plus `runtime.json` and `train_log.csv`.
 
-**Defaults.** `--proj_dim 128` (beats 64-D and beats no projection). `--attn_implementation auto`
+**Defaults.** `--proj_dim 128` — on ProtSent-V2-35M it beats 64-D and beats scoring the native
+residues (+.0074 superfamily over native, CI clear of zero). Two caveats: the 64-D and 128-D arms
+differ in optimizer steps as well as width (2,000x256 vs 4,000x128), so width and update count are
+confounded; and on vanilla ESM-2 the ordering reverses — there 64-D beats native residues by
++.0766. Tested on one init and one benchmark. `--attn_implementation auto`
 tries flash, falls back to sdpa, and records which it got in `runtime.json`. `--compile` is 1.14x
 faster under 2-way DDP. Weights stay **fp32** with bf16 autocast and TF32 matmuls — flash needs
 half-precision *activations*, not half-precision weights, and loading in bf16 puts AdamW's
