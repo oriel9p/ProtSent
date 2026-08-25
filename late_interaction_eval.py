@@ -257,18 +257,26 @@ PROTEINGYM_REF = Path("/opt/hpc/ddofer/ProtBench/data/proteingym_ref/DMS_substit
 
 
 def corrected_average(per_group: dict) -> float:
-    """Mean within each function group, then the mean of those group means."""
-    groups: dict = {}
+    """ProteinGym's exact substitutions aggregation, from performance_DMS_benchmarks.py:297-309:
+    per-assay score -> mean per UniProt_ID -> mean per (UniProt, function) collapsed to function
+    means -> mean over the function categories. Plain assay means over-weight proteins with many
+    assays and over-represented function types; the leaderboard's headline number corrects both.
+    """
     if not PROTEINGYM_REF.exists():
         return float("nan")
     import csv as _csv
-    fn = {r["DMS_id"]: r["coarse_selection_type"]
-          for r in _csv.DictReader(PROTEINGYM_REF.open()) if r.get("coarse_selection_type")}
+
+    ref = {r["DMS_id"]: (r["UniProt_ID"], r["coarse_selection_type"])
+           for r in _csv.DictReader(PROTEINGYM_REF.open()) if r.get("coarse_selection_type")}
+    per_uf: dict = {}
     for assay, score in per_group.items():
-        g = fn.get(str(assay))
-        if g:
-            groups.setdefault(g, []).append(score)
-    return float(np.mean([np.mean(v) for v in groups.values()])) if groups else float("nan")
+        m = ref.get(str(assay))
+        if m:
+            per_uf.setdefault(m, []).append(score)      # (UniProt, function) -> assay scores
+    per_fn: dict = {}
+    for (_, fn), scores in per_uf.items():
+        per_fn.setdefault(fn, []).append(float(np.mean(scores)))   # UniProt mean within function
+    return float(np.mean([np.mean(v) for v in per_fn.values()])) if per_fn else float("nan")
 
 
 def cmd_proteingym(args) -> None:
@@ -330,8 +338,10 @@ def cmd_proteingym(args) -> None:
             continue
         mut = [m for m, k in zip(mut, ok) if k]
         y = y[ok]
-        if len(np.unique(y)) < 2:
-            continue  # a constant label has neither a rank correlation nor an AUC
+        if len(np.unique(y)) < 2 and cfg["metric"] != "auc":
+            continue  # a constant label has no rank correlation
+        # Single-class groups stay for AUC variants: no per-group AUC exists for them (skipped at
+        # scoring time), but ProteinGym's pooled clinical-indels AUC includes them.
         work.append((a, mut, wt, y, n_silent))
     n_silent_total = sum(w[4] for w in work)
     logger.info("%s: %d assays, %d sequences to encode per model (%d variants dropped as "
@@ -344,6 +354,7 @@ def cmd_proteingym(args) -> None:
         scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
         t0 = time.time()
         per_assay = []
+        pooled_scores, pooled_y = [], []
         for a, mut, wt, y, n_silent in work:
             sim = scorer([wt], queries=mut, bs=args.batch_size, ce=args.chunk_elements)[:, 0]
             lens = np.array([min(len(s), args.max_seq_length - 2) for s in mut], dtype=float)
@@ -352,6 +363,10 @@ def cmd_proteingym(args) -> None:
                 # The label is pathogenicity, but the score is similarity to wild type: a variant
                 # that looks MORE like the WT should be LESS pathogenic. Negate, so an AUC above
                 # 0.5 means the expected direction rather than an accidental inversion.
+                pooled_scores.append(-score)
+                pooled_y.append(y)
+                if len(np.unique(y)) < 2:
+                    continue  # pooled-only group: no per-group AUC exists
                 val = roc_auc_score(y, -score)
             else:
                 val = spearmanr(score, y).statistic
@@ -366,8 +381,22 @@ def cmd_proteingym(args) -> None:
         rhos = np.array([r["score"] for r in per_assay])
         corrected = corrected_average({r["assay"]: r["score"] for r in per_assay})
         _, lo, hi = boot_ci(rhos, n_boot=args.n_boot, seed=args.seed)
+        # ProteinGym aggregates clinical INDELS as one pooled AUC over every variant of every gene
+        # (performance_clinical_benchmarks.py: "Indels: All genes pooled together, then single AUC
+        # computed"); per-group AUC there would drop the ~97% of groups that carry one class.
+        # Emit both aggregations for every AUC variant: per_group_mean reads against their
+        # substitutions protocol, pooled against their indels one.
+        if cfg["metric"] == "auc" and pooled_scores:
+            rows.append({"model": name, "scoring": scoring, "variant": args.variant,
+                         "metric": "auc", "aggregation": "pooled",
+                         "mean_score": float(roc_auc_score(np.concatenate(pooled_y),
+                                                           np.concatenate(pooled_scores))),
+                         "n_assays": len(pooled_scores), "cap": args.max_variants_per_assay,
+                         "n_variants_scored": int(sum(len(s) for s in pooled_scores)),
+                         "runtime_s": round(time.time() - t0, 1)})
         rows.append({"model": name, "scoring": scoring, "variant": args.variant,
-                     "metric": cfg["metric"], "mean_score": float(rhos.mean()),
+                     "metric": cfg["metric"], "aggregation": "per_group_mean",
+                     "mean_score": float(rhos.mean()),
                      "corrected_average": round(corrected, 4),
                      "ci95": f"[{lo:.4f}, {hi:.4f}]",
                      "n_assays": len(per_assay), "cap": args.max_variants_per_assay,

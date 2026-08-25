@@ -12,6 +12,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from bootstrap_ci import boot_ci  # noqa: E402
+from late_interaction_eval import corrected_average  # noqa: E402
 
 D = Path("results/late_interaction/pilot_35m/benchmarks")
 VARIANTS = ("dms_substitutions", "dms_indels", "clinical_substitutions", "clinical_indels")
@@ -83,13 +84,20 @@ for v in VARIANTS:
     n_groups = max(int(r["n_assays"]) for r in m.values())
     print(f"### ProteinGym {v.replace('_', ' ')} — mean {METRIC[v]} across {n_groups} "
           f"{'assays' if 'dms' in v else 'protein groups'}\n")
-    print("| Model | Size | Scoring | " + METRIC[v] + " | 95% CI |")
-    print("|---|---|---|---|---|")
+    # corrected_average is recomputed from the per-assay npz rather than read from the row, so
+    # rows written before that column existed still get it.
+    corr_col = " ProteinGym-corrected |" if v == "dms_substitutions" else ""
+    print("| Model | Size | Scoring | " + METRIC[v] + " | 95% CI |" + corr_col)
+    print("|---|---|---|---|---|" + ("---|" if corr_col else ""))
     for name, disp, size, scoring in ARMS:
         if name not in m:
             continue
         r = m[name]
-        print(f"| {disp} | {size} | {scoring} | {float(r['mean_score']):.4f} | {r['ci95']} |")
+        extra = ""
+        if corr_col:
+            g = pq(v, name)
+            extra = f" {corrected_average(g):.4f} |" if g else " — |"
+        print(f"| {disp} | {size} | {scoring} | {float(r['mean_score']):.4f} | {r['ci95']} |{extra}")
     print()
     print("Paired deltas (same groups, bootstrap over groups; \\* = 95% CI excludes zero):\n")
     print("| Comparison | Δ " + METRIC[v] + " |")

@@ -17,20 +17,38 @@ sequences truncated at 512 residues; variants whose truncated form is byte-ident
 truncated WT are excluded and counted per row (~4.7% of substitution mutations; leaving them in
 creates blocks of exact ties that depress Spearman).
 
-**These numbers cannot be placed on the [ProteinGym leaderboard](https://proteingym.org/benchmarks):**
+### Comparability to the leaderboard, itemised
 
-1. **Different score.** The leaderboard's zero-shot protocol is a mutant-likelihood ratio from a
-   generative/masked LM. Our models are embedding models with no LM head; similarity-to-WT is a
-   different (and weaker) signal — it cannot distinguish two substitutions at the same position
-   that are equally "far" from WT in embedding space but opposite in fitness.
-2. **Subsampled and truncated.** 500 variants/group vs the full 2.47M; 512-residue truncation.
-3. **Own aggregation.** Plain mean over groups; the leaderboard also stratifies by MSA depth,
-   function category and taxon.
+Checked against ProteinGym's own scoring code (`proteingym/performance_DMS_benchmarks.py`,
+`performance_clinical_benchmarks.py` on `main`), not the paper.
 
-For scale only: leaderboard zero-shot DMS-substitution averages are ~0.40–0.52 Spearman
-(ESM-2-650M ≈ 0.40–0.42 masked-marginal; GEMME 0.455; TranceptEVE ≈ 0.46; recent SOTA ≈ 0.5).
-Our best similarity-based score is 0.34 with 35M-parameter encoders. The right use of our tables
-is **ranking our own arms under one fixed protocol**, where every comparison is paired.
+| Dimension | ProteinGym leaderboard | Ours | Comparable? |
+|---|---|---|---|
+| Score | mutant-vs-WT **log-likelihood ratio** from a generative/masked LM | **similarity to WT** in embedding space | **No — different quantity** |
+| DMS metric | per-assay Spearman | per-assay Spearman | Yes |
+| DMS aggregation | assay → **mean per UniProt_ID** → **mean per function category** → mean | now reported both ways (`mean_score`, `corrected_average`) | Yes, via `corrected_average` |
+| Clinical substitutions | **AUC per gene, then averaged** | per-group mean AUC | Yes |
+| Clinical indels | **all genes pooled, one global AUC** | now reported both ways (`aggregation=pooled`) | Yes, via `pooled` |
+| Assay coverage | all 217 DMS substitution assays | **210** (7 dropped, see below) | **No — biased subset** |
+| Variants per assay | all (2.47M total) | ≤500, seeded | **No — subsampled** |
+| Sequence length | full | truncated at 512 residues | **No** |
+
+**What we drop, exactly.** 7 of 217 DMS-substitution assays are excluded entirely, and they are
+not a random sample: every one is a long protein whose mutated positions all lie past our
+512-residue truncation, leaving zero variants distinguishable from wild type —
+`A4_HUMAN_Seuma_2022` (770 aa), `CAPSD_AAV2S_Sinai_2021` (735), `ERBB2_HUMAN_Elazar_2016` (1255),
+`KCNH2_HUMAN_Kozek_2020` (1159), `POLG_HCVJF_Qi_2014` (3033), `SCN5A_HUMAN_Glazer_2019` (2016),
+`UBE4B_MOUSE_Starita_2013` (1173). Within the surviving 210 assays a further ~4.7% of mutations
+are dropped for the same reason (counted per row as `n_variants_dropped_truncated`). **This biases
+our averages upward relative to a full-length model**, since long proteins are excluded rather
+than scored badly.
+
+**Bottom line: the metric and aggregation now match; the score, the coverage and the truncation do
+not.** These numbers are therefore *not* leaderboard entries. For scale only, leaderboard
+zero-shot DMS-substitution averages run ~0.40–0.52 Spearman (ESM-2-650M ≈ 0.40, GEMME 0.455,
+TranceptEVE ≈ 0.46); our best similarity-based score is ~0.33 (0.32 corrected) from a 35M encoder
+on 210/217 assays. The tables' purpose is **ranking our own arms under one fixed protocol**, where
+every comparison is paired and every arm suffers the identical truncation.
 
 ## Findings
 

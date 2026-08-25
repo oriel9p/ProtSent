@@ -271,6 +271,56 @@ def maxsim_matrix(
     return scores.float().cpu().numpy()
 
 
+def maxsim_against_one(
+    mve: MultiVectorEncoder,
+    document: str,
+    queries: Sequence[str],
+    *,
+    batch_size: int = 256,
+    max_seq_length: Optional[int] = None,
+) -> np.ndarray:
+    """MaxSim of every query against ONE document, streamed.
+
+    ``maxsim_matrix`` is built for all-vs-all: it materialises every query's per-residue
+    embeddings and round-trips them GPU->host->GPU. That is the right shape for a 69k-domain
+    lookup set, and the wrong one for "score 2.4M variants against a single wild type", where the
+    corpus is one sequence and the queries are the whole benchmark. Measured on a real assay, only
+    36% of that path's time was the forward pass.
+
+    Here the document is encoded once and kept on the GPU, and each query batch is scored the
+    moment it is embedded, so nothing but a scalar per query survives the batch. Scores match
+    ``maxsim_matrix`` to float tolerance.
+    """
+    mve.eval()
+    device = mve.device
+    L = max_seq_length or mve.max_seq_length
+
+    def embed(texts: List[str]):
+        feats = mve.tokenize(list(texts))
+        feats = {k: (v.to(device) if hasattr(v, "to") else v) for k, v in feats.items()}
+        with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16,
+                                             enabled=(device.type == "cuda")):
+            out = mve(feats)
+        emb = out["token_embeddings"].float()
+        # MultiVectorMask zeroes the skiplisted positions rather than removing them, so the mask
+        # is what says which residues count -- summing without it would add <cls>/<eos>/<pad>.
+        mask = out.get("attention_mask")
+        if mask is None:
+            mask = feats.get("attention_mask")
+        return emb, mask.to(emb.dtype)
+
+    doc_emb, doc_mask = embed([document])
+    doc = doc_emb[0][doc_mask[0].bool()]                      # [Ld, d], valid residues only
+    scores = np.empty(len(queries), dtype=np.float64)
+    for i in range(0, len(queries), batch_size):
+        q_emb, q_mask = embed(list(queries[i:i + batch_size]))
+        with torch.no_grad():
+            sim = torch.einsum("bqd,kd->bqk", q_emb, doc)     # [B, Lq, Ld]
+            best = sim.max(dim=-1).values * q_mask            # best document match per residue
+            scores[i:i + q_emb.shape[0]] = best.sum(dim=1).cpu().numpy()
+    return scores
+
+
 def cosine_matrix(st: SentenceTransformer, seqs: Sequence[str], *, batch_size: int = 64,
                   queries: Optional[Sequence[str]] = None) -> np.ndarray:
     def encode(texts):
