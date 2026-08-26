@@ -1,0 +1,13 @@
+2026-08-26 19:45:40,297 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-26 19:45:40,305 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
+2026-08-26 19:45:40,479 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
+2026-08-26 19:45:43,892 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
+2026-08-26 19:45:44,058 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-08-26 19:45:44,227 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
+2026-08-26 19:45:44,401 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-26 19:45:44,573 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-26 19:45:44,779 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-08-26 20:00:10,526 - INFO - dms_substitutions: 214 assays, 2459339 sequences to encode per model (3675 variants dropped as invisible past the 1022-residue truncation)
+2026-08-26 20:00:10,530 - INFO - No device provided, using cuda:0
+2026-08-26 20:00:10,531 - INFO - Loading MultiVectorEncoder model from /opt/hpc/ddofer/ProtSent/models/late_interaction/late-r2-esm2-150m/snapshots/step-10000.
+Loading weights:   0%|          | 0/488 [00:00<?, ?it/s]Loading weights:  83%|████████▎ | 406/488 [00:00<00:00, 4054.17it/s]Loading weights: 100%|██████████| 488/488 [00:00<00:00, 3973.67it/s]

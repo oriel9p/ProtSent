@@ -1,0 +1,15 @@
+2026-08-26 19:45:40,187 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-26 19:45:40,196 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
+2026-08-26 19:45:40,370 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
+2026-08-26 19:45:43,709 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
+2026-08-26 19:45:43,892 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-08-26 19:45:44,066 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
+2026-08-26 19:45:44,233 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-26 19:45:44,404 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-26 19:45:44,616 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-08-26 20:00:10,407 - INFO - dms_substitutions: 214 assays, 2459339 sequences to encode per model (3675 variants dropped as invisible past the 1022-residue truncation)
+2026-08-26 20:00:10,412 - INFO - No device provided, using cuda:0
+2026-08-26 20:00:10,413 - INFO - Loading MultiVectorEncoder model from /opt/hpc/ddofer/ProtSent/models/late_interaction/vanilla35m_clean/snapshots/step-10000.
+Loading weights:   0%|          | 0/200 [00:00<?, ?it/s]Loading weights: 100%|██████████| 200/200 [00:00<00:00, 4777.25it/s]
+2026-08-26 20:56:41,995 - INFO - vanilla35m_clean_s10000 dms_substitutions: mean spearman 0.3284 (corrected avg 0.3193) over 214 groups in 3391s
+2026-08-26 20:56:41,997 - INFO - wrote 1 rows -> /opt/hpc/ddofer/ProtSent/results/late_interaction/r2_final/_parallel/vanilla35m_clean_s10000/proteingym_maxsim.csv
