@@ -1,9 +1,0 @@
-cap,ci95,mean_score,metric,model,n_assays,n_variants_dropped_truncated,n_variants_scored,runtime_s,scoring,variant
-500,"[0.2580, 0.3047]",0.2817579110418689,spearman,protsent_v2_dense,210,4595,97553,209.2,cosine,dms_substitutions
-500,"[0.3093, 0.3501]",0.3303335183383704,spearman,proj128_late,210,4595,97553,221.1,maxsim,dms_substitutions
-500,"[0.3043, 0.3456]",0.3252804074615939,spearman,protsent_late_35m_prop_late,210,4595,97553,221.9,maxsim,dms_substitutions
-500,"[0.2769, 0.3215]",0.299498219008735,spearman,protsent_late_35m_prop_dense,210,4595,97553,209.2,cosine,dms_substitutions
-500,"[0.6691, 0.6926]",0.680552677630951,auc,protsent_v2_dense,2226,17775,38207,190.4,cosine,clinical_substitutions
-500,"[0.7573, 0.7790]",0.7675951064574489,auc,proj128_late,2226,17775,38207,200.7,maxsim,clinical_substitutions
-500,"[0.7441, 0.7654]",0.7546913200523433,auc,protsent_late_35m_prop_late,2226,17775,38207,199.3,maxsim,clinical_substitutions
-500,"[0.6885, 0.7114]",0.6994583751515813,auc,protsent_late_35m_prop_dense,2226,17775,38207,190.5,cosine,clinical_substitutions

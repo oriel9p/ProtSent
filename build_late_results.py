@@ -27,7 +27,7 @@ def _proteingym_is_full(csv_path):
     Keying on Path.exists() meant the first partial run flipped the report to "Full coverage:
     every variant of every assay, 1024-residue context" while the CSV held a 500-variant cap at
     512 residues -- and simultaneously hid the other three variants, whose npz still lived in
-    proteingym_partial/.
+    proteingym_partial/ (since deleted).
     """
     import csv as _csv
 
@@ -44,7 +44,7 @@ def _proteingym_is_full(csv_path):
 
 
 PARTIAL = not _proteingym_is_full(B / "proteingym_maxsim.csv")
-PG = B / "proteingym_partial" if PARTIAL else B
+PG = B  # the partial directory was deleted; there is nothing to fall back to
 out: list[str] = []
 w = out.append
 
@@ -153,19 +153,14 @@ w("survives in RUNS.md; the artifacts do not, and `build_late_results.py` still 
 w("so a CSV restored from git cannot reintroduce them.")
 w("")
 if PARTIAL:
-    w("## ProteinGym — PARTIAL, quarantined")
+    # The partial run was deleted rather than quarantined: a directory that still generated tables,
+    # however loudly captioned, is one bad glance away from being quoted as a result. So this emits
+    # no numbers at all and says what to run instead.
+    w("## ProteinGym — not available")
     w("")
-    w("> **Absolute numbers here are not results.** Scored at `--max_variants_per_assay 500` (~4.3%")
-    w("> of the 2.47M variants) and truncated at 512 residues, with a plain mean over groups instead")
-    w("> of the leaderboard's corrected average. Files live in")
-    w("> `pilot_35m/benchmarks/proteingym_partial/`; that directory's README lists every limitation")
-    w("> and the rerun cost (~1.0 h/arm at full coverage). A full-coverage rerun is deferred while")
-    w("> the scoring path is optimised.")
-    w("")
-    w("Only the **paired** rows below survive the caveat: both sides ran under the same cap, the")
-    w("same truncation and the same assay set, so a delta is a scoring or weights effect rather")
-    w("than a protocol artifact. The per-arm means above each delta table are for internal ranking")
-    w("only and must not be placed next to a published ProteinGym score.")
+    w("> The only ProteinGym data for these arms was a partial run (500-variant cap, 512-residue")
+    w("> truncation); it has been deleted, so there is nothing to report here. Rerun at full")
+    w("> coverage (~1.0 h/arm) to populate this section.")
     w("")
 else:
     w("## ProteinGym")

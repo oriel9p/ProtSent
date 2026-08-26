@@ -51,19 +51,11 @@ below the representable spacing, so only 2.4% of backbone elements could move. T
 survives in RUNS.md; the artifacts do not, and `build_late_results.py` still filters the names
 so a CSV restored from git cannot reintroduce them.
 
-## ProteinGym — PARTIAL, quarantined
+## ProteinGym — not available
 
-> **Absolute numbers here are not results.** Scored at `--max_variants_per_assay 500` (~4.3%
-> of the 2.47M variants) and truncated at 512 residues, with a plain mean over groups instead
-> of the leaderboard's corrected average. Files live in
-> `pilot_35m/benchmarks/proteingym_partial/`; that directory's README lists every limitation
-> and the rerun cost (~1.0 h/arm at full coverage). A full-coverage rerun is deferred while
-> the scoring path is optimised.
-
-Only the **paired** rows below survive the caveat: both sides ran under the same cap, the
-same truncation and the same assay set, so a delta is a scoring or weights effect rather
-than a protocol artifact. The per-arm means above each delta table are for internal ranking
-only and must not be placed next to a published ProteinGym score.
+> The only ProteinGym data for these arms was a partial run (500-variant cap, 512-residue
+> truncation); it has been deleted, so there is nothing to report here. Rerun at full
+> coverage (~1.0 h/arm) to populate this section.
 
 The second paired row is **not a step-count contrast**, despite once being labelled as one.
 `protsent_late_35m_prop` continues from `protsent_late_proj128`, but changes five things at
@@ -77,31 +69,31 @@ as a cost of the phase-2 mixture, not evidence that training longer hurts.
 For the clinical variants the score is **negated** before the AUC: the label is pathogenicity,
 and a variant that looks more like the wild type should be less pathogenic.
 
-### dms_substitutions — spearman, 210 groups
+### dms_indels — spearman, 66 groups
 
 | arm | scoring | spearman | 95% CI |
 |---|---|---|---|
-| `proj128_late` | MaxSim | 0.3303 | [0.3093, 0.3501] |
-| `protsent_late_35m_prop_late` | MaxSim | 0.3253 | [0.3043, 0.3456] |
-| `protsent_late_35m_prop_dense` | pooled cosine | 0.2995 | [0.2769, 0.3215] |
-| `protsent_v2_dense` | pooled cosine | 0.2818 | [0.2580, 0.3047] |
+| `proj128_late` | MaxSim | 0.5214 | [0.4843, 0.5587] |
+| `protsent_late_35m_prop_late` | MaxSim | 0.5192 | [0.4820, 0.5568] |
+| `protsent_late_35m_prop_dense` | pooled cosine | 0.4956 | [0.4564, 0.5336] |
+| `protsent_v2_dense` | pooled cosine | 0.4904 | [0.4513, 0.5307] |
 
 | paired comparison | Δ | 95% CI |
 |---|---|---|
-| MaxSim − pooled cosine (identical weights) (n=210) | +0.0258 ** | [+0.0191, +0.0322] |
-| phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=210) | -0.0051 ** | [-0.0089, -0.0013] |
+| MaxSim − pooled cosine (identical weights) (n=66) | +0.0236 ** | [+0.0079, +0.0395] |
+| phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=66) | -0.0022 | [-0.0089, +0.0047] |
 
-### clinical_substitutions — auc, 2226 groups
+### clinical_indels — auc, 77 groups
 
 | arm | scoring | auc | 95% CI |
 |---|---|---|---|
-| `proj128_late` | MaxSim | 0.7676 | [0.7573, 0.7790] |
-| `protsent_late_35m_prop_late` | MaxSim | 0.7547 | [0.7441, 0.7654] |
-| `protsent_late_35m_prop_dense` | pooled cosine | 0.6995 | [0.6885, 0.7114] |
-| `protsent_v2_dense` | pooled cosine | 0.6806 | [0.6691, 0.6926] |
+| `proj128_late` | MaxSim | 0.8545 | [0.7824, 0.9135] |
+| `protsent_late_35m_prop_late` | MaxSim | 0.8488 | [0.7825, 0.9107] |
+| `protsent_v2_dense` | pooled cosine | 0.7015 | [0.6169, 0.7892] |
+| `protsent_late_35m_prop_dense` | pooled cosine | 0.7003 | [0.6146, 0.7870] |
 
 | paired comparison | Δ | 95% CI |
 |---|---|---|
-| MaxSim − pooled cosine (identical weights) (n=2226) | +0.0552 ** | [+0.0483, +0.0626] |
-| phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=2226) | -0.0129 ** | [-0.0178, -0.0080] |
+| MaxSim − pooled cosine (identical weights) (n=77) | +0.1485 ** | [+0.0724, +0.2279] |
+| phase-2 proportional recipe − phase-1 round-robin arm (5 confounds, NOT step count) (n=77) | -0.0057 | [-0.0433, +0.0329] |
 

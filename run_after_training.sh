@@ -20,7 +20,7 @@ ARMS="${ARMS:-protsent_late_35m_prop protsent_late_150m_prop}"
 # logs/queue_b.log:1525) -- its own @0 is a random projection and is not a usable baseline.
 PARENTS="${PARENTS:-protsent_late_proj128 protsent_late_150m}"
 # proteingym is deliberately NOT in the default stages. The existing run is quarantined as PARTIAL
-# (results/late_interaction/pilot_35m/benchmarks/proteingym_partial/) and the full-coverage rerun
+# (deleted 2026-08-26; recoverable from git at a138268) and the full-coverage rerun
 # (~1.0 h/arm) is deferred while the scoring path is optimised in a separate session. Opt in only
 # when you own that work:
 #   STAGES="proteingym" ./run_after_training.sh
