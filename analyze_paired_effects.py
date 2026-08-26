@@ -27,6 +27,8 @@ import late_interaction as li  # noqa: E402
 CONTRASTS = [
     ("protsent_v2_zeroshot", "esm2_zeroshot",
      "ProtSent-V2 pretraining (35M, raw MaxSim)"),
+    ("protsent_v2_150m_zeroshot", "esm2_150m_zeroshot",
+     "ProtSent-V2 pretraining (150M, raw MaxSim)"),
     ("protsent_v2_150m_zeroshot", "protsent_v2_zeroshot",
      "size 35M->150M (V2, raw MaxSim)"),
     ("esm2_zeroshot", "esm2_dense",

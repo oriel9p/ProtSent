@@ -343,8 +343,10 @@ def cmd_proteingym(args) -> None:
     rng = np.random.default_rng(args.seed)
 
     # Materialise each assay once: ds.select(idx) plus a column read is ~21x faster than indexing
-    # rows in a Python loop. Encode volume, not data access, is the cost -- 217 assays at the
-    # default cap is ~105k sequences per model against 2.47M unsubsampled.
+    # rows in a Python loop. Encode volume, not data access, is the cost -- the full substitutions
+    # set is ~2.46M sequences per model. --max_variants_per_assay defaults to 0 (no cap), which is
+    # the only leaderboard-comparable setting; a 500 cap would score ~105k, i.e. 4.3% of ProteinGym,
+    # and is a different estimator, not a cheaper one.
     work = []
     for a in assays:
         idx = groups[a]
