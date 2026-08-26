@@ -135,7 +135,7 @@ def main() -> int:
         if kind == "dense":
             cosine_cache[name] = sim  # keyed by the exact --models name that --rerank refers to
         else:
-            base = metrics(li.ranking_from_similarity(sim), fam)
+            base_ranking = li.ranking_from_similarity(sim)
             partner = pairing.get(name)
             if partner is not None:
                 cos = cosine_cache.get(partner)
@@ -145,11 +145,19 @@ def main() -> int:
                         "list it in --models as a dense arm before this one"
                     )
                 shortlist = li.ranking_from_similarity(cos)
-                for k in RERANK_K:
-                    rerank_rows.append({"arm": name, "shortlist_from": partner, "shortlist_k": k,
-                                        **metrics(rerank_from(shortlist, sim, k), fam)})
-                rerank_rows.append({"arm": name, "shortlist_from": partner,
-                                    "shortlist_k": "full", **base})
+                # Every level, not just family: a pooled shortlist has an easy job at family
+                # (same-family proteins are near-duplicates) and a hard one at fold, so a
+                # family-only table cannot say whether two-stage retrieval actually holds up.
+                reranked = {k: rerank_from(shortlist, sim, k) for k in RERANK_K}
+                for level in li.SCOPE_LEVELS:
+                    labels = li.scope_labels(fam, level)
+                    for k in RERANK_K:
+                        rerank_rows.append({"arm": name, "shortlist_from": partner,
+                                            "shortlist_k": k, "level": level,
+                                            **metrics(reranked[k], labels)})
+                    rerank_rows.append({"arm": name, "shortlist_from": partner,
+                                        "shortlist_k": "full", "level": level,
+                                        **metrics(base_ranking, labels)})
             else:
                 logger.info("no --rerank pairing for %s; skipping its two-stage rows", name)
         del model, emb, sim

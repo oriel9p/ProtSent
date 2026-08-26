@@ -1,0 +1,4 @@
+accuracy,ci95,level,model,n_correct,n_lookup,n_queries,runtime_s,scoring,test_split
+0.74,"[0.6733, 0.8067]",cath_h,vanilla35m_clean_s10000,111,69605,150,134.71,maxsim,test_h
+0.7266666666666667,"[0.6598, 0.8000]",cath_h,late-r2-protsentv2-150m_s10000,109,69605,150,317.41,maxsim,test_h
+0.7666666666666667,"[0.7000, 0.8333]",cath_h,late-r2-esm2-150m_s10000,115,69605,150,316.85,maxsim,test_h
