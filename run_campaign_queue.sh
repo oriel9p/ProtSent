@@ -56,6 +56,16 @@ run_stage() {
       --run_dir "$M/$RUN" --name "$RUN" --out_dir "$RESDIR/scope" --batch_size 32 \
       --device cuda:1 --follow_pid "$pid" --max_hours 40 > "logs/watch_${RUN}.log" 2>&1 &
 
+  # Arm the step gate BEFORE blocking on the trainer. It waits for checkpoint-$TARGET, stops
+  # training there, then benchmarks the marks -- all of which it can only do while training is still
+  # alive. Invoked after wait_for_pid (as it was) it could never stop anything: that call blocks
+  # until the trainer exits on its own, by which point the run has already gone the full
+  # --max_steps. MAXSTEPS only shapes the constant_with_warmup schedule; TARGET is the real budget,
+  # so an unreachable gate silently trains every arm to 3x its intended length.
+  RUN="$RUN" TARGET="$TARGET" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
+    ./stop_at_and_bench.sh > "logs/gate_${RUN}.log" 2>&1 &
+  local gate=$!
+
   wait_for_pid "$pid"
   while pgrep -f -- "--run_name $RUN " >/dev/null 2>&1; do sleep 30; done
   sleep 30
@@ -69,8 +79,7 @@ run_stage() {
     ln -s ../dense_view "$M/$RUN/snapshots/step-$TARGET-dense"
   fi
 
-  if RUN="$RUN" TARGET="$TARGET" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
-       ./stop_at_and_bench.sh; then
+  if wait "$gate"; then
     touch "$done"
   else
     echo "$(date +%H:%M) $RUN: sweep reported failures (see its logs); NOT marking the stage done"
@@ -153,6 +162,16 @@ resume_stage() {
       --run_dir "$M/$RUN" --name "$RUN" --out_dir "$RESDIR/scope" --batch_size 32 \
       --device cuda:1 --follow_pid "$pid" --max_hours 40 > "logs/watch_${RUN}_resume.log" 2>&1 &
 
+  # Arm the step gate BEFORE blocking on the trainer. It waits for checkpoint-$TARGET, stops
+  # training there, then benchmarks the marks -- all of which it can only do while training is still
+  # alive. Invoked after wait_for_pid (as it was) it could never stop anything: that call blocks
+  # until the trainer exits on its own, by which point the run has already gone the full
+  # --max_steps. MAXSTEPS only shapes the constant_with_warmup schedule; TARGET is the real budget,
+  # so an unreachable gate silently trains every arm to 3x its intended length.
+  RUN="$RUN" TARGET="$TO" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
+    ./stop_at_and_bench.sh > "logs/gate_${RUN}_resume.log" 2>&1 &
+  local gate=$!
+
   wait_for_pid "$pid"
   while pgrep -f -- "--run_name $RUN " >/dev/null 2>&1; do sleep 30; done
   sleep 30
@@ -160,8 +179,7 @@ resume_stage() {
     mkdir -p "$M/$RUN/snapshots"
     ln -s ../dense_view "$M/$RUN/snapshots/step-$TO-dense"
   fi
-  RUN="$RUN" TARGET="$TO" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
-    ./stop_at_and_bench.sh || echo "$(date +%H:%M) $RUN resume: sweep reported failures"
+  wait "$gate" || echo "$(date +%H:%M) $RUN resume: sweep reported failures"
   touch "$done"
   echo "=== $(date +%H:%M) $RUN resume complete"
 }
