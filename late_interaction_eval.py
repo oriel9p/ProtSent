@@ -214,7 +214,7 @@ def cmd_fewshot_rh(args) -> None:
     te_seqs, te_y = list(test["seq"]), np.asarray(test["label"])
     te_seqs, te_y = subsample(te_seqs, te_y, args.max_test, args.seed)
 
-    rows = []
+    rows, per_query = [], {}
     for spec in args.models:
         name, kind, path = parse_model_spec(spec)
         scorer, scoring = load_scorer(kind, path, max_seq_length=args.max_seq_length, device=args.device)
@@ -245,10 +245,19 @@ def cmd_fewshot_rh(args) -> None:
             preds = np.asarray(preds)
             from sklearn.metrics import accuracy_score, f1_score
 
+            # Bootstrap over the test queries -- same axis and estimator the SCOPe rows use, so a
+            # few-shot interval means the same thing as a retrieval one. Keeping the per-query
+            # correctness is what lets two arms be compared paired later: marginal intervals
+            # overlap freely between arms that a paired test separates cleanly.
+            correct = (preds == te_y).astype(float)
+            _, lo, hi = boot_ci(correct, n_boot=args.n_boot, seed=args.seed)
+            per_query[f"{name}@{int(budget)}"] = correct
+
             rows.append({
                 "model": name, "scoring": scoring, "budget": int(budget), "knn_k": args.knn_k,
                 "seed": args.seed, "n_test": len(te_y),
                 "accuracy": float(accuracy_score(te_y, preds)),
+                "accuracy_ci95": f"[{lo:.4f}, {hi:.4f}]",
                 "f1_macro": float(f1_score(te_y, preds, average="macro")),
                 "runtime_s": round(time.time() - t0, 2),
             })
@@ -256,6 +265,9 @@ def cmd_fewshot_rh(args) -> None:
         del scorer
         torch.cuda.empty_cache()  # 8 arms in one invocation, each holding a corpus
     append_csv(Path(args.out_dir) / "late_fewshot_knn.csv", rows)
+    out = Path(args.out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(out / "fewshot_per_query_correct.npz", **per_query)
 
 
 # ProteinGym's headline number is a "corrected average": the metric is averaged WITHIN each of five
@@ -612,6 +624,7 @@ def main() -> None:
     pf.add_argument("--budgets", type=int, nargs="+", default=[100, 500, 1000])
     pf.add_argument("--knn_k", type=int, default=3)
     pf.add_argument("--max_test", type=int, default=0, help="Subsample the test split (0 = all)")
+    pf.add_argument("--n_boot", type=int, default=1000)
     pf.set_defaults(fn=cmd_fewshot_rh)
 
     pc = sub.add_parser("watch_curve", parents=[common])
