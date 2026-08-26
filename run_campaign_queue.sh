@@ -60,8 +60,17 @@ run_stage() {
   # training there, then benchmarks the marks -- all of which it can only do while training is still
   # alive. Invoked after wait_for_pid (as it was) it could never stop anything: that call blocks
   # until the trainer exits on its own, by which point the run has already gone the full
-  # --max_steps. MAXSTEPS only shapes the constant_with_warmup schedule; TARGET is the real budget,
-  # so an unreachable gate silently trains every arm to 3x its intended length.
+  # --max_steps. TARGET is the real budget, so an unreachable gate silently trains every arm to 3x
+  # its intended length.
+  #
+  # MAXSTEPS is deliberately larger than TARGET, and NOT because it shapes the schedule -- with
+  # constant_with_warmup the LR is identical at 10,000 and 30,000 (measured). It is larger so the
+  # trainer never believes it finished: on natural completion train_late_interaction.py deletes
+  # every checkpoint-* (treating them as crash-resume state and keeping only late/ + dense_view/),
+  # which would destroy the checkpoint this arm needs to resume to a longer budget later. Killing at
+  # the gate keeps it. Benchmarks read weights from snapshot_checkpoints.sh, and the stage is marked
+  # done by logs/stage_$RUN.done rather than runtime.json, which a killed run never writes.
+  # MAXSTEPS == TARGET looks like a simplification and silently costs the checkpoint.
   RUN="$RUN" TARGET="$TARGET" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
     ./stop_at_and_bench.sh > "logs/gate_${RUN}.log" 2>&1 &
   local gate=$!
@@ -166,8 +175,17 @@ resume_stage() {
   # training there, then benchmarks the marks -- all of which it can only do while training is still
   # alive. Invoked after wait_for_pid (as it was) it could never stop anything: that call blocks
   # until the trainer exits on its own, by which point the run has already gone the full
-  # --max_steps. MAXSTEPS only shapes the constant_with_warmup schedule; TARGET is the real budget,
-  # so an unreachable gate silently trains every arm to 3x its intended length.
+  # --max_steps. TARGET is the real budget, so an unreachable gate silently trains every arm to 3x
+  # its intended length.
+  #
+  # MAXSTEPS is deliberately larger than TARGET, and NOT because it shapes the schedule -- with
+  # constant_with_warmup the LR is identical at 10,000 and 30,000 (measured). It is larger so the
+  # trainer never believes it finished: on natural completion train_late_interaction.py deletes
+  # every checkpoint-* (treating them as crash-resume state and keeping only late/ + dense_view/),
+  # which would destroy the checkpoint this arm needs to resume to a longer budget later. Killing at
+  # the gate keeps it. Benchmarks read weights from snapshot_checkpoints.sh, and the stage is marked
+  # done by logs/stage_$RUN.done rather than runtime.json, which a killed run never writes.
+  # MAXSTEPS == TARGET looks like a simplification and silently costs the checkpoint.
   RUN="$RUN" TARGET="$TO" MARKS="$MARKS" OUTDIR="$RESDIR/benchmarks" TRAIN_PID="$pid" \
     ./stop_at_and_bench.sh > "logs/gate_${RUN}_resume.log" 2>&1 &
   local gate=$!
