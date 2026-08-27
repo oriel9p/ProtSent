@@ -55,6 +55,10 @@ CONTRASTS = [
      "more training: V2-150M 10000 - 1000"),
     ("late-r2-esm2-150m@8000", "vanilla35m_clean@8000",
      "size: 150M - 35M (ESM2 init, step 8000)"),
+    ("late-r2-esm2-150m@1000", "late-r2-esm2-150m-proj640@1000",
+     "proj_dim 128 - 640, identical recipe @1000"),
+    ("late-r2-esm2-150m@2000", "late-r2-esm2-150m-proj640@2000",
+     "proj_dim 128 - 640, identical recipe @2000"),
     # Filled in by close_gaps.sh; absent until then and reported as MISSING rather than skipped.
     ("esm2_150m_zeroshot", "esm2_zeroshot",
      "size 35M->150M (ESM2, raw MaxSim) [mechanism prediction: ~0]"),

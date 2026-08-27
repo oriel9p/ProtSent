@@ -3,7 +3,8 @@
 Hand-maintained ledger. `RESULTS.md` next to it is generated and holds the numbers; this holds
 their standing. Read this before trusting, citing, or rerunning anything here.
 
-Last reviewed 2026-08-25 (evening).
+Last reviewed 2026-08-27 (early morning). The r2 campaign is complete: all four init x size
+arms trained to 10,000, plus a proj_dim ablation. See "r2 findings" below.
 
 
 ## Run naming convention (adopted 2026-08-25)
@@ -26,16 +27,59 @@ it actually is. **Use the convention for every new run.**
 
 | run dir | recipe | base | size | steps | standing |
 |---|---|---|---|---|---|
-| `vanilla35m_clean` *(= `late-r2-esm2-35m`)* | **r2** | vanilla ESM-2 | 35M | 30,000 planned | **RUNNING** |
-| *(not yet created)* `late-r2-protsentv2-35m` | **r2** | ProtSent-V2 | 35M | — | **planned next**, matched-step comparison vs the above |
+| `vanilla35m_clean` *(= `late-r2-esm2-35m`)* | **r2** | vanilla ESM-2 | 35M | 10,000 | **done**, sfam 0.7040 @10k |
+| `late-r2-protsentv2-35m` | **r2** | ProtSent-V2 | 35M | 10,000 | **done**, sfam 0.6939 @10k. Deadlocked twice on `--mini_batch_num_tokens` before running on `--mini_batch_size` |
+| `late-r2-esm2-150m` | **r2** | vanilla ESM-2 | 150M | 10,000 | **done**, sfam 0.7288 @10k (0.7403 @8k) — best late model |
+| `late-r2-protsentv2-150m` | **r2** | ProtSent-V2 | 150M | 11,000 | **done**, sfam 0.7235 @11k |
+| `late-r2-esm2-150m-proj640` | **r2** | vanilla ESM-2 | 150M | 2,000 | **done**, proj_dim ablation: 640-d loses to 128-d |
 | `protsent_late_proj128` | r1 | ProtSent-V2 | 35M | 4,000 | phase-1 reference, sfam 0.7057 |
 | `protsent_late` | r1 | ProtSent-V2 | 35M | 2,000 | early pilot |
 | `protsent_late_swap` | r1 | ProtSent-V2 | 35M | 4,000 | pair-symmetry ablation |
 | `protsent_late_35m_prop` | r1 phase 2 | *continues* `protsent_late_proj128` | 35M | 31,000 | mixture-confounded, see retraction above |
 | `esm2_late` | r1 | vanilla ESM-2 | 35M | 2,000 | vanilla-base reference, fold 0.6000 |
-| `protsent_late_150m` | r1 | ProtSent-V2 | 150M | 5,000 | phase-1 150M, sfam 0.7376 — **best 150M late model** |
+| `protsent_late_150m` | r1 | ProtSent-V2 | 150M | 5,000 | phase-1 150M, sfam 0.7376 — superseded by `late-r2-esm2-150m` |
 | `protsent_late_150m_prop` | r1 phase 2 | *continues* `protsent_late_150m` | 150M | 30,000 | head-reinit confounded, see above |
 | `esm2_late_150m` | r1 | vanilla ESM-2 | 150M | 5,000 | vanilla-base 150M reference |
+
+## r2 findings (2026-08-27) — paired bootstraps, not marginal CIs
+
+Regenerate any of these with `python analyze_paired_effects.py --level superfamily`. They are
+paired over the same SCOPe-40 queries; the marginal CIs in `scope_hierarchy.csv` overlap for
+several contrasts that are separated cleanly here, so **do not compare arms by eye off that file**.
+
+| effect | dAP (sfam) | CI95 | sig |
+|---|---|---|---|
+| ProtSent-V2 pretraining, 35M, frozen MaxSim | +0.2096 | [+0.1971,+0.2216] | yes |
+| ProtSent-V2 pretraining, 150M, frozen MaxSim | +0.2743 | [+0.2626,+0.2863] | yes |
+| MaxSim - cosine, same ESM2-35M weights | +0.0754 | [+0.0672,+0.0835] | yes |
+| MaxSim - cosine, same V2-150M weights | +0.0490 | [+0.0444,+0.0533] | yes |
+| **scale, ESM2, frozen MaxSim 35M->150M** | **-0.0286** | [-0.0415,-0.0160] | yes |
+| scale, ProtSent-V2, frozen MaxSim 35M->150M | +0.0360 | [+0.0273,+0.0447] | yes |
+| init after training: ESM2 - V2, 35M @10k | +0.0101 | [+0.0054,+0.0150] | yes |
+| init after training: ESM2 - V2, 150M | +0.0173 | [+0.0125,+0.0221] | yes |
+| late training on V2-35M vs frozen | +0.0108 | [+0.0047,+0.0169] | yes |
+| late training on V2-150M vs frozen | +0.0038 | [-0.0022,+0.0098] | **no** |
+| proj_dim 128 - 640, identical recipe @2000 | +0.0104 | [+0.0072,+0.0138] | yes |
+
+Four conclusions, and the two that are easy to overstate:
+
+1. **Pretraining is the dominant effect**, ~5x the next largest lever. MaxSim is how it is cashed in.
+2. **Scale is an interaction, not a main effect.** Frozen ESM2 gets *worse* at 150M; frozen ProtSent
+   gets better. `campaign/token_spread.py` measures why: ESM2's effective residue rank falls with
+   scale (12.10 -> 10.54) while ProtSent's rises (15.50 -> 22.50), and MaxSim needs residues to be
+   individually distinguishable. The negative ESM2 number was predicted from the rank before it was
+   measured.
+3. **128-d beats 640-d** at matched steps and identical flags, so the compression claim is a win,
+   not a trade-off: 5x smaller index *and* higher MAP.
+4. **"Late training adds nothing on top of ProtSent" is size-dependent** — true at 150M (ns here,
+   and significantly *negative* on few-shot), false at 35M (+0.0108). Do not state it generally.
+
+Benchmarks that do NOT separate these arms: the 6-task cheap sweep (all 8 cells within 0.024),
+ProteinGym (every CI overlaps), CATH (n=150). They are do-no-harm checks, not evidence. SCOPe and
+few-shot remote homology are the two that discriminate.
+
+Never run on any r2 arm: the 22-task `paper` suite (`TASKS=paper ./run_late_bench.sh`), and
+ProtBench's own ProteinGym path -- our ProteinGym numbers come from `late_interaction_eval.py`.
 
 Results directories follow the same split: `clean_35m/` holds r2 output, `pilot_35m/` and
 `pilot_150m/` hold r1. Per-query npz are prefixed with the run name, so they never collide.
