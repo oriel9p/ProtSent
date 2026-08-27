@@ -64,12 +64,17 @@ interaction recovers most where pooling loses most. Corpus is
 | Metal Ion Binding | ESM-2 150M | **0.765** | 0.735 | 0.720 |
 | Subcellular Loc. | ProtSent 150M | **0.564** | 0.552 | 0.633 |
 | Subcellular Loc. | ESM-2 150M | **0.577** | 0.536 | 0.620 |
-| *All 18 model-task pairs* | | *16 beat cosine kNN* | | *8 beat linear* |
+| Optimal pH (Spearman) | ProtSent 150M | **0.605** | 0.583 | 0.512 |
+| beta-lactamase (Spearman) | ProtSent 150M | **0.838** | 0.755 | 0.697 |
+| *All 30 model-task pairs* | | *27 beat cosine kNN* | | *19 beat linear* |
 
 *Caption.* Splits, k, training set and metrics are unchanged from Section 4.1; only neighbour
-selection differs. Across six models and three tasks, MaxSim beats pooled cosine on 16 of 18 pairs
-and a linear probe on 8. Late interaction is a better neighbourhood metric, not a substitute for
-supervised readout.
+selection differs. Across six models and five tasks, MaxSim beats pooled cosine on 27 of 30 pairs and
+a linear probe on 19. The split by task type is informative: MaxSim beats **both** probes on the
+regression tasks (optimal pH 6/6, beta-lactamase 5/6) and on metal ion binding (6/6), while a linear
+probe wins on the two multiclass tasks (remote homology 1/6, subcellular localisation 1/6). Late
+interaction is the better neighbourhood metric throughout; whether it also beats a learned readout
+depends on whether the labels are linearly separable in the pooled space.
 
 **Table C.** Pretraining and scale under frozen MaxSim (SCOPe-40 superfamily MAP).
 
@@ -97,9 +102,10 @@ A ProtSent embedding averages L residue vectors into one, and that step is lossy
 detail is retrievable. Scoring identical frozen weights with MaxSim instead of cosine improves
 SCOPe-40 superfamily MAP by 0.049 at 150M and 0.029 at 35M (Table A), with no training of any kind.
 The effect is not confined to retrieval: substituting MaxSim for pooled distance inside the k=3 probe
-of Section 4.1 improves 16 of 18 model-task pairs (Table B). It does not displace a supervised
-readout — a linear probe still wins where classes separate linearly — but as a neighbourhood metric,
-the axis this work argues matters, MaxSim is consistently the better choice. The result replicates on
+of Section 4.1 improves 27 of 30 model-task pairs (Table B). Against a linear probe the picture is
+task-dependent: MaxSim wins on both regression tasks and on metal ion binding, and loses on the two
+multiclass tasks, where the labels are evidently linearly separable in the pooled space. As a
+neighbourhood metric — the axis this work argues matters — MaxSim is consistently the better choice. The result replicates on
 an unrelated benchmark: few-shot remote homology gives +0.047 accuracy for the same contrast against
 SCOPe's +0.049 MAP, two tasks sharing no data agreeing to within 0.002.
 
@@ -148,7 +154,8 @@ Stated rather than omitted, so a reviewer finding these files does not assume th
 |---|---|---|
 | 1 | SCOPe corpus differs from Table 3 (2,207 vs 100k) | **Blocker** |
 | 2 | Effective rank rests on 4 models — correct prediction, not yet a trend | Medium |
-| 3 | Table B covers 3 tasks; 2 regression tasks queued | Medium |
+| 3 | Table B covers 5 tasks x 6 models; EC excluded (multilabel) | Low |
+| 3b | ProteinGym frozen arms OOM: an unprojected 150M arm needs a 26.6 GiB allocation for one 8192-query chunk at 1024 residues. Needs a smaller `_QUERY_CHUNK`. Not chased -- ProteinGym does not discriminate anyway | Low |
 | 4 | Rerank latency measured in MAP recovered, not wall-clock | Low |
 
 ## Excluded by choice

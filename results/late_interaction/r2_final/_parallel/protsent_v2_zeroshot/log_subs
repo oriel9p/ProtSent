@@ -7,3 +7,60 @@
 2026-08-27 16:47:22,130 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions?recursive=false&expand=false "HTTP/1.1 200 OK"
 2026-08-27 16:47:22,305 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
 2026-08-27 16:47:22,516 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-08-27 17:02:40,601 - INFO - dms_substitutions: 214 assays, 2459339 sequences to encode per model (3675 variants dropped as invisible past the 1022-residue truncation)
+2026-08-27 17:02:40,625 - INFO - 🏗️  Loading model: GrimSqueaker/ProtSent-V2-35M (device=cuda)
+2026-08-27 17:02:40,626 - INFO -    ✨ Using standard SentenceTransformer loading
+Loading weights:   0%|          | 0/198 [00:00<?, ?it/s]Loading weights: 100%|██████████| 198/198 [00:00<00:00, 4618.40it/s]
+[transformers] [1mEsmModel LOAD REPORT[0m from: GrimSqueaker/ProtSent-V2-35M
+Key                       | Status     | 
+--------------------------+------------+-
+lm_head.dense.weight      | UNEXPECTED | 
+lm_head.layer_norm.weight | UNEXPECTED | 
+lm_head.bias              | UNEXPECTED | 
+lm_head.decoder.weight    | UNEXPECTED | 
+lm_head.dense.bias        | UNEXPECTED | 
+lm_head.layer_norm.bias   | UNEXPECTED | 
+pooler.dense.bias         | MISSING    | 
+pooler.dense.weight       | MISSING    | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+2026-08-27 17:02:43,363 - INFO -    Disabled ESM2 token_dropout (HF transformers bug workaround)
+2026-08-27 17:02:43,363 - INFO - Tokenizer will map out-of-vocabulary tokens (e.g. 'J') to 'X' (id 24)
+2026-08-27 17:02:43,363 - INFO -    📊 Tokenizer vocab size: 33, Model vocab size: 33
+2026-08-27 17:02:43,364 - INFO -    🧪 Test tokenization: min_id=0, max_id=22, model_vocab=33
+2026-08-27 17:02:43,364 - INFO -    ✅ Tokenization test passed
+2026-08-27 17:02:43,364 - INFO -    ✅ Model loaded successfully (dim=480)
+2026-08-27 17:02:43,364 - INFO -    ✂️  max_seq_length enforced at 1024
+2026-08-27 17:02:43,366 - INFO - No device provided, using cuda:0
+[W827 17:23:07.289019603 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 25839009792 bytes (free: 2314403840, total: 85094825984).
+[W827 17:23:07.866305121 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 25839009792 bytes (free: 23990566912, total: 85094825984).
+Traceback (most recent call last):
+  File "/opt/hpc/ddofer/ProtSent/late_interaction_eval.py", line 670, in <module>
+    main()
+    ~~~~^^
+  File "/opt/hpc/ddofer/ProtSent/late_interaction_eval.py", line 666, in main
+    args.fn(args)
+    ~~~~~~~^^^^^^
+  File "/opt/hpc/ddofer/ProtSent/late_interaction_eval.py", line 415, in cmd_proteingym
+    score = (li.maxsim_against_one(fast, wt, mut, batch_size=max(args.batch_size, 256))
+             ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hpc/ddofer/ProtSent/late_interaction.py", line 344, in maxsim_against_one
+    sim = mve.similarity([q.float() for q in qs], [doc],
+                         chunk_elements=_CHUNK_ELEMENTS, length_normalize=True)
+  File "/opt/hpc/ddofer/ProtSent/.venv/lib/python3.13/site-packages/sentence_transformers/multi_vector_encoder/model.py", line 1008, in similarity
+    return self._similarity(embeddings1, embeddings2, **kwargs)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hpc/ddofer/ProtSent/.venv/lib/python3.13/site-packages/sentence_transformers/util/similarity.py", line 460, in maxsim
+    score_chunks.append(_maxsim_score_documents(a, chunk_b, a_mask_padded, chunk_b_mask).to(result_device))
+                        ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hpc/ddofer/ProtSent/.venv/lib/python3.13/site-packages/sentence_transformers/util/similarity.py", line 484, in _maxsim_score_documents
+    scores = torch.einsum("ash,bth->abst", a, b)
+  File "/opt/hpc/ddofer/ProtSent/.venv/lib/python3.13/site-packages/torch/functional.py", line 372, in einsum
+    return _VF.einsum(equation, operands)  # type: ignore[attr-defined]
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hpc/ddofer/ProtSent/.venv/lib/python3.13/site-packages/torch/_native/registry.py", line 925, in eager_router
+    return _fallback.call_boxed(keyset, *args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 24.06 GiB. GPU 0 has a total capacity of 79.25 GiB of which 22.34 GiB is free. Including non-PyTorch memory, this process has 56.88 GiB memory in use. Of the allocated memory 26.21 GiB is allocated by PyTorch, and 30.18 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)
