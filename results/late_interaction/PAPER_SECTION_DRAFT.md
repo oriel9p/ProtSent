@@ -40,14 +40,18 @@ distance between pooled vectors when selecting neighbours.
 |---|---|---|---|---|---|
 | ESM-2 35M | cosine | 0.698 | 0.845 | 0.902 | 0.3981 |
 | ESM-2 35M | MaxSim | 0.719 | 0.856 | 0.901 | **0.4735** |
+| ESM-2 150M | cosine | 0.728 | 0.869 | 0.914 | 0.3580 |
+| ESM-2 150M | MaxSim | 0.791 | 0.881 | 0.923 | **0.4449** |
 | ProtSent 35M | cosine | 0.857 | 0.956 | 0.971 | 0.6540 |
 | ProtSent 35M | MaxSim | 0.878 | 0.956 | 0.975 | **0.6831** |
 | ProtSent 150M | cosine | 0.895 | 0.953 | 0.972 | 0.6702 |
 | ProtSent 150M | MaxSim | 0.916 | 0.963 | 0.978 | **0.7192** |
 
 *Caption.* MaxSim and cosine applied to the same frozen weights; no model is retrained. MAP gains are
-+0.075 (ESM-2 35M), +0.029 (ProtSent 35M) and +0.049 (ProtSent 150M), all significant under a paired
-bootstrap over the 2,020 queries having at least one same-superfamily target. Corpus is
++0.075 (ESM-2 35M), **+0.087 (ESM-2 150M)**, +0.029 (ProtSent 35M) and +0.049 (ProtSent 150M), all
+significant under a paired bootstrap over the 2,020 queries having at least one same-superfamily
+target. The gain is largest for the weakest pooled baseline and smallest for the strongest: late
+interaction recovers most where pooling loses most. Corpus is
 `tattabio/scope40_test` (2,207 domains), not the set used in Table 3.
 
 **Table B.** MaxSim substituted for pooled distance inside the k=3 probe of Section 4.1.
@@ -78,10 +82,14 @@ supervised readout.
 
 *Caption.* Frozen backbones, MaxSim scoring, no projection. ProtSent pretraining is worth +0.210 MAP
 at 35M and +0.274 at 150M — roughly five times the effect of the scoring change in Table A. Scale is
-an interaction rather than a main effect: it costs ESM-2 0.029 MAP and gains ProtSent 0.036. The
-italic row reports mean effective rank (participation ratio of the singular values) of each protein's
+an interaction rather than a main effect: it costs ESM-2 0.029 MAP and gains ProtSent 0.036. **This
+decline is not specific to MaxSim** -- under cosine, ESM-2 loses 0.040 MAP over the same scale step
+(Table A), so ESM-2 150M is simply weaker than 35M at SCOPe retrieval on this corpus under either
+scoring, and MaxSim recovers part of that loss rather than causing it. The italic row reports mean effective rank (participation ratio of the singular values) of each protein's
 residue matrix over 300 SCOPe domains. MaxSim requires residues to be individually distinguishable;
-ESM-2's residues grow more collinear with scale while ProtSent's grow less so.
+ESM-2's residues grow more collinear with scale while ProtSent's grow less so. Rank accounts for
+MaxSim's absolute level across these four models; it does not by itself explain the direction of the
+scale effect, which is present under pooling too.
 
 ### Prose
 
@@ -98,12 +106,17 @@ SCOPe's +0.049 MAP, two tasks sharing no data agreeing to within 0.002.
 The gain is specific to ProtSent. At matched size, ProtSent pretraining is worth +0.210 MAP at 35M
 and +0.274 at 150M over stock ESM-2 under identical scoring (Table C), roughly five times the effect
 of the scoring change itself. Scale and pretraining interact: scaling ESM-2 from 35M to 150M degrades
-frozen MaxSim retrieval by 0.029 MAP, while scaling ProtSent improves it by 0.036. The mechanism is
-measurable. MaxSim needs residues within a protein to be distinguishable from one another, which we
+frozen retrieval while scaling ProtSent improves it by 0.036 MAP. ESM-2's decline is not a
+late-interaction artefact: it loses 0.040 MAP under cosine against 0.029 under MaxSim, so MaxSim
+recovers part of the loss rather than causing it. One property of the residue representations tracks
+MaxSim's absolute level. MaxSim needs residues within a protein to be distinguishable from one another, which we
 quantify as the effective rank of the residue matrix. ESM-2's residues become more collinear with
 scale (12.1 to 10.5) while ProtSent's become less so (15.5 to 22.5). Contrastive training on pooled
 vectors decorrelates the residues underneath: to make a mean discriminative across many proteins, the
-model cannot let its parts collapse onto a single direction.
+model cannot let its parts collapse onto a single direction. We report this as a correlation over
+four models, not a demonstrated cause. The benefit is also largest where pooling costs most: the
+MaxSim gain is +0.087 MAP on ESM-2 150M, whose pooled baseline is the weakest of the four, and +0.029
+on ProtSent 35M, whose pooled baseline is already strong.
 
 Late interaction stores L vectors per protein instead of one. Two-stage retrieval removes most of
 this cost: a pooled-cosine shortlist reranked by MaxSim recovers 97.7% of exhaustive MaxSim MAP at

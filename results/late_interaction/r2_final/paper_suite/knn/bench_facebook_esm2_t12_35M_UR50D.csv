@@ -20,3 +20,5 @@ facebook/esm2_t12_35M_UR50D,Temperature Stability,Full,2026-08-27,knn,standard,t
 facebook/esm2_t12_35M_UR50D,Thermostability (FLIP),Full,2026-08-27,knn,standard,test,test_random_split,none,470d637,42,0.47605,0.48327,0.03507,0.14674,0.17148,0.0019,,,,,,,,,
 facebook/esm2_t12_35M_UR50D,Variant Effect (GB1),Full,2026-08-27,knn,standard,test,test_split,none,470d637,42,0.66299,0.62134,1.00325,0.71323,0.30962,0.00166,,,,,,,,,
 facebook/esm2_t12_35M_UR50D,beta-lactamase-PEER,Full,2026-08-27,knn,standard,test,test_split_column,none,470d637,42,0.73751,0.78923,0.03953,0.13591,0.61679,0.00154,,,,,,,,,
+facebook/esm2_t12_35M_UR50D,PPI (Bernett Gold Standard),Full,2026-08-27,knn,standard,test,test_split,none,470d637,42,,,,,,0.06446,0.55528,0.55524,0.55528,0.11057,,0.55116,0.5715,0.54554,
+facebook/esm2_t12_35M_UR50D,RhlA Enzyme Mutations,Full,2026-08-27,knn,standard,test,test_split_column,none,470d637,42,0.46591,0.42342,0.15229,0.28289,-1.85335,0.00064,,,,,,,,,

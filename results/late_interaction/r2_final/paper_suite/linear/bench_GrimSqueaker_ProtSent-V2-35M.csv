@@ -20,3 +20,5 @@ GrimSqueaker/ProtSent-V2-35M,Temperature Stability,Full,2026-08-27,linear,standa
 GrimSqueaker/ProtSent-V2-35M,Thermostability (FLIP),Full,2026-08-27,linear,standard,test,test_random_split,none,470d637,42,0.54856,0.54769,0.03004,0.13861,0.29018,0.03837,,,,,,,,,
 GrimSqueaker/ProtSent-V2-35M,Variant Effect (GB1),Full,2026-08-27,linear,standard,test,test_split,none,470d637,42,0.84624,0.81753,0.48211,0.52428,0.66823,0.044,,,,,,,,,
 GrimSqueaker/ProtSent-V2-35M,beta-lactamase-PEER,Full,2026-08-27,linear,standard,test,test_split_column,none,470d637,42,0.63539,0.7254,0.04923,0.16962,0.52277,0.03138,,,,,,,,,
+GrimSqueaker/ProtSent-V2-35M,PPI (Bernett Gold Standard),Full,2026-08-27,linear,standard,test,test_split,none,470d637,42,,,,,,7.84851,0.53214,0.53003,0.53214,0.06487,,0.49855,0.54942,0.53368,
+GrimSqueaker/ProtSent-V2-35M,RhlA Enzyme Mutations,Full,2026-08-27,linear,standard,test,test_split_column,none,470d637,42,0.38765,0.38327,0.28521,0.41307,-4.3439,0.01054,,,,,,,,,
