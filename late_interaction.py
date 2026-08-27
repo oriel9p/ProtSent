@@ -312,8 +312,27 @@ def maxsim_matrix(
 
 
 # Query embeddings for one chunk stay resident; 8192 keeps that under ~1 GB at 128-D.
-_QUERY_CHUNK = 8192
+_QUERY_CHUNK = 8192          # queries held resident at once, calibrated for a 128-d projected arm
+_QUERY_CHUNK_REF_DIM = 128
 _CHUNK_ELEMENTS = 25_000_000
+
+
+def query_chunk_for_dim(dim: int) -> int:
+    """Queries to hold at once so residency stays near the 128-d budget.
+
+    maxsim_against_one keeps one chunk of query embeddings alive: chunk x L x dim floats. A fixed
+    chunk therefore costs 5x more on an unprojected 640-d backbone than on a 128-d projected one,
+    which is why the ProteinGym zero-shot arms asked for a single 26.6 GiB allocation and OOMed on an
+    80 GB card even running alone, while the projected arms on identical data were fine.
+
+    Chunking is NOT bit-exact under the bf16 autocast in maxsim_against_one: it changes which
+    sequences share a batch and therefore how much padding each carries, which moves individual
+    scores by up to ~1e-3 (measured; a self-score reads 0.999962 at one chunk size and 1.000000 at
+    another). That is the same order as the bf16-vs-fp32 difference already accepted there, and well
+    below the ~2e-3 it moves a per-assay Spearman. Projected 128-d arms keep the full 8192 chunk, so
+    no number already published changes.
+    """
+    return max(1, _QUERY_CHUNK * _QUERY_CHUNK_REF_DIM // max(1, dim))
 
 
 def maxsim_against_one(
@@ -336,8 +355,9 @@ def maxsim_against_one(
     with torch.no_grad(), torch.autocast(**bf16):
         doc = mve.encode_document([document], **enc)[0].float()
     scores = []
-    for i in range(0, len(queries), _QUERY_CHUNK):
-        chunk = list(queries[i : i + _QUERY_CHUNK])
+    step = query_chunk_for_dim(doc.shape[-1])
+    for i in range(0, len(queries), step):
+        chunk = list(queries[i : i + step])
         with torch.no_grad(), torch.autocast(**bf16):
             qs = mve.encode_query(chunk, batch_size=batch_size, **enc)
         with torch.no_grad():
