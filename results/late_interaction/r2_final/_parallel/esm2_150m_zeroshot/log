@@ -1,22 +1,22 @@
-2026-08-27 12:42:14,847 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
-2026-08-27 12:42:14,857 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
-2026-08-27 12:42:15,034 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
-2026-08-27 12:42:18,382 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
-2026-08-27 12:42:18,552 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
-2026-08-27 12:42:18,723 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
-2026-08-27 12:42:18,894 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions?recursive=false&expand=false "HTTP/1.1 200 OK"
-2026-08-27 12:42:19,064 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
-2026-08-27 12:42:19,277 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
-2026-08-27 12:56:41,878 - INFO - dms_substitutions: 214 assays, 2459339 sequences to encode per model (3675 variants dropped as invisible past the 1022-residue truncation)
-2026-08-27 12:56:41,898 - INFO - 🏗️  Loading model: facebook/esm2_t30_150M_UR50D (device=cuda)
-2026-08-27 12:56:41,898 - INFO -    ✨ Using standard SentenceTransformer loading
-Loading weights:   0%|          | 0/486 [00:00<?, ?it/s]Loading weights:  45%|████▌     | 219/486 [00:00<00:00, 2189.75it/s]Loading weights: 100%|██████████| 486/486 [00:00<00:00, 4328.06it/s]
+2026-08-27 14:42:18,209 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-27 14:42:18,219 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
+2026-08-27 14:42:18,395 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
+2026-08-27 14:42:21,818 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
+2026-08-27 14:42:21,986 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-08-27 14:42:22,156 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_indels%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
+2026-08-27 14:42:22,330 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_indels?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-27 14:42:22,500 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-27 14:42:22,715 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-08-27 14:43:19,824 - INFO - dms_indels: 66 assays, 287207 sequences to encode per model (0 variants dropped as invisible past the 1022-residue truncation)
+2026-08-27 14:43:19,844 - INFO - 🏗️  Loading model: facebook/esm2_t30_150M_UR50D (device=cuda)
+2026-08-27 14:43:19,844 - INFO -    ✨ Using standard SentenceTransformer loading
+Loading weights:   0%|          | 0/486 [00:00<?, ?it/s]Loading weights:  53%|█████▎    | 256/486 [00:00<00:00, 2559.55it/s]Loading weights: 100%|██████████| 486/486 [00:00<00:00, 4392.87it/s]
 [transformers] [1mEsmModel LOAD REPORT[0m from: facebook/esm2_t30_150M_UR50D
 Key                       | Status     | 
 --------------------------+------------+-
-lm_head.dense.weight      | UNEXPECTED | 
-lm_head.bias              | UNEXPECTED | 
 lm_head.dense.bias        | UNEXPECTED | 
+lm_head.bias              | UNEXPECTED | 
+lm_head.dense.weight      | UNEXPECTED | 
 lm_head.layer_norm.bias   | UNEXPECTED | 
 lm_head.layer_norm.weight | UNEXPECTED | 
 pooler.dense.weight       | MISSING    | 
@@ -25,25 +25,18 @@ pooler.dense.bias         | MISSING    |
 Notes:
 - UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
 - MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
-2026-08-27 12:56:44,720 - INFO -    Disabled ESM2 token_dropout (HF transformers bug workaround)
-2026-08-27 12:56:44,720 - INFO - Tokenizer will map out-of-vocabulary tokens (e.g. 'J') to 'X' (id 24)
-2026-08-27 12:56:44,720 - INFO -    📊 Tokenizer vocab size: 33, Model vocab size: 33
-2026-08-27 12:56:44,721 - INFO -    🧪 Test tokenization: min_id=0, max_id=22, model_vocab=33
-2026-08-27 12:56:44,721 - INFO -    ✅ Tokenization test passed
-2026-08-27 12:56:44,721 - INFO -    ✅ Model loaded successfully (dim=640)
-2026-08-27 12:56:44,721 - INFO -    ✂️  max_seq_length enforced at 1024
-2026-08-27 12:56:44,723 - INFO - No device provided, using cuda:0
-[W827 12:58:11.980333924 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 34227617792 bytes (free: 22140878848, total: 85094825984).
-[W827 13:04:18.098971513 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 2097152 bytes (free: 3342336, total: 85094825984).
-[W827 13:06:52.780579886 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 17704157184 bytes (free: 4738711552, total: 85094825984).
-[W827 13:11:15.793162435 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 25390219264 bytes (free: 13066502144, total: 85094825984).
-[W827 13:15:39.116459773 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 24293408768 bytes (free: 9344057344, total: 85094825984).
-[W827 13:33:49.402850060 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 25839009792 bytes (free: 2754805760, total: 85094825984).
-[W827 13:34:42.523860562 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 25839009792 bytes (free: 13756465152, total: 85094825984).
-[W827 13:38:51.854097824 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 2097152 bytes (free: 3342336, total: 85094825984).
-[W827 13:40:52.746031241 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 28586278912 bytes (free: 17747345408, total: 85094825984).
-[W827 13:41:49.261147344 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 28586278912 bytes (free: 11252465664, total: 85094825984).
-[W827 13:41:49.639504135 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 28586278912 bytes (free: 25286606848, total: 85094825984).
+2026-08-27 14:43:22,716 - INFO -    Disabled ESM2 token_dropout (HF transformers bug workaround)
+2026-08-27 14:43:22,716 - INFO - Tokenizer will map out-of-vocabulary tokens (e.g. 'J') to 'X' (id 24)
+2026-08-27 14:43:22,717 - INFO -    📊 Tokenizer vocab size: 33, Model vocab size: 33
+2026-08-27 14:43:22,718 - INFO -    🧪 Test tokenization: min_id=0, max_id=22, model_vocab=33
+2026-08-27 14:43:22,718 - INFO -    ✅ Tokenization test passed
+2026-08-27 14:43:22,718 - INFO -    ✅ Model loaded successfully (dim=640)
+2026-08-27 14:43:22,718 - INFO -    ✂️  max_seq_length enforced at 1024
+2026-08-27 14:43:22,724 - INFO - No device provided, using cuda:0
+[W827 14:44:48.345589363 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 18039701504 bytes (free: 14666563584, total: 85094825984).
+[W827 14:46:28.353305934 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 18039701504 bytes (free: 16166027264, total: 85094825984).
+[W827 14:56:24.993379060 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 18039701504 bytes (free: 13833994240, total: 85094825984).
+[W827 14:56:24.994241375 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 18039701504 bytes (free: 13838188544, total: 85094825984).
 Traceback (most recent call last):
   File "/opt/hpc/ddofer/ProtSent/late_interaction_eval.py", line 670, in <module>
     main()
@@ -71,4 +64,4 @@ Traceback (most recent call last):
   File "/opt/hpc/ddofer/ProtSent/.venv/lib/python3.13/site-packages/torch/_native/registry.py", line 925, in eager_router
     return _fallback.call_boxed(keyset, *args, **kwargs)
            ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 26.62 GiB. GPU 0 has a total capacity of 79.25 GiB of which 23.55 GiB is free. Including non-PyTorch memory, this process has 55.68 GiB memory in use. Of the allocated memory 37.08 GiB is allocated by PyTorch, and 18.10 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 16.80 GiB. GPU 0 has a total capacity of 79.25 GiB of which 12.89 GiB is free. Including non-PyTorch memory, this process has 66.34 GiB memory in use. Of the allocated memory 29.72 GiB is allocated by PyTorch, and 36.12 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)

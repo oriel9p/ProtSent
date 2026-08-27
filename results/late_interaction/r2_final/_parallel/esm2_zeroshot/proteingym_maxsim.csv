@@ -1,0 +1,2 @@
+aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
+per_group_mean,0,"[0.4997, 0.5831]",nan,unpinned,zeroshot,0.5408449839963978,spearman,esm2_zeroshot,66,1000,0,287207,facebook/esm2_t12_35M_UR50D,0,798.1,maxsim,dms_indels

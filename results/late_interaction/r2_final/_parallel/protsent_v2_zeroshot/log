@@ -1,76 +1,40 @@
-2026-08-27 13:26:37,146 - INFO - HTTP Request: GET https://huggingface.co/api/agent-harnesses "HTTP/1.1 200 OK"
-2026-08-27 13:26:37,317 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
-2026-08-27 13:26:37,326 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
-2026-08-27 13:26:37,511 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
-2026-08-27 13:26:40,892 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
-2026-08-27 13:26:41,062 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
-2026-08-27 13:26:41,234 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
-2026-08-27 13:26:41,406 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions?recursive=false&expand=false "HTTP/1.1 200 OK"
-2026-08-27 13:26:41,575 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
-2026-08-27 13:26:41,793 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
-2026-08-27 13:41:09,266 - INFO - dms_substitutions: 214 assays, 2459339 sequences to encode per model (3675 variants dropped as invisible past the 1022-residue truncation)
-2026-08-27 13:41:09,287 - INFO - 🏗️  Loading model: GrimSqueaker/ProtSent-V2-35M (device=cuda)
-2026-08-27 13:41:09,287 - INFO -    ✨ Using standard SentenceTransformer loading
-Loading weights:   0%|          | 0/198 [00:00<?, ?it/s]Loading weights: 100%|██████████| 198/198 [00:00<00:00, 5211.89it/s]
+2026-08-27 14:42:18,263 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-27 14:42:18,273 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
+2026-08-27 14:42:18,447 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
+2026-08-27 14:42:21,806 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
+2026-08-27 14:42:21,978 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-08-27 14:42:22,152 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_indels%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
+2026-08-27 14:42:22,324 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_indels?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-27 14:42:22,491 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-27 14:42:22,700 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-08-27 14:43:19,594 - INFO - dms_indels: 66 assays, 287207 sequences to encode per model (0 variants dropped as invisible past the 1022-residue truncation)
+2026-08-27 14:43:19,614 - INFO - 🏗️  Loading model: GrimSqueaker/ProtSent-V2-35M (device=cuda)
+2026-08-27 14:43:19,614 - INFO -    ✨ Using standard SentenceTransformer loading
+Loading weights:   0%|          | 0/198 [00:00<?, ?it/s]Loading weights: 100%|██████████| 198/198 [00:00<00:00, 4314.70it/s]
 [transformers] [1mEsmModel LOAD REPORT[0m from: GrimSqueaker/ProtSent-V2-35M
 Key                       | Status     | 
 --------------------------+------------+-
-lm_head.decoder.weight    | UNEXPECTED | 
 lm_head.dense.weight      | UNEXPECTED | 
 lm_head.dense.bias        | UNEXPECTED | 
-lm_head.layer_norm.bias   | UNEXPECTED | 
-lm_head.layer_norm.weight | UNEXPECTED | 
 lm_head.bias              | UNEXPECTED | 
-pooler.dense.bias         | MISSING    | 
+lm_head.layer_norm.bias   | UNEXPECTED | 
+lm_head.decoder.weight    | UNEXPECTED | 
+lm_head.layer_norm.weight | UNEXPECTED | 
 pooler.dense.weight       | MISSING    | 
+pooler.dense.bias         | MISSING    | 
 
 Notes:
 - UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
 - MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
-2026-08-27 13:41:11,985 - INFO -    Disabled ESM2 token_dropout (HF transformers bug workaround)
-2026-08-27 13:41:11,986 - INFO - Tokenizer will map out-of-vocabulary tokens (e.g. 'J') to 'X' (id 24)
-2026-08-27 13:41:11,986 - INFO -    📊 Tokenizer vocab size: 33, Model vocab size: 33
-2026-08-27 13:41:11,986 - INFO -    🧪 Test tokenization: min_id=0, max_id=22, model_vocab=33
-2026-08-27 13:41:11,986 - INFO -    ✅ Tokenization test passed
-2026-08-27 13:41:11,987 - INFO -    ✅ Model loaded successfully (dim=480)
-2026-08-27 13:41:11,987 - INFO -    ✂️  max_seq_length enforced at 1024
-2026-08-27 13:41:11,989 - INFO - No device provided, using cuda:0
-[W827 13:45:13.544924567 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 2097152 bytes (free: 3342336, total: 85094825984).
-[W827 13:49:02.065759501 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 25390219264 bytes (free: 1517486080, total: 85094825984).
-[W827 14:00:53.943847741 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 25839009792 bytes (free: 14022803456, total: 85094825984).
-[W827 14:01:21.807250682 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 25839009792 bytes (free: 22163947520, total: 85094825984).
-[W827 14:02:30.573103411 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 2097152 bytes (free: 3342336, total: 85094825984).
-[W827 14:04:34.491594087 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 28586278912 bytes (free: 23195746304, total: 85094825984).
-[W827 14:05:03.938022104 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 28586278912 bytes (free: 20492517376, total: 85094825984).
-[W827 14:05:48.018289511 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 2097152 bytes (free: 3342336, total: 85094825984).
-[W827 14:10:37.424869603 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 34227617792 bytes (free: 15096545280, total: 85094825984).
-[W827 14:11:19.840321741 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 31415336960 bytes (free: 10778509312, total: 85094825984).
-[W827 14:11:19.040717626 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 31415336960 bytes (free: 18095472640, total: 85094825984).
-Traceback (most recent call last):
-  File "/opt/hpc/ddofer/ProtSent/late_interaction_eval.py", line 670, in <module>
-    main()
-    ~~~~^^
-  File "/opt/hpc/ddofer/ProtSent/late_interaction_eval.py", line 666, in main
-    args.fn(args)
-    ~~~~~~~^^^^^^
-  File "/opt/hpc/ddofer/ProtSent/late_interaction_eval.py", line 415, in cmd_proteingym
-    score = (li.maxsim_against_one(fast, wt, mut, batch_size=max(args.batch_size, 256))
-             ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/hpc/ddofer/ProtSent/late_interaction.py", line 344, in maxsim_against_one
-    sim = mve.similarity([q.float() for q in qs], [doc],
-                         chunk_elements=_CHUNK_ELEMENTS, length_normalize=True)
-  File "/opt/hpc/ddofer/ProtSent/.venv/lib/python3.13/site-packages/sentence_transformers/multi_vector_encoder/model.py", line 1008, in similarity
-    return self._similarity(embeddings1, embeddings2, **kwargs)
-           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/hpc/ddofer/ProtSent/.venv/lib/python3.13/site-packages/sentence_transformers/util/similarity.py", line 460, in maxsim
-    score_chunks.append(_maxsim_score_documents(a, chunk_b, a_mask_padded, chunk_b_mask).to(result_device))
-                        ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/hpc/ddofer/ProtSent/.venv/lib/python3.13/site-packages/sentence_transformers/util/similarity.py", line 484, in _maxsim_score_documents
-    scores = torch.einsum("ash,bth->abst", a, b)
-  File "/opt/hpc/ddofer/ProtSent/.venv/lib/python3.13/site-packages/torch/functional.py", line 372, in einsum
-    return _VF.einsum(equation, operands)  # type: ignore[attr-defined]
-           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
-  File "/opt/hpc/ddofer/ProtSent/.venv/lib/python3.13/site-packages/torch/_native/registry.py", line 925, in eager_router
-    return _fallback.call_boxed(keyset, *args, **kwargs)
-           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 29.26 GiB. GPU 0 has a total capacity of 79.25 GiB of which 16.85 GiB is free. Including non-PyTorch memory, this process has 62.38 GiB memory in use. Of the allocated memory 27.65 GiB is allocated by PyTorch, and 34.23 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)
+2026-08-27 14:43:22,283 - INFO -    Disabled ESM2 token_dropout (HF transformers bug workaround)
+2026-08-27 14:43:22,284 - INFO - Tokenizer will map out-of-vocabulary tokens (e.g. 'J') to 'X' (id 24)
+2026-08-27 14:43:22,284 - INFO -    📊 Tokenizer vocab size: 33, Model vocab size: 33
+2026-08-27 14:43:22,284 - INFO -    🧪 Test tokenization: min_id=0, max_id=22, model_vocab=33
+2026-08-27 14:43:22,284 - INFO -    ✅ Tokenization test passed
+2026-08-27 14:43:22,284 - INFO -    ✅ Model loaded successfully (dim=480)
+2026-08-27 14:43:22,284 - INFO -    ✂️  max_seq_length enforced at 1024
+2026-08-27 14:43:22,286 - INFO - No device provided, using cuda:0
+[W827 14:44:30.658591984 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 18039701504 bytes (free: 13441826816, total: 85094825984).
+2026-08-27 14:56:56,901 - WARNING - corrected average unavailable for these 66 groups: none matched DMS_substitutions.csv, which covers DMS_substitutions only. The row's mean_score still holds the plain mean.
+2026-08-27 14:56:56,903 - INFO - protsent_v2_zeroshot dms_indels: mean spearman 0.5240 (corrected avg nan) over 66 groups in 815s
+2026-08-27 14:56:56,904 - INFO - wrote 1 rows -> /opt/hpc/ddofer/ProtSent/results/late_interaction/r2_final/_parallel/protsent_v2_zeroshot/proteingym_maxsim.csv

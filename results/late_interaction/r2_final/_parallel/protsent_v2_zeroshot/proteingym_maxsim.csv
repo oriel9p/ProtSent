@@ -1,0 +1,2 @@
+aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
+per_group_mean,0,"[0.4878, 0.5637]",nan,unpinned,zeroshot,0.5240446517324646,spearman,protsent_v2_zeroshot,66,1000,0,287207,GrimSqueaker/ProtSent-V2-35M,0,814.6,maxsim,dms_indels
