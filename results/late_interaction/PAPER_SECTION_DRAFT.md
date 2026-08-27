@@ -44,19 +44,22 @@ domains), **not** the set used in Table 3.
 
 **Table B.** MaxSim substituted for pooled distance inside the k=3 probe of Section 4.1.
 
-| Task | Metric | beats cosine kNN | beats linear |
-|---|---|---|---|
-| Optimal pH | Spearman | 6/6 | **6/6** |
-| Metal Ion Binding | F1_macro | 6/6 | **6/6** |
-| beta-lactamase | Spearman | 5/6 | **5/6** |
-| Subcellular Loc. | F1_macro | 6/6 | 1/6 |
-| Remote Homology | F1_macro | 4/6 | 1/6 |
-| **Total** | | **27/30** | **19/30** |
+Absolute scores are for frozen ProtSent-150M; win counts are over all six models.
 
-*Caption.* Six models x five tasks. Splits, k, training set and metrics are unchanged from
-Section 4.1; only neighbour selection differs. MaxSim beats pooled cosine on 27 of 30 pairs. Against
-a learned readout the result is task-dependent: it beats a linear probe on both regression tasks and
-on metal ion binding, and loses on the two multiclass tasks.
+| Task | Metric | MaxSim | cosine kNN | linear | wins vs cos / lin |
+|---|---|---|---|---|---|
+| beta-lactamase | Spearman | **0.838** | 0.760 | 0.698 | 5/6, 5/6 |
+| Metal Ion Binding | F1_macro | **0.774** | 0.760 | 0.708 | 6/6, 6/6 |
+| Optimal pH | Spearman | **0.605** | 0.586 | 0.503 | 6/6, 6/6 |
+| Subcellular Loc. | F1_macro | 0.564 | 0.552 | **0.633** | 6/6, 1/6 |
+| Remote Homology | F1_macro | 0.401 | 0.387 | **0.435** | 4/6, 1/6 |
+| **Total, 30 pairs** | | | | | **27/30, 19/30** |
+
+*Caption.* Six models x five tasks; splits, k, training set and metrics are unchanged from
+Section 4.1 and only neighbour selection differs. MaxSim beats pooled cosine on 27 of 30 model-task
+pairs. Against a learned readout the result is task-dependent: it beats a linear probe on both
+regression tasks and on metal ion binding, and loses on the two multiclass tasks, where the labels
+are evidently linearly separable in the pooled space.
 
 ### Prose
 
