@@ -1,0 +1,34 @@
+2026-08-27 13:41:57,300 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-27 13:41:57,308 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
+2026-08-27 13:41:57,486 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
+2026-08-27 13:42:00,835 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
+2026-08-27 13:42:01,030 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-08-27 13:42:01,206 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
+2026-08-27 13:42:01,385 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-27 13:42:01,569 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-27 13:42:01,786 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-08-27 13:56:29,346 - INFO - dms_substitutions: 214 assays, 2459339 sequences to encode per model (3675 variants dropped as invisible past the 1022-residue truncation)
+2026-08-27 13:56:29,366 - INFO - 🏗️  Loading model: GrimSqueaker/ProtSent-V2-150M (device=cuda)
+2026-08-27 13:56:29,366 - INFO -    ✨ Using standard SentenceTransformer loading
+Loading weights:   0%|          | 0/486 [00:00<?, ?it/s]Loading weights:  56%|█████▋    | 274/486 [00:00<00:00, 2738.21it/s]Loading weights: 100%|██████████| 486/486 [00:00<00:00, 4437.37it/s]
+[transformers] [1mEsmModel LOAD REPORT[0m from: GrimSqueaker/ProtSent-V2-150M
+Key                 | Status  | 
+--------------------+---------+-
+pooler.dense.weight | MISSING | 
+pooler.dense.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+2026-08-27 13:56:32,238 - INFO -    Disabled ESM2 token_dropout (HF transformers bug workaround)
+2026-08-27 13:56:32,238 - INFO - Tokenizer will map out-of-vocabulary tokens (e.g. 'J') to 'X' (id 24)
+2026-08-27 13:56:32,238 - INFO -    📊 Tokenizer vocab size: 33, Model vocab size: 33
+2026-08-27 13:56:32,239 - INFO -    🧪 Test tokenization: min_id=0, max_id=22, model_vocab=33
+2026-08-27 13:56:32,239 - INFO -    ✅ Tokenization test passed
+2026-08-27 13:56:32,239 - INFO -    ✅ Model loaded successfully (dim=640)
+2026-08-27 13:56:32,239 - INFO -    ✂️  max_seq_length enforced at 1024
+2026-08-27 13:56:32,242 - INFO - No device provided, using cuda:0
+[W827 13:58:01.844434190 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 34227617792 bytes (free: 22140878848, total: 85094825984).
+[W827 14:04:12.423155231 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 2097152 bytes (free: 3342336, total: 85094825984).
+[W827 14:06:47.661089864 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 17704157184 bytes (free: 4738711552, total: 85094825984).
+[W827 14:11:15.032695067 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 25390219264 bytes (free: 13066502144, total: 85094825984).
+[W827 14:15:42.968455328 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 24293408768 bytes (free: 9344057344, total: 85094825984).
