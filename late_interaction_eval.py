@@ -265,9 +265,18 @@ def cmd_fewshot_rh(args) -> None:
         del scorer
         torch.cuda.empty_cache()  # 8 arms in one invocation, each holding a corpus
     append_csv(Path(args.out_dir) / "late_fewshot_knn.csv", rows)
+    # Merge, do not overwrite. Rows are APPENDED to the CSV, so a second invocation adding one arm
+    # would otherwise delete every earlier arm's per-query vector and silently break exactly the
+    # paired comparison these exist for. Later runs of the same arm win.
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(out / "fewshot_per_query_correct.npz", **per_query)
+    npz = out / "fewshot_per_query_correct.npz"
+    merged = {}
+    if npz.exists():
+        with np.load(npz) as prev:
+            merged.update({k: prev[k] for k in prev.files})
+    merged.update(per_query)
+    np.savez_compressed(npz, **merged)
 
 
 # ProteinGym's headline number is a "corrected average": the metric is averaged WITHIN each of five

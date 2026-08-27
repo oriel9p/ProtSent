@@ -18,6 +18,13 @@ from sentence_transformers.sentence_transformer.evaluation import InformationRet
 
 DEFAULT_K = (1, 5, 10, 30)
 
+# NAME COLLISION, read before joining these columns with scope_hierarchy.csv. The `Recall@k` in
+# scope_rows is hit-at-least-one-in-top-k, i.e. what IR calls accuracy@k -- and it is the definition
+# the ProtSent paper uses ("the fraction of queries for which a protein from the same structural
+# superfamily appears among the top-K"). The `recall@k` returned here is the true IR recall,
+# retrieved-relevant over total-relevant. They are different estimators that happen to share a name;
+# use `accuracy@k` below when comparing against scope_hierarchy.csv or the paper's Table 3.
+
 
 def ir_metrics_from_ranking(ranking: np.ndarray, labels, *, k_values=DEFAULT_K) -> dict[str, float]:
     """Metrics for one (n, n-1) self-excluded ranking against same-label relevance.
