@@ -85,6 +85,25 @@ def load_scorer(kind: str, path: str, *, max_seq_length: int, device):
     )
 
 
+def resolve_model_revision(path: str) -> str:
+    """Hub commit sha for `path`, or "" for a local directory or an unreachable id.
+
+    A model name is not a stable identifier: a Hub repo can be retrained and re-pushed under the same
+    name. That matters most on ProteinGym, where ProtSent-V2 (which does not train on
+    dms_cosent.parquet) is safe to score and V2.5 / ESM-C-300M-V2 (which do) are contaminated.
+    Pinning the sha makes a stored row checkable against the weights that produced it rather than
+    against a name that may since have moved.
+    """
+    if os.path.exists(path):
+        return ""
+    try:
+        from huggingface_hub import HfApi
+
+        return HfApi().model_info(path).sha or ""
+    except Exception:  # offline, private, typo -- provenance is best-effort, never fatal
+        return ""
+
+
 def save_per_query(out: Path, name: str, pq: dict) -> Path:
     """Write the per-query vectors that every paired test downstream reads.
 
@@ -461,6 +480,7 @@ def cmd_proteingym(args) -> None:
                          "runtime_s": round(time.time() - t0, 1)})
         rows.append({"model": name, "scoring": scoring, "variant": args.variant,
                      "kind": kind, "path": path, "proj_dim": proj_dim,
+                     "model_revision": resolve_model_revision(path),
                      "dataset_revision": args.dataset_revision or "unpinned",
                      "n_boot": args.n_boot,
                      "metric": cfg["metric"], "aggregation": "per_group_mean",
