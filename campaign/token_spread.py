@@ -29,6 +29,7 @@ seqs_all, _ = li.load_scope40()
 seqs = [s for s in seqs_all if 60 <= len(s) <= 400][:N_SEQ]
 print(f"{len(seqs)} sequences, mean length {np.mean([len(s) for s in seqs]):.0f}", flush=True)
 
+rows = []
 print(f"\n{'model':<20} {'dim':>5} {'intra_cos':>10} {'eff_rank':>9} {'eff_rank/dim':>13}")
 print("-" * 62)
 for name, path in MODELS:
@@ -53,5 +54,19 @@ for name, path in MODELS:
     d = mve.get_embedding_dimension()
     print(f"{name:<20} {d:>5} {np.mean(ic):>10.4f} {np.mean(er):>9.2f} {np.mean(er)/d:>13.4f}",
           flush=True)
+    rows.append({"model": name, "path": path, "dim": d, "n_seqs": len(ic),
+                 "intra_cos": round(float(np.mean(ic)), 6),
+                 "eff_rank": round(float(np.mean(er)), 4),
+                 "eff_rank_over_dim": round(float(np.mean(er)) / d, 6)})
     del mve
     torch.cuda.empty_cache()
+
+# Persist: this is the mechanism row of the paper's late-interaction table, and stdout goes to
+# logs/, which is gitignored. Without this the numbers exist nowhere the repo can reproduce.
+out = Path("results/late_interaction/r2_final/residue_geometry.csv")
+out.parent.mkdir(parents=True, exist_ok=True)
+import csv
+with out.open("w", newline="") as fh:
+    w = csv.DictWriter(fh, fieldnames=list(rows[0]))
+    w.writeheader(); w.writerows(rows)
+print(f"\nwrote {len(rows)} rows -> {out}")

@@ -1,0 +1,5 @@
+model,path,dim,n_seqs,intra_cos,eff_rank,eff_rank_over_dim
+ESM2-35M,,480,300,0.5986,12.1,0.0252
+ProtSent-V2-35M,,480,300,0.4366,15.5,0.0323
+ESM2-150M,,640,300,0.6124,10.54,0.0165
+ProtSent-V2-150M,,640,300,0.3856,22.5,0.0352

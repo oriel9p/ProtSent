@@ -81,6 +81,32 @@ MaxSim scores Σ_i max_j A_i·B_j and so requires residues to be individually di
 residues grow **more** collinear with scale while ProtSent's grow less so. The negative ESM-2 scaling
 was predicted from rank before it was measured.*
 
+## Table D — the same effect on three further benchmarks
+
+| Benchmark | What it measures | MaxSim − cosine, same frozen ProtSent 150M weights |
+|---|---|---|
+| SCOPe-40 superfamily (Table A) | structural retrieval, 2,020 queries | **+0.0490** MAP [+0.0444, +0.0533] |
+| Few-shot remote homology | 3-NN vote, 3,244 test seqs | **+0.0469** acc [+0.0376, +0.0564] |
+| ProtBench kNN probe, 3 tasks (Table B) | supervised readout, full train split | **16/18** model-task pairs |
+
+**Caption.** *The scoring change replicates across benchmarks that share no data. SCOPe-40 and
+few-shot remote homology agree to within 0.002 on the same contrast (MaxSim vs cosine, identical
+frozen weights), from a structural-retrieval task and a fold-classification task respectively. Both
+are paired bootstraps over their own queries.*
+
+**Benchmarks that do not discriminate, reported for completeness.** Three further evaluations were
+run and are **not** evidence for this section, which we state rather than omit. (i) The 21-task
+ProtBench suite at k=3 separates nothing — the eight model means span 0.579 to 0.604, and frozen
+ProtSent-V2-150M is top at 0.6035 — because these are probe tasks over pooled vectors and late
+interaction does not touch that representation; they serve as a do-no-harm check, which passes.
+(ii) ProteinGym at full coverage (214 substitution assays, 2,459,339 variants, aggregated as
+ProteinGym's corrected average) places our MaxSim arms at 0.319–0.346, but every pair of confidence
+intervals overlaps, so it cannot rank the models; its value is that residue-level scoring reaches
+parity with likelihood-based scoring at matched size, not that it favours one arm. (iii) CATH-EAT is
+**excluded**: its `test_h` split has 150 queries, giving ±0.07 confidence intervals that cannot
+support a 0.02–0.05 effect. The numbers are in `results/late_interaction/r2_final/cath_eat.csv` and
+should not be cited.
+
 ---
 
 ## Prose (draft)
@@ -109,6 +135,10 @@ matrix. ESM-2's residue representations become more collinear with scale (12.1 �
 ProtSent's become less so (15.5 → 22.5). Contrastive training on pooled vectors, perhaps
 counter-intuitively, *decorrelates* the residues underneath: to make a mean discriminative across many
 proteins, the model cannot let its parts collapse onto one direction.
+
+The effect replicates on an unrelated benchmark: on few-shot remote homology the same contrast
+(MaxSim vs cosine, identical frozen ProtSent 150M weights) gives +0.047 accuracy against SCOPe's
++0.049 MAP — two tasks sharing no data agreeing to within 0.002 (Table D).
 
 **Cost.** Late interaction stores L vectors per protein rather than one, and scores pairs rather than
 looking up a single vector. Two-stage retrieval removes most of this: a pooled-cosine shortlist
