@@ -2,5 +2,6 @@ method,scoring,level,eligible_R@1,eligible_MAP,queries_with_no_hit,wall_seconds,
 phmmer (HMMER3),profile HMM,family,0.7525,0.6067,691,4.2,32 CPU threads,"E=10, filters off, self excluded"
 MMseqs2 (-s 7.5),alignment,family,0.6556,0.4098,,,,from results/RESULTS.md
 ProtSent-V2-150M,cosine (mean-pool),family,0.7431,0.7045,0,9.0,1 GPU,includes encoding
-ProtSent-V2-150M,MaxSim (frozen),family,0.7744,0.7496,0,46.8,1 GPU,includes encoding
+ProtSent-V2-150M,MaxSim (frozen),family,0.7744,0.7496,0,44.1,1 GPU,"encode 9.9s + score 34.2s, 640-d"
 ESM-2-150M,MaxSim (frozen),family,0.6804,0.6058,0,,1 GPU,
+late-r2-esm2-150m,MaxSim (128-d proj),family,,,0,20.4,1 GPU,"encode 9.3s + score 11.1s; fastest MaxSim config available"

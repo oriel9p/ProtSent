@@ -19,8 +19,20 @@ and vanilla ESM-2 under MaxSim does not get there. Three things kill it.
    aggregates only. The one paired comparison on record (`hmmer_maxsens_paired.json`, ProtSent-V2-35M
    cosine vs phmmer, hit@1 delta -0.068) has a CI half-width of about 0.024. The +0.022 margin here
    is smaller than that, so it would very likely not exclude zero.
-2. **phmmer is 11x faster** on this matrix: 4.2 s on 32 CPU threads against 46.8 s on a GPU. Any
-   framing as a practical win is wrong.
+2. **phmmer is 5-11x faster**, depending on which MaxSim configuration you compare against:
+
+   | | dim | encode | score | total |
+   |---|---|---|---|---|
+   | phmmer, 32 CPU threads | - | - | - | **4.2 s** |
+   | MaxSim, 128-d projected arm | 128 | 9.3 s | 11.1 s | 20.4 s |
+   | MaxSim, frozen ProtSent | 640 | 9.9 s | 34.2 s | 44.1 s |
+
+   Encoding is only about 22% of the total; MaxSim scoring dominates and scales with dimension, so
+   the 128-d projected arm scores 3x faster than the 640-d unprojected one on identical work. The
+   frozen-ProtSent row is the paper-relevant one and is the slowest. No free speedup is available:
+   bf16 would roughly halve the scoring time but ST upcasts to fp32 only AFTER the token-token
+   matmul, so bf16 quantises each per-residue maximum before summing, and this repo pins fp32 for
+   that reason. Lower dimension is the real lever and it requires a trained projection.
 3. The margin is one point comparison at one level on one corpus.
 
 ## What IS real, and is about coverage rather than accuracy
