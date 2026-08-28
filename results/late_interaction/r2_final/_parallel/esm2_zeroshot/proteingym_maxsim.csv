@@ -1,2 +1,4 @@
-aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
-per_group_mean,0,"[0.4997, 0.5831]",nan,unpinned,zeroshot,0.5408449839963978,spearman,esm2_zeroshot,66,1000,0,287207,facebook/esm2_t12_35M_UR50D,0,798.1,maxsim,dms_indels
+aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,model_revision,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
+per_group_mean,0,"[0.4997, 0.5831]",nan,unpinned,zeroshot,0.5408449839963978,spearman,esm2_zeroshot,,66,1000,0,287207,facebook/esm2_t12_35M_UR50D,0,798.1,maxsim,dms_indels
+per_group_mean,0,"[0.3263, 0.3703]",0.3349,unpinned,zeroshot,0.3472560817114341,spearman,esm2_zeroshot,,214,1000,3675,2459339,facebook/esm2_t12_35M_UR50D,0,3379.3,maxsim,dms_substitutions
+per_group_mean,0,"[0.4997, 0.5831]",nan,unpinned,zeroshot,0.5408702064540993,spearman,esm2_zeroshot,6fbf070e65b0b7291e7bbcd451118c216cff79d8,66,1000,0,287207,facebook/esm2_t12_35M_UR50D,0,816.2,maxsim,dms_indels

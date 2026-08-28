@@ -1,0 +1,31 @@
+2026-08-27 23:49:40,207 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-27 23:49:40,216 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
+2026-08-27 23:49:40,387 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
+2026-08-27 23:49:43,743 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
+2026-08-27 23:49:43,913 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-08-27 23:49:44,090 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
+2026-08-27 23:49:44,268 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-27 23:49:44,468 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-27 23:49:44,677 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-08-28 00:04:15,788 - INFO - dms_substitutions: 214 assays, 2459339 sequences to encode per model (3675 variants dropped as invisible past the 1022-residue truncation)
+2026-08-28 00:04:15,808 - INFO - 🏗️  Loading model: GrimSqueaker/ProtSent-V2-150M (device=cuda)
+2026-08-28 00:04:15,808 - INFO -    ✨ Using standard SentenceTransformer loading
+Loading weights:   0%|          | 0/486 [00:00<?, ?it/s]Loading weights:  56%|█████▌    | 272/486 [00:00<00:00, 2719.10it/s]Loading weights: 100%|██████████| 486/486 [00:00<00:00, 4423.37it/s]
+[transformers] [1mEsmModel LOAD REPORT[0m from: GrimSqueaker/ProtSent-V2-150M
+Key                 | Status  | 
+--------------------+---------+-
+pooler.dense.weight | MISSING | 
+pooler.dense.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+2026-08-28 00:04:18,826 - INFO -    Disabled ESM2 token_dropout (HF transformers bug workaround)
+2026-08-28 00:04:18,826 - INFO - Tokenizer will map out-of-vocabulary tokens (e.g. 'J') to 'X' (id 24)
+2026-08-28 00:04:18,826 - INFO -    📊 Tokenizer vocab size: 33, Model vocab size: 33
+2026-08-28 00:04:18,827 - INFO -    🧪 Test tokenization: min_id=0, max_id=22, model_vocab=33
+2026-08-28 00:04:18,827 - INFO -    ✅ Tokenization test passed
+2026-08-28 00:04:18,827 - INFO -    ✅ Model loaded successfully (dim=640)
+2026-08-28 00:04:18,827 - INFO -    ✂️  max_seq_length enforced at 1024
+2026-08-28 00:04:18,829 - INFO - No device provided, using cuda:0
+2026-08-28 01:55:12,335 - INFO - protsent_v2_150m_zeroshot dms_substitutions: mean spearman 0.3327 (corrected avg 0.3251) over 214 groups in 6654s
+2026-08-28 01:55:12,337 - INFO - wrote 1 rows -> /opt/hpc/ddofer/ProtSent/results/late_interaction/r2_final/_parallel/protsent_v2_150m_zeroshot/proteingym_maxsim.csv

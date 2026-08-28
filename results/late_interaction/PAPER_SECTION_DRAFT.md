@@ -61,6 +61,21 @@ pairs. Against a learned readout the result is task-dependent: it beats a linear
 regression tasks and on metal ion binding, and loses on the two multiclass tasks, where the labels
 are evidently linearly separable in the pooled space.
 
+**Table C.** ProteinGym under frozen MaxSim: ProtSent minus ESM-2 at matched size.
+
+| Variant | 35M | 150M |
+|---|---|---|
+| DMS substitutions (corrected avg) | **-0.021** | **-0.010** |
+| DMS indels (Spearman) | **-0.017** | **-0.043** |
+| *SCOPe-40 superfamily, for contrast* | *+0.210* | *+0.274* |
+
+*Caption.* Same frozen weights and same MaxSim scoring as Table A, on ProteinGym's full substitution
+set (214 assays, 2,459,339 variants, ProteinGym's corrected average) and its 66 indel assays.
+ProtSent trails stock ESM-2 in all four comparisons, having led it by +0.21 to +0.27 MAP on
+structural retrieval. No individual difference is significant -- the confidence intervals overlap --
+but the direction is consistent across both variants and both scales. ProtSent-V2 does not train on
+`dms_cosent.parquet`, so ProteinGym is held out for these models.
+
 ### Prose
 
 Pooling L residue vectors into one is lossy, and the lost detail is retrievable. Scoring identical
@@ -81,6 +96,15 @@ of the loss rather than causing it. One property of the residue representations 
 absolute level across these four models: effective rank of the residue matrix rises for ProtSent with
 scale (15.5 to 22.5) and falls for ESM-2 (12.1 to 10.5), consistent with MaxSim requiring residues to
 be individually distinguishable. We report this as a correlation over four models, not a cause.
+
+The advantage is task-specific, and ProteinGym marks its limit (Table C). On mutation-effect
+prediction ProtSent trails stock ESM-2 at both scales and on both variants, having led it by +0.21 to
++0.27 MAP on structural retrieval with the same weights and the same scoring. The reversal is
+consistent in direction though not individually significant. A plausible reading is that contrastive
+training on family- and structure-level positives teaches the model to place related proteins close
+together, which is precisely the invariance that a single-residue substitution must break for
+ProteinGym to score it. That is the same axis on which the paper already reports stability and
+thermostability regressing.
 
 Late interaction stores L vectors per protein rather than one. Two-stage retrieval removes most of
 that cost: a pooled-cosine shortlist reranked by MaxSim recovers 97.7% of exhaustive MaxSim MAP at

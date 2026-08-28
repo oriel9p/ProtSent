@@ -1,2 +1,4 @@
-aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
-per_group_mean,0,"[0.4878, 0.5637]",nan,unpinned,zeroshot,0.5240446517324646,spearman,protsent_v2_zeroshot,66,1000,0,287207,GrimSqueaker/ProtSent-V2-35M,0,814.6,maxsim,dms_indels
+aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,model_revision,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
+per_group_mean,0,"[0.4878, 0.5637]",nan,unpinned,zeroshot,0.5240446517324646,spearman,protsent_v2_zeroshot,,66,1000,0,287207,GrimSqueaker/ProtSent-V2-35M,0,814.6,maxsim,dms_indels
+per_group_mean,0,"[0.3041, 0.3464]",0.3137,unpinned,zeroshot,0.3235748777619754,spearman,protsent_v2_zeroshot,,214,1000,3675,2459339,GrimSqueaker/ProtSent-V2-35M,0,3456.7,maxsim,dms_substitutions
+per_group_mean,0,"[0.4878, 0.5637]",nan,unpinned,zeroshot,0.5240502051709446,spearman,protsent_v2_zeroshot,497c50cff58a368f30838f1acafeda3d0c280c18,66,1000,0,287207,GrimSqueaker/ProtSent-V2-35M,0,829.7,maxsim,dms_indels
