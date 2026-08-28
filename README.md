@@ -153,6 +153,56 @@ python protein_benchmark_suite.py \
   -t remote_homology fluorescence ec_classification
 ```
 
+## Late interaction (ColBERT-style MaxSim)
+
+An experimental second scoring mode: instead of comparing two mean-pooled vectors,
+keep one vector per residue and score a pair by MaxSim — for each query residue take
+its best match in the document, then sum. Built on Sentence Transformers v6
+(`MultiVectorEncoder`), sharing the same backbone and the same dc40 pair corpus as
+ordinary ProtSent training, so any late-trained model also exports a normal
+mean-pooled "dense view" that every existing benchmark can consume unchanged.
+
+```bash
+# Continue an existing ProtSent model with a residue-level contrastive objective
+python train_late_interaction.py \
+  --model GrimSqueaker/ProtSent-V2-35M \
+  --files /storage/users/ddofer/data/protsent-data-dc40/{pfam_sorted,afdb_sorted,stringdb_train_15M}.parquet \
+  --output_dir models/late_interaction/protsent_late \
+  --proj_dim 128 --max_steps 18219
+
+# SCOPe-40 all-vs-all: dense cosine vs zero-shot MaxSim vs trained MaxSim
+python late_interaction_eval.py scope --models models/late_interaction/protsent_late/late
+
+# The long-run queue (survives disconnect; idempotent; --resume)
+QUEUES="p q" ./run_experiment_queue.sh start
+./run_experiment_queue.sh status
+```
+
+Outputs land in `--output_dir` as `late/` (the multi-vector model), `dense_view/`
+(its mean-pooled equivalent), `step0/` (both, before training, as a parity control),
+plus `runtime.json` and `train_log.csv`.
+
+**Defaults.** `--proj_dim 128` — on ProtSent-V2-35M it beats 64-D and beats scoring the native
+residues (+.0074 superfamily over native, CI clear of zero). Two caveats: the 64-D and 128-D arms
+differ in optimizer steps as well as width (2,000x256 vs 4,000x128), so width and update count are
+confounded; and on vanilla ESM-2 the ordering reverses — there 64-D beats native residues by
++.0766. Tested on one init and one benchmark. `--attn_implementation auto`
+tries flash, falls back to sdpa, and records which it got in `runtime.json`. `--compile` is 1.14x
+faster under 2-way DDP. Weights stay **fp32** with bf16 autocast and TF32 matmuls — flash needs
+half-precision *activations*, not half-precision weights, and loading in bf16 puts AdamW's
+parameters there, where a 1e-5 update rounds to nothing (it froze 97.6% of one backbone before it
+was caught). `kernels` must be `0.15.2 <= v < 0.16` or flash silently falls back. FastPLM
+checkpoints (`Synthyra/*`) always take sdpa.
+
+After any environment change, check the backend a run actually got, and check it is training:
+
+```bash
+python validate_run.py models/late_interaction/<run>   # dtype + loss + drift from step0
+```
+
+Results, method notes and the caveats that go with them:
+[`results/late_interaction/RESULTS.md`](results/late_interaction/RESULTS.md).
+
 ## Tests
 
 ```bash
@@ -177,6 +227,16 @@ benchmark_plotting.py        # Shared plot helpers
 umap_visualization.py        # UMAP embedding visualization
 ablation_optuna_search.py    # Hyperparameter search
 static_guide.py              # Static embedding guide helpers
+late_interaction.py          # ColBERT/MaxSim encoder, scoring and SCOPe metrics
+train_late_interaction.py    # Late-interaction contrastive training
+late_interaction_eval.py     # SCOPe / CATH / few-shot evaluation for late models
+run_experiment_queue.sh      # Resumable, disconnect-proof training queue
+run_late_bench.sh            # Pooled benchmarks over each arm's dense view
+snapshot_checkpoints.sh      # Keeps weights-only checkpoint copies for the curve
+validate_run.py              # Is a run's backbone actually moving? (dtype/loss/drift)
+watch_validation.sh          # Runs validate_run.py per arm as checkpoints appear
+run_after_training.sh        # Waits for the arms, then benchmarks them (SCOPe/CATH/pooled/PGym)
+build_late_results.py        # Regenerates results/late_interaction/RESULTS.md from the CSVs
 pyproject.toml               # Dependencies and project config
 tests/                       # Unit and integration tests
 data/                        # Small metadata files (large data is generated)

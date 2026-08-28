@@ -15,7 +15,9 @@ agents/
 hf_datasets_cache/
 
 # Trained checkpoints and run logs (GBs; artifacts live on /storage)
-models/
+# models has no trailing slash: it is now a symlink to /storage, and a "dir/"
+# pattern does not match a symlink.
+models
 logs/
 data/
 

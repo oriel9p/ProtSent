@@ -1,0 +1,37 @@
+2026-08-27 23:49:40,129 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-27 23:49:40,140 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
+2026-08-27 23:49:40,322 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
+2026-08-27 23:49:43,674 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
+2026-08-27 23:49:43,846 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-08-27 23:49:44,028 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
+2026-08-27 23:49:44,297 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_substitutions?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-27 23:49:44,476 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-27 23:49:44,687 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-08-28 00:04:17,541 - INFO - dms_substitutions: 214 assays, 2459339 sequences to encode per model (3675 variants dropped as invisible past the 1022-residue truncation)
+2026-08-28 00:04:17,562 - INFO - 🏗️  Loading model: facebook/esm2_t30_150M_UR50D (device=cuda)
+2026-08-28 00:04:17,562 - INFO -    ✨ Using standard SentenceTransformer loading
+Loading weights:   0%|          | 0/486 [00:00<?, ?it/s]Loading weights:  53%|█████▎    | 257/486 [00:00<00:00, 2569.38it/s]Loading weights: 100%|██████████| 486/486 [00:00<00:00, 4367.47it/s]
+[transformers] [1mEsmModel LOAD REPORT[0m from: facebook/esm2_t30_150M_UR50D
+Key                       | Status     | 
+--------------------------+------------+-
+lm_head.dense.bias        | UNEXPECTED | 
+lm_head.layer_norm.weight | UNEXPECTED | 
+lm_head.layer_norm.bias   | UNEXPECTED | 
+lm_head.bias              | UNEXPECTED | 
+lm_head.dense.weight      | UNEXPECTED | 
+pooler.dense.bias         | MISSING    | 
+pooler.dense.weight       | MISSING    | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+2026-08-28 00:04:20,559 - INFO -    Disabled ESM2 token_dropout (HF transformers bug workaround)
+2026-08-28 00:04:20,559 - INFO - Tokenizer will map out-of-vocabulary tokens (e.g. 'J') to 'X' (id 24)
+2026-08-28 00:04:20,559 - INFO -    📊 Tokenizer vocab size: 33, Model vocab size: 33
+2026-08-28 00:04:20,559 - INFO -    🧪 Test tokenization: min_id=0, max_id=22, model_vocab=33
+2026-08-28 00:04:20,559 - INFO -    ✅ Tokenization test passed
+2026-08-28 00:04:20,559 - INFO -    ✅ Model loaded successfully (dim=640)
+2026-08-28 00:04:20,559 - INFO -    ✂️  max_seq_length enforced at 1024
+2026-08-28 00:04:20,562 - INFO - No device provided, using cuda:0
+2026-08-28 01:54:32,319 - INFO - esm2_150m_zeroshot dms_substitutions: mean spearman 0.3576 (corrected avg 0.3354) over 214 groups in 6612s
+2026-08-28 01:54:32,321 - INFO - wrote 1 rows -> /opt/hpc/ddofer/ProtSent/results/late_interaction/r2_final/_parallel/esm2_150m_zeroshot/proteingym_maxsim.csv

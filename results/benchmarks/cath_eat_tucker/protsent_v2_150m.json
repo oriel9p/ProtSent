@@ -1,0 +1,66 @@
+{
+  "model": "/home/ddofer/ProtSent/models/protsent_esm2_150m_v2/final",
+  "dim": 640,
+  "raw_val_h_acc": 0.6993464052287581,
+  "best_val_h_acc": 0.6928104575163399,
+  "tucker_levels": {
+    "cath_c": {
+      "accuracy": 0.8356164383561644,
+      "ci95": 0.04723507220529506,
+      "n_answerable": 219,
+      "n_answerable_strict": 219,
+      "n_total": 219
+    },
+    "cath_a": {
+      "accuracy": 0.680365296803653,
+      "ci95": 0.06308327481256602,
+      "n_answerable": 219,
+      "n_answerable_strict": 219,
+      "n_total": 219
+    },
+    "cath_t": {
+      "accuracy": 0.5714285714285714,
+      "ci95": 0.06829735838267055,
+      "n_answerable": 210,
+      "n_answerable_strict": 208,
+      "n_total": 219
+    },
+    "cath_h": {
+      "accuracy": 0.6333333333333333,
+      "ci95": 0.07716598480321916,
+      "n_answerable": 150,
+      "n_answerable_strict": 150,
+      "n_total": 219
+    }
+  },
+  "raw_levels": {
+    "cath_c": {
+      "accuracy": 0.8401826484018264,
+      "ci95": 0.04814272358354767,
+      "n_answerable": 219,
+      "n_answerable_strict": 219,
+      "n_total": 219
+    },
+    "cath_a": {
+      "accuracy": 0.6986301369863014,
+      "ci95": 0.06286301560081466,
+      "n_answerable": 219,
+      "n_answerable_strict": 219,
+      "n_total": 219
+    },
+    "cath_t": {
+      "accuracy": 0.5714285714285714,
+      "ci95": 0.06802018083628565,
+      "n_answerable": 210,
+      "n_answerable_strict": 208,
+      "n_total": 219
+    },
+    "cath_h": {
+      "accuracy": 0.6266666666666667,
+      "ci95": 0.077522538705869,
+      "n_answerable": 150,
+      "n_answerable_strict": 150,
+      "n_total": 219
+    }
+  }
+}

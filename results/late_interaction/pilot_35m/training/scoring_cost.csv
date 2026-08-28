@@ -1,0 +1,7 @@
+arm,encode_s,n_proteins,numbers_per_protein,pairs_scored,score_s,scoring,total_s,vector_dim
+esm2_dense,3.22,2207,480.0,4870849,0.026,cosine,3.25,480
+esm2_zeroshot,3.11,2207,74087.9,4870849,27.013,maxsim,30.12,480
+esm2_late,3.48,2207,9878.4,4870849,8.142,maxsim,11.62,64
+protsent_v2_dense,3.01,2207,480.0,4870849,0.021,cosine,3.03,480
+protsent_v2_zeroshot,3.22,2207,74087.9,4870849,26.967,maxsim,30.19,480
+protsent_late,2.97,2207,9878.4,4870849,8.135,maxsim,11.11,64

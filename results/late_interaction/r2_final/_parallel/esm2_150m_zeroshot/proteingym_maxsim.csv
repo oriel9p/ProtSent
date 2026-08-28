@@ -1,0 +1,3 @@
+aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,model_revision,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
+per_group_mean,0,"[0.3360, 0.3817]",0.3354,unpinned,zeroshot,0.357637688374967,spearman,esm2_150m_zeroshot,,214,1000,3675,2459339,facebook/esm2_t30_150M_UR50D,0,6611.8,maxsim,dms_substitutions
+per_group_mean,0,"[0.5478, 0.6408]",nan,unpinned,zeroshot,0.5933363149315009,spearman,esm2_150m_zeroshot,a695f6045e2e32885fa60af20c13cb35398ce30c,66,1000,0,287207,facebook/esm2_t30_150M_UR50D,0,1689.8,maxsim,dms_indels

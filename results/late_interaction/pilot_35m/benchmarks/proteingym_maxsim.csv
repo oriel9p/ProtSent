@@ -1,0 +1,9 @@
+aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
+per_group_mean,0,"[0.4843, 0.5587]",nan,unpinned,late,0.521394249104773,spearman,proj128_late,66,1000,0,287207,/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_proj128/late,-1,921.8,maxsim,dms_indels
+per_group_mean,0,"[0.4564, 0.5336]",nan,unpinned,dense,0.4955817387255983,spearman,protsent_late_35m_prop_dense,66,1000,0,287207,/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/dense_view,0,1704.2,cosine,dms_indels
+per_group_mean,0,"[0.4820, 0.5568]",nan,unpinned,late,0.5192281896175553,spearman,protsent_late_35m_prop_late,66,1000,0,287207,/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/late,-1,755.6,maxsim,dms_indels
+per_group_mean,0,"[0.4513, 0.5307]",nan,unpinned,dense,0.4904248567700596,spearman,protsent_v2_dense,66,1000,0,287207,GrimSqueaker/ProtSent-V2-35M,0,1728.6,cosine,dms_indels
+per_group_mean,0,"[0.7824, 0.9135]",nan,unpinned,late,0.8545382395382396,auc,proj128_late,77,1000,34,358,/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_proj128/late,-1,13.7,maxsim,clinical_indels
+per_group_mean,0,"[0.6146, 0.7870]",nan,unpinned,dense,0.7003270803270804,auc,protsent_late_35m_prop_dense,77,1000,34,358,/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/dense_view,0,17.5,cosine,clinical_indels
+per_group_mean,0,"[0.7825, 0.9107]",nan,unpinned,late,0.8488095238095238,auc,protsent_late_35m_prop_late,77,1000,34,358,/opt/hpc/ddofer/ProtSent/models/late_interaction/protsent_late_35m_prop/late,-1,13.6,maxsim,clinical_indels
+per_group_mean,0,"[0.6169, 0.7892]",nan,unpinned,dense,0.7015398886827459,auc,protsent_v2_dense,77,1000,34,358,GrimSqueaker/ProtSent-V2-35M,0,17.7,cosine,clinical_indels

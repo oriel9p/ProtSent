@@ -1,0 +1,7 @@
+Model,Task,Samples,Date,Probe,EvalMode,EvalSplit,EvalStrategy,EmbeddingNorm,CodeVersion,BenchmarkSeed,Accuracy,F1_Macro,BalancedAccuracy,MCC,F1_Weighted,ProbeFitSec,F1,AUC,AP,Spearman,Pearson,MSE,MAE,R2
+GrimSqueaker/ProtSent-V2-150M,Remote Homology (Fold),Full,2026-08-25,knn,standard,test,test_split,none,ba5a4bf,42,0.6606,0.38689,0.4707,0.65662,0.64401,0.01647,,,,,,,,
+GrimSqueaker/ProtSent-V2-150M,Solubility (DeepSol),Full,2026-08-25,knn,standard,test,test_split,none,ba5a4bf,42,0.51674,0.51306,0.5167,0.03391,,0.01698,0.47072,0.52541,0.51675,,,,,
+GrimSqueaker/ProtSent-V2-150M,Metal Ion Binding,Full,2026-08-25,knn,standard,test,test_split,none,ba5a4bf,42,0.76051,0.76044,0.76051,0.52133,,0.00259,0.76458,0.81754,0.77503,,,,,
+GrimSqueaker/ProtSent-V2-150M,Fluorescence (TAPE),Full,2026-08-25,knn,standard,test,test_split,none,ba5a4bf,42,,,,,,0.00551,,,,0.38929,0.42216,1.75396,1.0282,-0.84811
+GrimSqueaker/ProtSent-V2-150M,Stability (Biomap),Full,2026-08-25,knn,standard,test,test_split,none,ba5a4bf,42,,,,,,0.01235,,,,0.62422,0.61388,0.15319,0.29418,0.08293
+GrimSqueaker/ProtSent-V2-150M,beta-lactamase-PEER,Full,2026-08-25,knn,standard,test,test_split_column,none,ba5a4bf,42,,,,,,0.00139,,,,0.75967,0.81896,0.03453,0.12092,0.66526

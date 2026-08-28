@@ -1,0 +1,7 @@
+MAE,MAE_ci95,Pearson,Spearman,Task,model,n_eval,n_gallery,probe,runtime_s,scoring,task_key
+0.11236154699423076,"[0.1012, 0.1242]",0.8361825439420264,0.8092980159912834,beta-lactamase-PEER,esm2_35m_frozen,520,4158,knn3,27.27,maxsim,beta_lactamase_peer
+0.14892416578589743,"[0.1332, 0.1648]",0.7161620575845895,0.6783737909748043,beta-lactamase-PEER,esm2_150m_frozen,520,4158,knn3,106.89,maxsim,beta_lactamase_peer
+0.10143047296346154,"[0.0903, 0.1129]",0.8655161381212911,0.8462485623600242,beta-lactamase-PEER,protsent_v2_35m_frozen,520,4158,knn3,54.44,maxsim,beta_lactamase_peer
+0.1062570604628205,"[0.0947, 0.1182]",0.8524240546283475,0.8382624917987952,beta-lactamase-PEER,protsent_v2_150m_frozen,520,4158,knn3,76.39,maxsim,beta_lactamase_peer
+0.10011085894423077,"[0.0892, 0.1109]",0.870795692197482,0.8493281370592238,beta-lactamase-PEER,late-r2-esm2-150m_s10000,520,4158,knn3,47.29,maxsim,beta_lactamase_peer
+0.10657312640384616,"[0.0951, 0.1187]",0.8496165458200359,0.8178243346362367,beta-lactamase-PEER,late-r2-protsentv2-150m_s10000,520,4158,knn3,49.22,maxsim,beta_lactamase_peer

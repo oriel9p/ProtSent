@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# ProtSent-V2.5-35M — a continuation pass on top of ProtSent-V2-35M.
+#
+# Starts from models/protsent_esm2_35m_v3/final (paper name: ProtSent-V2-35M),
+# copied to models/protsent_v2p5_init with FastPLM's config.json restored from
+# the config.json.fastplm that make_checkpoint_loadable.py left behind. The
+# vanilla-ESM rewrite is what lets SentenceTransformer(path) load the model for
+# benchmarking; training wants the FastPLM identity back so it goes down the
+# same code path the original run used. Verified equivalent: embeddings from
+# both forms match to 0.0 max absolute difference.
+#
+# Three deltas from the V2 run, all requested:
+#   * DMS CoSENT as an auxiliary target (--dms_file).
+#   * Global Orthogonal Regularization on the contrastive losses (--gor_weight).
+#   * A different draw of the data: k drops 8 -> 5, which changes the
+#     Dataset.from_generator fingerprint and so re-samples every cluster, and
+#     the shuffle/global seeds move off 40/41. About 28% of the resulting rows
+#     are pairs V2 never saw.
+#
+# Sized for ONE B300 in under 16 h; ~15M rows is roughly 43% of a V2 epoch.
+# Measured throughput and the GOR ablation are in RUNS.md — the short version is
+# that GOR cost +11.7% per step and bought no task metric at this scale.
+#
+# CoSENT has no gradient cache and is capped at MINI_BATCH rows per batch
+# (SubsampledLoss); sentence-transformers uses one per_device_train_batch_size
+# for every dataset in a multi-task dict, so that cap is what lets the
+# contrastive batch stay at V2's 1024 while a DMS target rides along.
+#
+# Defaults changed after this run trained: --batch_sampler now resolves to
+# NO_DUPLICATES for multi-task runs and --mnrl_directions is symmetric. Set
+# BATCH_SAMPLER=none MNRL_DIRECTIONS=query_to_doc to reproduce V2.5 exactly.
+set -euo pipefail
+cd ~/ProtSent
+
+DATA="${DATA:-/storage/users/ddofer/data/protsent-data-dc40}"
+MODEL="${MODEL:-models/protsent_v2p5_init}"
+RUN_NAME="${RUN_NAME:-protsent_esm2_35m_v2p5}"
+
+# NOT decontaminated: this file predates protsent-data-dc40 and was never
+# filtered against the benchmark test sequences. Several suite tasks are
+# themselves DMS-derived (Fluorescence, Stability, beta-lactamase, Variant
+# Effect), so treat V2.5's numbers on those four as contaminated until checked.
+DMS_FILE="${DMS_FILE:-/storage/users/ddofer/data/dms_cosent.parquet}"
+# Kept auxiliary. The parquet is already interleaved across assays (179k length
+# changes in the first 200k rows), so a prefix cap is an unbiased sample.
+# 1.0M against ~14M contrastive pairs is ~7% of steps under the proportional
+# sampler; the full 2.17M would be ~13%, which starts to stop being auxiliary.
+DMS_MAX_ROWS="${DMS_MAX_ROWS:-1000000}"
+
+BATCH_SIZE="${BATCH_SIZE:-1024}"       # V2's contrastive batch, kept
+MINI_BATCH="${MINI_BATCH:-256}"        # CachedMNRL chunk; also the CoSENT cap
+PRIMARY_LOSS="${PRIMARY_LOSS:-cached_mnrl}"
+GOR_WEIGHT="${GOR_WEIGHT:-0.1}"
+# k=5 -> C(5,2)=10 pairs per cluster, against V2's k=8 -> 28.
+MAX_PAIRS_PER_CLUSTER="${MAX_PAIRS_PER_CLUSTER:-5}"
+STRING_FILE="${STRING_FILE:-stringdb_train_15M.parquet}"
+# Split evenly across the 3 --files, so this is a 7.0M cap per corpus.
+#
+# It was intended to bind only on STRING, which is a flat pair table with no
+# clusters and so is not bounded by --max_pairs_per_cluster at all. It does not:
+# AFDB yields more than 7.0M at k=5 and is capped too. That matters because the
+# two corpora are capped by different mechanisms — STRING is *sampled* under the
+# cap ("row-group sample, seed=13"), while a clustered corpus is truncated at the
+# first N pairs of a group-sorted file, so the tail clusters are never visited.
+# Measured coverage for the run of 2026-08-03 is recorded in RUNS.md; raise this
+# and lower MAX_PAIRS_PER_CLUSTER together if you want AFDB whole.
+MAX_MAP_ROWS="${MAX_MAP_ROWS:-21000000}"
+MAX_STEPS="${MAX_STEPS:-0}"
+EPOCHS="${EPOCHS:-1}"
+# 5e-5, a quarter of V2's 2e-4, and a single half-cosine to a floor rather than
+# V2's 3 cycles. V2 ended at peak LR, which RUNS.md had to control for with a
+# near-trough checkpoint; this one ends where it should.
+LR="${LR:-5e-5}"
+LR_CYCLES="${LR_CYCLES:-0.5}"
+WARMUP="${WARMUP:-200}"
+MAX_SEQ_LENGTH="${MAX_SEQ_LENGTH:-512}"
+WORKERS="${WORKERS:-8}"
+# Different draw of the data than V2 (40/41).
+SHUFFLE_SEED="${SHUFFLE_SEED:-13}"
+SEED="${SEED:-7}"
+SAVE_STEPS="${SAVE_STEPS:-1000}"
+SAVE_TOTAL_LIMIT="${SAVE_TOTAL_LIMIT:-3}"
+MAX_MINUTES="${MAX_MINUTES:-900}"      # hard 15 h stop, safety net only
+
+export HF_HOME=/storage/models/hf_home
+export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-/home/ddofer/hf_datasets_cache}"
+mkdir -p "$HF_DATASETS_CACHE"
+export HF_HUB_OFFLINE=1
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-5}"
+export PROTSENT_ESMPLUSPLUS_ATTN_BACKEND="${PROTSENT_ESMPLUSPLUS_ATTN_BACKEND:-flash_attention_2}"
+export TOKENIZERS_PARALLELISM=false
+export NCCL_NVLS_ENABLE=0
+export OMP_NUM_THREADS=8
+export OPENBLAS_NUM_THREADS=32
+NUM_PROCESSES=$(awk -F, '{print NF}' <<<"$CUDA_VISIBLE_DEVICES")
+
+MATRYOSHKA="${MATRYOSHKA:-1}"
+# Cross-device contrastive gather. OFF by default, as in V2: under CachedMNRL peak
+# memory is set by the mini-batch, so a single rank already carries the paper's 1024
+# in-batch negatives without paying the allgather. Only relevant multi-GPU, where
+# turning it ON is the only way to keep 1024 negatives while lowering the per-device
+# batch. train_v2.sh records a CoSENT/gather deadlock under DDP, and V2.5 has a DMS
+# CoSENT target, so smoke-test any multi-GPU run with GATHER=1 before committing.
+GATHER="${GATHER:-0}"
+# RESUME=1 continues from the newest checkpoint in models/$RUN_NAME instead of
+# starting over. The recovery path when MAX_MINUTES stops a run mid-schedule.
+# Safe ONLY at the same GPU count and the same data knobs: the step count is
+# derived from world size and the corpus size, so changing either re-derives a
+# different schedule and desynchronises it from global_step (RUNS.md). The saved
+# optimizer also carries the backbone's LM-head parameters, which the rebuilt
+# model does not have, so run fix_resume_optimizer.py on the checkpoint first.
+RESUME="${RESUME:-0}"
+EXTRA_ARGS=()
+# Escape hatches for the two defaults that changed after V2.5 trained, so the
+# original configuration stays reproducible from this same script.
+[[ -n "${BATCH_SAMPLER:-}" ]] && EXTRA_ARGS+=(--batch_sampler "$BATCH_SAMPLER")
+[[ -n "${MNRL_DIRECTIONS:-}" ]] && EXTRA_ARGS+=(--mnrl_directions $MNRL_DIRECTIONS)
+[[ "$RESUME" == "1" ]] || EXTRA_ARGS+=(--no_resume)
+[[ "$MAX_STEPS" -gt 0 ]] && EXTRA_ARGS+=(--max_steps "$MAX_STEPS")
+[[ "$GATHER" != "1" ]] && EXTRA_ARGS+=(--no_gather_across_devices)
+if [[ "$MATRYOSHKA" == "1" ]]; then
+  EXTRA_ARGS+=(--matryoshka --matryoshka_dims 64 128 256)
+else
+  EXTRA_ARGS+=(--no-matryoshka)
+fi
+
+for f in pfam_sorted.parquet afdb_sorted.parquet "$STRING_FILE"; do
+  [[ -f "$DATA/$f" ]] || { echo "MISSING: $DATA/$f" >&2; exit 1; }
+done
+[[ -f "$DMS_FILE" ]] || { echo "MISSING: $DMS_FILE" >&2; exit 1; }
+[[ -d "$MODEL" ]] || { echo "MISSING: $MODEL — see the header" >&2; exit 1; }
+if [[ -e "models/$RUN_NAME/final" && "${ALLOW_OVERWRITE:-0}" != "1" ]]; then
+  echo "models/$RUN_NAME/final exists; set ALLOW_OVERWRITE=1 to replace it" >&2
+  exit 1
+fi
+
+echo "$(date) ProtSent v2.5: model=$MODEL bs=$BATCH_SIZE k=$MAX_PAIRS_PER_CLUSTER lr=$LR" \
+     "gor=$GOR_WEIGHT dms_rows=$DMS_MAX_ROWS gpus=$CUDA_VISIBLE_DEVICES"
+
+uv run --no-sync accelerate launch --num_processes "$NUM_PROCESSES" --mixed_precision bf16 \
+  protein_pipeline.py train \
+  --model "$MODEL" \
+  --files "$DATA/pfam_sorted.parquet" \
+          "$DATA/afdb_sorted.parquet" \
+          "$DATA/$STRING_FILE" \
+  --dms_file "$DMS_FILE" \
+  --dms_max_rows "$DMS_MAX_ROWS" \
+  --loss_mode multi --multi_primary_loss "$PRIMARY_LOSS" \
+  --mnrl_mini_batch_size "$MINI_BATCH" \
+  --multi_dataset_sampler proportional \
+  --gor_weight "$GOR_WEIGHT" \
+  --max_seq_length "$MAX_SEQ_LENGTH" \
+  --max_pairs_per_cluster "$MAX_PAIRS_PER_CLUSTER" \
+  --batch_size "$BATCH_SIZE" \
+  --max_map_rows "$MAX_MAP_ROWS" \
+  --epochs "$EPOCHS" --learning_rate "$LR" --warmup_steps "$WARMUP" \
+  --lr_scheduler_type cosine_with_min_lr --lr_num_cycles "$LR_CYCLES" \
+  --max_minutes "$MAX_MINUTES" \
+  --pair_dataset_shuffle_seed "$SHUFFLE_SEED" --seed "$SEED" \
+  --dataloader_num_workers "$WORKERS" \
+  --save_steps "$SAVE_STEPS" --save_total_limit "$SAVE_TOTAL_LIMIT" \
+  --no-compile \
+  "${EXTRA_ARGS[@]}" \
+  --run_name "$RUN_NAME"

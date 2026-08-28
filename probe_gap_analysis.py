@@ -39,10 +39,22 @@ ARMS = {
 }
 
 
+EMBED_MAX_LENGTH = 1024  # matches protein_benchmark_suite.DEFAULT_EMBED_MAX_LENGTH
+
+
 def load(path):
     from sentence_transformers import SentenceTransformer
 
-    return SentenceTransformer(path, device="cuda", trust_remote_code=True)
+    model = SentenceTransformer(path, device="cuda", trust_remote_code=True)
+    # Pin the truncation limit rather than inheriting whatever each checkpoint's
+    # tokenizer declares. Checkpoints written before the max_seq_length fix carry
+    # model_max_length = 1e24 (no truncation) and ones written after carry 512, so
+    # without this the arms in a single table would be truncated differently --
+    # ProtSent-V2-35M uncapped against ProtSent-V2.5-35M at 512. It bites only a
+    # handful of sequences here (0.5% of SCOPe-40 exceeds 512, 0.2% exceeds 1024),
+    # but "the arms used different preprocessing" is not a footnote worth carrying.
+    model.max_seq_length = min(model.max_seq_length, EMBED_MAX_LENGTH)
+    return model
 
 
 def encode(model, seqs):
@@ -165,7 +177,18 @@ def scope_retrieval(X, labels):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="results/benchmarks/probe_gap_analysis.json")
+    ap.add_argument(
+        "--models",
+        nargs="+",
+        metavar="NAME=PATH",
+        help="Override the built-in arms, same NAME=PATH form embedding_geometry.py takes. "
+        "Use it to score one new checkpoint without re-encoding the other three.",
+    )
     args = ap.parse_args()
+
+    arms = ARMS
+    if args.models:
+        arms = dict(pair.split("=", 1) for pair in args.models)
 
     from datasets import load_dataset
 
@@ -183,7 +206,7 @@ def main():
     )
 
     res = {}
-    for name, path in ARMS.items():
+    for name, path in arms.items():
         print(f"\n=== {name} ===", flush=True)
         model = load(path)
         S = encode(model, scope_seqs)

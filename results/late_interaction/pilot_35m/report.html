@@ -1,0 +1,717 @@
+<title>ProtSent · Late-Interaction Pilot · 35M</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Public+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #FBFCFD;
+    --panel: #FFFFFF;
+    --panel-alt: #F2F5F7;
+    --ink: #131B23;
+    --ink-soft: #4A5966;
+    --ink-faint: #7A8894;
+    --rule: #DDE4E9;
+    --accent: #0F6E6B;
+    --accent-soft: #E2F0EF;
+    --pos: #1F7A4D;
+    --neg: #A63A2E;
+    --warn: #8A6412;
+    --warn-soft: #FBF3DF;
+    --shadow: 0 1px 2px rgba(19, 27, 35, .05), 0 8px 24px -18px rgba(19, 27, 35, .35);
+    --measure: 68ch;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0E141A; --panel: #151D25; --panel-alt: #1B242D;
+      --ink: #E4EBF1; --ink-soft: #A6B4C0; --ink-faint: #75838F; --rule: #27333D;
+      --accent: #63C8C0; --accent-soft: #16302F; --pos: #58C489; --neg: #E58A7C;
+      --warn: #D9AE55; --warn-soft: #241E10;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -18px rgba(0, 0, 0, .8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0E141A; --panel: #151D25; --panel-alt: #1B242D;
+    --ink: #E4EBF1; --ink-soft: #A6B4C0; --ink-faint: #75838F; --rule: #27333D;
+    --accent: #63C8C0; --accent-soft: #16302F; --pos: #58C489; --neg: #E58A7C;
+    --warn: #D9AE55; --warn-soft: #241E10;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -18px rgba(0, 0, 0, .8);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 16.5px; line-height: 1.62; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px 96px; }
+  .prose { max-width: var(--measure); }
+
+  h1, h2, h3 { font-family: Newsreader, Georgia, serif; font-weight: 600; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 4.4vw, 3.1rem); line-height: 1.1; letter-spacing: -.015em; }
+  h2 { font-size: 1.6rem; line-height: 1.2; }
+  h3 { font-size: 1.14rem; line-height: 1.3; }
+  p { margin: 0; }
+  a { color: var(--accent); }
+  code, .mono, td.num, th.num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  code { font-size: .89em; background: var(--panel-alt); padding: .1em .34em; border-radius: 3px; }
+
+  header.masthead { border-bottom: 1px solid var(--rule); padding: 56px 0 28px; display: flex; flex-direction: column; gap: 18px; }
+  .eyebrow { font-size: .74rem; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .standfirst { font-size: 1.12rem; color: var(--ink-soft); max-width: var(--measure); }
+  .meta { display: flex; flex-wrap: wrap; gap: 10px 26px; font-size: .82rem; color: var(--ink-faint); font-family: "IBM Plex Mono", monospace; }
+
+  section { padding-top: 52px; display: flex; flex-direction: column; gap: 20px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; border-top: 2px solid var(--ink); padding-top: 14px; }
+  .sec-head .tick { flex: none; width: 26px; height: 10px; margin-top: 8px;
+    background: repeating-linear-gradient(90deg, var(--accent) 0 2px, transparent 2px 6px); }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 6px; box-shadow: var(--shadow); }
+  .card .k { font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; }
+  .card .v { font-family: "IBM Plex Mono", monospace; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+  .card .n { font-size: .86rem; color: var(--ink-soft); }
+
+  .verdict { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 6px; padding: 20px 22px;
+    display: flex; flex-direction: column; gap: 10px; }
+  .verdict h3 { color: var(--ink); }
+  .flag { background: var(--warn-soft); border: 1px solid var(--warn); border-radius: 6px; padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 8px; }
+  .flag .k { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--warn); font-weight: 700; }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  thead th { background: var(--panel-alt); font-size: .74rem; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--ink-soft); position: sticky; top: 0; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; }
+  tr.group td { background: var(--panel-alt); font-weight: 700; font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft); }
+  td.best { font-weight: 700; }
+  tr.baseline td { color: var(--ink-soft); font-style: italic; }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+  .dim { color: var(--ink-faint); }
+  caption { caption-side: bottom; text-align: left; padding: 10px 12px; font-size: .82rem; color: var(--ink-faint); }
+
+  ul, ol { margin: 0; padding-left: 1.15em; display: flex; flex-direction: column; gap: 7px; max-width: var(--measure); }
+  li::marker { color: var(--accent); }
+  dl.method { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; font-size: .9rem; }
+  dl.method dt { color: var(--ink-faint); font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; padding-top: 2px; }
+  dl.method dd { margin: 0; }
+  .note { border-left: 3px solid var(--warn); padding: 4px 0 4px 14px; color: var(--ink-soft); max-width: var(--measure); }
+
+  .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+  .flow .step { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; gap: 5px; }
+  .flow .step .stage { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .flow .step .what { font-weight: 500; }
+  .flow .step .cost { font-family: "IBM Plex Mono", monospace; font-size: .82rem; color: var(--ink-soft); }
+
+  figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  figcaption { font-size: .82rem; color: var(--ink-faint); max-width: var(--measure); }
+  svg { max-width: 100%; height: auto; }
+  footer { margin-top: 64px; border-top: 1px solid var(--rule); padding-top: 18px; font-size: .84rem; color: var(--ink-faint); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="wrap">
+<header class="masthead">
+  <div class="eyebrow">ProtSent · late-interaction pilot · 35M</div>
+  <h1>Residue-level MaxSim for protein retrieval</h1>
+  <p class="standfirst">A dense protein model squeezes each protein into <strong>one</strong> vector and compares two
+  proteins with a single dot product. A late-interaction model keeps <strong>one small vector per residue</strong>, and
+  compares two proteins by letting every residue of one shop for its best match in the other and adding those matches
+  up — that operation is MaxSim. This is what that costs, what it buys, and which of the gains need training at all.
+  Measured on A100-80GBs with sentence-transformers 6.0.</p>
+  <div class="meta">
+    <span>branch LateInteractions</span><span>2026-08-24</span><span>ESM-2 35M scale</span><span>150M arms + ablations still running</span>
+  </div>
+</header>
+
+<section id="verdict">
+  <div class="sec-head"><span class="tick"></span><h2>The short version</h2></div>
+  <div class="verdict prose">
+    <h3>Late interaction is worth having. Whether you need to train for it depends entirely on the backbone.</h3>
+    <p>Swapping pooled cosine for residue MaxSim improves retrieval on both backbones with <strong>zero training</strong>
+    — significantly on SCOPe for both, and on CATH significantly for ESM-2 (+11.3, p=.002) while only directional for
+    ProtSent-V2 (+4.7, p=.10) on that benchmark's 150 queries.
+    Late training then helps both backbones too — but the 64-D projection it trains through is not always where the
+    gain lives. On vanilla ESM-2 the head <em>is</em> the trained space and beats the backbone's own residues by
+    +.077 MAP. On ProtSent-V2, whose residues were already contrastively trained by its 34.8M-pair run, the same head
+    <em>discards</em> .026 MAP — more than the training added. Score that trained backbone at its native 480-D instead
+    and it is the best configuration in the pilot. The ordering survives restriction to low-identity queries;
+    alignment still leads at rank 1 while the late arms win ranking depth.</p>
+  </div>
+  <p class="prose dim" style="font-size:.86rem">Every figure on these four cards is <strong>superfamily-level</strong>
+  eligible MAP on SCOPe-40. Tables further down report family level too, which is what earlier ProtSent work
+  published — check the block header before comparing a card to a row.</p>
+  <div class="cards">
+    <div class="card"><span class="k">Best in the pilot</span><span class="v">.698 MAP</span>
+      <span class="n">ProtSent-Late scored at native 480-D. Beats its own 64-D head (.672) and the untrained
+      backbone (.683), superfamily eligible MAP</span></div>
+    <div class="card"><span class="k">Free (no training)</span><span class="v">.646 → .683</span>
+      <span class="n">ProtSent-V2, pooled cosine → MaxSim on native residues. ESM-2: .398 → .474</span></div>
+    <div class="card"><span class="k">The 64-D head, two ways</span><span class="v">+.077 / −.026</span>
+      <span class="n">vs the same trained backbone's own residues: a large gain on ESM-2, a real loss on ProtSent.
+      All four CIs exclude zero at n=2,020</span></div>
+    <div class="card"><span class="k">Probe dependence</span><span class="v">4/5/4 → 10/2/1</span>
+      <span class="n">ProtSent-Late vs ProtSent-V2 on 13 pooled tasks, KNN vs linear. The transfer verdict depends
+      on the probe</span></div>
+  </div>
+</section>
+
+<section id="method">
+  <div class="sec-head"><span class="tick"></span><h2>What was trained, from what</h2></div>
+  <div class="prose">
+    <p>No masked-language-model pretraining happened anywhere, and no per-task fine-tuning happened anywhere.
+    Both trained arms are a short <strong>contrastive (sentence-transformer) continuation</strong> from an existing
+    checkpoint, on the <strong>general ProtSent-V2 pair corpus</strong> — never on a benchmark's own training set.</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Arm (used verbatim in every table below)</th><th>Weights</th><th>Late head</th><th>Scored with</th></tr></thead>
+      <tbody>
+        <tr class="group"><td colspan="4">From vanilla ESM-2 (Synthyra/ESM2-35M)</td></tr>
+        <tr><td><strong>ESM-2</strong></td><td>vanilla, unmodified</td><td class="dim">none</td><td>pooled cosine, 480-D</td></tr>
+        <tr><td><strong>ESM-2 + MaxSim</strong></td><td>vanilla, unmodified</td><td class="dim">none</td><td>MaxSim over native 480-D residues</td></tr>
+        <tr><td><strong>ESM-2-Late (64-D)</strong></td><td>late-trained</td><td>trained 64-D</td><td>MaxSim over the 64-D head</td></tr>
+        <tr><td><strong>ESM-2-Late (480-D)</strong></td><td>late-trained <span class="dim">(same weights as the row above)</span></td><td>bypassed</td><td>MaxSim over native 480-D residues</td></tr>
+        <tr class="group"><td colspan="4">From ProtSent-V2-35M — already contrastively post-trained on 34.8M pairs</td></tr>
+        <tr><td><strong>ProtSent-V2</strong></td><td>as published</td><td class="dim">none</td><td>pooled cosine, 480-D</td></tr>
+        <tr><td><strong>ProtSent-V2 + MaxSim</strong></td><td>as published</td><td class="dim">none</td><td>MaxSim over native 480-D residues</td></tr>
+        <tr><td><strong>ProtSent-Late (64-D)</strong></td><td>late-trained</td><td>trained 64-D</td><td>MaxSim over the 64-D head</td></tr>
+        <tr><td><strong>ProtSent-Late (480-D)</strong></td><td>late-trained <span class="dim">(same weights as the row above)</span></td><td>bypassed</td><td>MaxSim over native 480-D residues</td></tr>
+      </tbody>
+      <caption>Eight arms, four model checkpoints. The <em>(64-D)</em> and <em>(480-D)</em> pairs share identical
+      weights and differ only in whether scoring goes through the trained projection or reads the backbone's own
+      residues — which is exactly the distinction this revision exists to make. "+ MaxSim" means <strong>no late head
+      and no late training</strong>; it does not mean an untrained model, and ProtSent-V2 in particular is heavily
+      post-trained already. Both late arms trained 2,000 steps / 512,000 pairs on the general ProtSent-V2 pair corpus
+      — never on a benchmark's training set — for ~1.5 GPU-h each. Two GPUs × 128 sequences means the optimiser sees
+      256 pairs per step, while the contrastive comparison stays within each GPU's 128 (<code>gather_across_devices</code>
+      is off), so <strong>in-batch negatives are 128</strong>. ProtSent-V2 is ESM-2 35M after its own contrastive
+      post-training on 34.8M Pfam / AFDB / STRING pairs — the same three sources used here, filtered against the
+      remote-homology and PPI test splits but <em>not</em> against SCOPe or CATH, which is why the contamination check
+      below exists.</caption>
+    </table>
+  </div>
+  <div class="prose">
+    <h3>Terms used throughout</h3>
+    <dl class="method" style="max-width: none">
+      <dt>MaxSim</dt><dd>the late-interaction score: for each residue of the query, its best match anywhere in the
+      document, summed. One number per protein pair, as cosine gives one number per pair.</dd>
+      <dt>R@1 / R@10</dt><dd>recall at 1 and 10: the fraction of queries with at least one correct hit that high in the
+      ranking. <strong>MAP</strong> is mean average precision over the <em>whole</em> ranking, so it rewards depth that
+      R@10 cannot see.</dd>
+      <dt>Eligible</dt><dd>a query with at least one non-self protein sharing its label. The rest are unreachable for
+      any method, so they are excluded from the headline metrics (1,693 / 2,020 / 2,116 queries at family /
+      superfamily / fold).</dd>
+      <dt>Transfer suite</dt><dd>ProtBench's 13-task benchmark of frozen-embedding probes — everything from solubility
+      to secondary structure. Distinct from "mean-pooled", which is what the model does to residues.</dd>
+      <dt>W / T / L</dt><dd>win / tie / loss counts across those tasks, ties being |Δ| &lt; 0.005.</dd>
+      <dt>EAT</dt><dd>embedding-based annotation transfer: label a query with its nearest neighbour's label. The CATH
+      convention, and the protocol behind that benchmark's published numbers.</dd>
+    </dl>
+  </div>
+  <div class="prose">
+    <h3>Method, in full</h3>
+  </div>
+  <dl class="method prose" style="max-width: none">
+    <dt>Head</dt><dd>token-level <code>Dense(480→64, no bias, no activation)</code> — <strong>30,720 weights</strong>, the entire trained addition → mask → per-residue L2 normalisation. Randomly initialised; step 0 is therefore a random projection.</dd>
+    <dt>Masking</dt><dd><code>&lt;cls&gt;</code> and <code>&lt;eos&gt;</code> excluded from scoring on <em>both</em> sides. There is no ColBERT-style query expansion and no query/document prefix: the two encoders are literally the same function, so <code>encode_query ≡ encode_document</code>.</dd>
+    <dt>Loss</dt><dd><code>CachedMultiVectorMultipleNegativesRankingLoss</code>, scale 1.0 (correct for unnormalised MaxSim; the dense recipe's 20.0 would be wrong), in-batch negatives only — <strong>no hard-negative mining</strong>.</dd>
+    <dt>Optimisation</dt><dd>backbone LR 1e-5, fresh projection LR 1e-4, cosine schedule, 100 warmup steps, bf16, max_seq_length 512, seed 42.</dd>
+    <dt>Data</dt><dd>round-robin over <code>protsent-data-dc40/{pfam_sorted, afdb_sorted, stringdb_train_15M}.parquet</code>, built into 777k + 2.0M + 2.0M pairs (AFDB and STRING capped at 2M each, taken from the group-sorted prefix). Effective contrastive batch 256 = 2 GPUs × 128, <code>gather_across_devices</code> off, so in-batch negatives are 128.</dd>
+    <dt>Control</dt><dd>the step-0 dense view reproduces the base model's pooled embeddings to <strong>0.0</strong> max absolute difference on both backbones — the wrapper adds nothing and removes nothing.</dd>
+  </dl>
+</section>
+
+<section id="cost">
+  <div class="sec-head"><span class="tick"></span><h2>What it costs, explained plainly</h2></div>
+  <div class="prose">
+    <p>A dense model boils each protein down to <strong>one</strong> 480-number summary; two proteins are compared with a
+    single dot product. A late-interaction model keeps <strong>one small vector per residue</strong>, and compares two
+    proteins by letting every residue of one shop for its best match in the other, then adding those matches up
+    (that is MaxSim). Same reading of the protein, much richer comparison. The extra cost lands in exactly two places:
+    storage and scoring.</p>
+  </div>
+  <div class="flow">
+    <div class="step"><span class="stage">Unchanged</span><span class="what">Reading the protein</span>
+      <span class="cost">the same backbone forward as dense; the 30,720-weight head is &lt;0.1% of forward FLOPs</span></div>
+    <div class="step"><span class="stage">Unchanged-ish</span><span class="what">Training through it</span>
+      <span class="cost">80.6 vs 102.4 pairs/s dense — ~21% slower, both on sdpa</span></div>
+    <div class="step"><span class="stage">Where the cost is</span><span class="what">Storing and comparing</span>
+      <span class="cost">one vector per residue instead of per protein — quantified below</span></div>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Arm</th><th>Scoring</th><th class="num">Numbers stored / protein</th><th class="num">Encode (2,207 seqs)</th><th class="num">Score 2,207² pairs</th><th class="num">Total</th></tr></thead>
+      <tbody>
+        <tr><td>ESM-2 / ProtSent-V2</td><td>pooled cosine</td><td class="num best">480</td><td class="num">2.9–5.5 s</td><td class="num best">0.03–0.04 s</td><td class="num best">3.0–5.5 s</td></tr>
+        <tr><td>ESM-2-Late / ProtSent-Late (64-D)</td><td>MaxSim, 64-D</td><td class="num">9,878 <span class="dim">(20.6×)</span></td><td class="num">3.9–8.0 s</td><td class="num">8.1 s</td><td class="num">12.1 s</td></tr>
+        <tr><td>either backbone, no late head</td><td>MaxSim, native 480-D</td><td class="num">74,088 <span class="dim">(154×)</span></td><td class="num">3.4–3.9 s</td><td class="num">40.2–41.5 s</td><td class="num">43.6–45.5 s</td></tr>
+      </tbody>
+      <caption>One A100, encoding and scoring timed separately (an earlier revision of this report conflated them).
+      Encoding is the <em>same</em> pass for every row and is paid once per corpus; scoring is paid per query set.
+      Ranges are across the two backbones and reflect some GPU contention with concurrent training. The batch-size
+      sweep behind the chosen configuration was 15 steps with no warmup discarded, so every rate in it is slightly
+      understated; the ordering it was used for is unaffected.</caption>
+    </table>
+  </div>
+  <div class="prose">
+    <p>Two things follow that matter beyond a benchmark. <strong>Storage scales with residues:</strong> at UniRef50
+    scale (~60M sequences, mean length ~350, fp16) a 64-D late index is ≈2.7 TB against ≈58 GB dense, and the native
+    480-D variant is 7.5× larger again. <strong>Scoring scales with pairs</strong>, so nobody deploys brute-force
+    MaxSim — the two-stage alternative is priced in the SCOPe section below.</p>
+  </div>
+  <p class="note prose">The transfer suite never touches MaxSim. Late-trained models are evaluated there
+  through their <em>dense view</em> — the same backbone with the original mean-pooling head — so those numbers stay
+  directly comparable to every previous ProtSent run and cost exactly what a dense model costs.</p>
+</section>
+
+<section id="scope">
+  <div class="sec-head"><span class="tick"></span><h2>SCOPe-40 retrieval, three levels</h2></div>
+  <div class="prose">
+    <p>Every arm scores the same 2,207-protein all-vs-all matrix. Metrics are over <strong>eligible</strong> queries —
+    those with at least one non-self protein sharing their label (1,693 / 2,020 / 2,116 at family / superfamily / fold);
+    the rest are unreachable for any method. Family is the level earlier ProtSent work reported; superfamily is the level
+    this pilot treats as primary. Alignment baselines are the baseline runs on this exact benchmark (<code>results/benchmarks/hmmer_maxsens.json</code>, filters off, and the 2026-07-31 MMseqs2 scoring).</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Arm</th><th>Scoring</th><th class="num">R@1</th><th class="num">R@10</th><th class="num">MAP</th></tr></thead>
+      <tbody>
+        <tr class="group"><td colspan="6">Family (legacy level)</td></tr>
+        <tr class="baseline"><td>phmmer (max sensitivity)</td><td>profile alignment</td><td class="num">.753</td><td class="num">.898</td><td class="num">.607</td></tr>
+        <tr class="baseline"><td>MMseqs2</td><td>alignment</td><td class="num">.656</td><td class="num">.740</td><td class="num">.410</td></tr>
+        <tr><td>ESM-2</td><td>pooled cosine</td><td class="num">.499</td><td class="num">.760</td><td class="num">.421</td></tr>
+        <tr><td>ESM-2 + MaxSim</td><td>MaxSim 480-D</td><td class="num">.601</td><td class="num">.804</td><td class="num">.545</td></tr>
+        <tr><td>ESM-2-Late (64-D)</td><td>MaxSim 64-D</td><td class="num best">.742</td><td class="num best">.942</td><td class="num best">.698</td></tr>
+        <tr><td>ESM-2-Late (480-D)</td><td>MaxSim 480-D</td><td class="num">.732</td><td class="num">.925</td><td class="num">.675</td></tr>
+        <tr><td>ProtSent-V2</td><td>pooled cosine</td><td class="num">.685</td><td class="num">.924</td><td class="num">.646</td></tr>
+        <tr><td>ProtSent-V2 + MaxSim</td><td>MaxSim 480-D</td><td class="num">.726</td><td class="num">.932</td><td class="num">.684</td></tr>
+        <tr><td>ProtSent-Late (64-D)</td><td>MaxSim 64-D</td><td class="num">.719</td><td class="num">.936</td><td class="num">.680</td></tr>
+        <tr><td><strong>ProtSent-Late (480-D)</strong></td><td>MaxSim 480-D</td><td class="num">.734</td><td class="num best">.942</td><td class="num">.695</td></tr>
+        <tr class="group"><td colspan="6">Superfamily (primary)</td></tr>
+        <tr><td>ESM-2</td><td>pooled cosine</td><td class="num">.698</td><td class="num">.845</td><td class="num">.398</td></tr>
+        <tr><td>ESM-2 + MaxSim</td><td>MaxSim 480-D</td><td class="num">.719</td><td class="num">.856</td><td class="num">.474</td></tr>
+        <tr><td>ESM-2-Late (64-D)</td><td>MaxSim 64-D</td><td class="num best">.896</td><td class="num">.959</td><td class="num">.670</td></tr>
+        <tr><td>ESM-2-Late (480-D)</td><td>MaxSim 480-D</td><td class="num">.869</td><td class="num">.946</td><td class="num">.594</td></tr>
+        <tr><td>ProtSent-V2</td><td>pooled cosine</td><td class="num">.857</td><td class="num">.956</td><td class="num">.654</td></tr>
+        <tr><td>ProtSent-V2 + MaxSim</td><td>MaxSim 480-D</td><td class="num">.878</td><td class="num">.956</td><td class="num">.683</td></tr>
+        <tr><td>ProtSent-Late (64-D)</td><td>MaxSim 64-D</td><td class="num">.880</td><td class="num">.959</td><td class="num">.672</td></tr>
+        <tr><td><strong>ProtSent-Late (480-D)</strong></td><td>MaxSim 480-D</td><td class="num">.885</td><td class="num best">.960</td><td class="num best">.698</td></tr>
+        <tr class="group"><td colspan="6">Fold</td></tr>
+        <tr><td>ESM-2</td><td>pooled cosine</td><td class="num">.725</td><td class="num">.869</td><td class="num">.358</td></tr>
+        <tr><td>ESM-2 + MaxSim</td><td>MaxSim 480-D</td><td class="num">.727</td><td class="num">.869</td><td class="num">.404</td></tr>
+        <tr><td>ESM-2-Late (64-D)</td><td>MaxSim 64-D</td><td class="num best">.901</td><td class="num">.961</td><td class="num">.600</td></tr>
+        <tr><td>ESM-2-Late (480-D)</td><td>MaxSim 480-D</td><td class="num">.882</td><td class="num">.952</td><td class="num">.512</td></tr>
+        <tr><td>ProtSent-V2</td><td>pooled cosine</td><td class="num">.887</td><td class="num">.961</td><td class="num">.582</td></tr>
+        <tr><td>ProtSent-V2 + MaxSim</td><td>MaxSim 480-D</td><td class="num">.897</td><td class="num">.958</td><td class="num">.601</td></tr>
+        <tr><td>ProtSent-Late (64-D)</td><td>MaxSim 64-D</td><td class="num">.898</td><td class="num">.961</td><td class="num">.602</td></tr>
+        <tr><td><strong>ProtSent-Late (480-D)</strong></td><td>MaxSim 480-D</td><td class="num">.900</td><td class="num best">.965</td><td class="num best">.625</td></tr>
+      </tbody>
+      <caption>Eligible-query metrics: 1,693 / 2,020 / 2,116 queries with at least one reachable positive at
+      family / superfamily / fold. The two alignment rows are measured at family only — re-levelling them would mean
+      re-running phmmer and MMseqs2, which has not been done — so <strong>the superfamily and fold blocks have no
+      alignment baseline</strong>. At family they carry the pattern this project has reported before:
+      <strong>alignment wins rank 1</strong> (phmmer .753) while embeddings win depth and MAP. The rows that matter for this revision are the (64-D) / (480-D) pairs: on ProtSent the native residues are
+      better at every level, on ESM-2 the head is better at every level.</caption>
+    </table>
+  </div>
+  <div class="flag prose" style="max-width: none">
+    <span class="k">Contamination check</span>
+    <p>SCOPe-40 is <strong>not</strong> decontaminated against the pretraining corpus — the corpus filter targeted the
+    remote-homology and PPI test splits, and the median SCOPe domain sits at 0.91 max identity to training data.
+    Restricting to queries far from the corpus (using the existing per-query vectors, no new compute) leaves the ordering
+    intact, which is the point of the check:</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Family MAP, eligible queries</th><th class="num">&lt;40% id (n=164)</th><th class="num">&lt;50% id (n=287)</th><th class="num">all (n=1,693)</th></tr></thead>
+      <tbody>
+        <tr><td>ESM-2</td><td class="num">.333</td><td class="num">.378</td><td class="num">.421</td></tr>
+        <tr><td>ESM-2 + MaxSim</td><td class="num">.469</td><td class="num">.519</td><td class="num">.545</td></tr>
+        <tr><td><strong>ESM-2-Late</strong></td><td class="num best">.676</td><td class="num best">.686</td><td class="num best">.698</td></tr>
+        <tr><td>ProtSent-V2</td><td class="num">.619</td><td class="num">.636</td><td class="num">.646</td></tr>
+        <tr><td>ProtSent-V2 + MaxSim</td><td class="num">.663</td><td class="num">.676</td><td class="num">.684</td></tr>
+        <tr><td>ProtSent-Late (64-D)</td><td class="num">.655</td><td class="num">.664</td><td class="num">.681</td></tr>
+      </tbody>
+      <caption>Every arm degrades on harder queries, as expected, and by a similar amount — the gaps between arms
+      hold. At &lt;40% identity the 95% CIs are wide (±.05) on 164 queries, so read the ordering, not the decimals.</caption>
+    </table>
+  </div>
+  <div class="prose">
+    <h3>Two-stage retrieval: the deployable shape</h3>
+    <p>Brute-force MaxSim over a whole corpus is not how anyone runs this. The standard answer is a cheap dense
+    shortlist reranked by MaxSim, and the same matrices price it without a GPU-minute:</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Retrieval scheme</th><th class="num">R@1</th><th class="num">R@10</th><th class="num">MAP</th><th class="num">Pairs scored with MaxSim</th></tr></thead>
+      <tbody>
+        <tr class="group"><td colspan="5">ProtSent-V2 + MaxSim, reranking its own cosine shortlist</td></tr>
+        <tr><td>cosine only (no MaxSim)</td><td class="num">.685</td><td class="num">.924</td><td class="num">.646</td><td class="num best">0</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 10</td><td class="num best">.727</td><td class="num">.924</td><td class="num">.675</td><td class="num">10 per query</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.726</td><td class="num">.932</td><td class="num">.684</td><td class="num">100 per query</td></tr>
+        <tr><td>full all-vs-all MaxSim</td><td class="num">.726</td><td class="num best">.932</td><td class="num best">.684</td><td class="num">2,207 per query</td></tr>
+        <tr class="group"><td colspan="5">ProtSent-Late (64-D), reranking the same shortlist</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 10</td><td class="num">.717</td><td class="num">.924</td><td class="num">.674</td><td class="num">10 per query</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.719</td><td class="num">.935</td><td class="num">.681</td><td class="num">100 per query</td></tr>
+        <tr><td>full all-vs-all MaxSim</td><td class="num">.719</td><td class="num">.936</td><td class="num">.681</td><td class="num">2,207 per query</td></tr>
+        <tr class="group"><td colspan="5">ESM-2-Late (64-D), reranking vanilla ESM-2's cosine shortlist</td></tr>
+        <tr><td>cosine only (no MaxSim)</td><td class="num">.499</td><td class="num">.760</td><td class="num">.421</td><td class="num best">0</td></tr>
+        <tr><td>cosine → MaxSim rerank of top 100</td><td class="num">.705</td><td class="num">.869</td><td class="num">.593</td><td class="num">100 per query</td></tr>
+        <tr><td>full all-vs-all MaxSim</td><td class="num best">.742</td><td class="num best">.942</td><td class="num best">.698</td><td class="num">2,207 per query</td></tr>
+      </tbody>
+      <caption>Eligible-query metrics, family level; both trained and untrained ProtSent arms behave the same way.
+      A two-stage system is only as good as its first stage:
+      on ProtSent's strong cosine shortlist, reranking just the top 10 recovers almost all of full MaxSim at
+      <strong>1/220th</strong> of the scoring work — that is the deployable configuration. On vanilla ESM-2's weaker
+      shortlist the recall ceiling is set before MaxSim ever runs. Note what this does and does not fix:
+      <strong>reranking cuts scoring cost, not storage</strong> — the residue index is exactly the same size either
+      way, so the 2.7 TB figure above stands.</caption>
+    </table>
+  </div>
+  <div class="flag prose" style="max-width: none">
+    <span class="k">Every timing on this page leaves ~2× on the table</span>
+    <p>None of these runs used flash attention. The shared environment ships <code>kernels</code> 0.12.3, below the
+    0.15.2 floor the flash kernels need, and <code>flash-attn</code> is absent — so every run silently fell back to
+    sdpa. In an isolated venv with <code>attn_implementation="kernels-community/vllm-flash-attn3"</code> and bf16, the
+    same ProtSent-V2-35M training step measures <strong>240.9 pairs/s against 122.2 on sdpa (1.97×) on Pfam</strong>,
+    and 135.6 against 91.4 (1.48×) on STRING, with peak VRAM <em>falling</em> 10.7 → 4.2 GB. Numerics check out
+    (pooled cosine agreement ≥ .99974, MaxSim top-1 retrieval agreement 100%), though FA3-produced and sdpa-produced
+    eval numbers should not be mixed in one table — nothing in this report's results tables came from that environment.
+    Three corollaries. The ~21% late-vs-dense training overhead above is an sdpa-vs-sdpa figure and is
+    <em>smaller than the attention backend choice in either direction</em>. The win is mostly not the kernel: forcing
+    unpadding off under flash gives 104.0 pairs/s against 135.6 with it on, so the 1.48× splits into ~1.30× unpadding
+    and ~1.14× kernel — and since Sentence Transformers enables unpadding automatically whenever flash is active, the
+    earlier token-packing null result is explained (there is no padding left for packing to reclaim; what packing does
+    buy is memory predictability, 8.49 → 7.66 GB peak). Finally <code>torch.compile</code> is length-dependent rather
+    than uniformly bad — +3.6% on Pfam, −13% on the longer STRING sequences — but ~250 s of warmup needs ~13k steps to
+    break even either way, so it stays off at this scale. Untested at 150M.</p>
+    <p>One caveat before this reaches a training recipe: the current setup keeps fp32 master weights and autocasts,
+    while the flash path wants bf16 weights, which moves the optimiser states with it. fp16 is not an option at all
+    here — it fails outright with "Attempting to unscale FP16 gradients". Speed this large is worth having, but
+    retrieval quality on a real run should be checked before the recipe changes, not after.</p>
+  </div>
+</section>
+
+<section id="head">
+  <div class="sec-head"><span class="tick"></span><h2>Where the gain actually lives</h2></div>
+  <div class="prose">
+    <p>Every earlier revision of this report confounded two things: what late training does to the <em>backbone</em>,
+    and what the 64-D projection does to the scores. They separate cleanly by scoring each trained backbone twice —
+    once through its head, once over its own 480-D residues. Same weights, same queries, paired bootstrap over the
+    2,020 eligible superfamily queries.</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Comparison (superfamily eligible MAP)</th><th class="num">Δ</th><th class="num">95% CI</th><th>Reading</th></tr></thead>
+      <tbody>
+        <tr class="group"><td colspan="4">ProtSent-V2 backbone — residues already contrastively trained</td></tr>
+        <tr><td>ProtSent-Late (480-D) − ProtSent-V2 + MaxSim</td><td class="num pos">+.0152</td><td class="num">[+.0117, +.0187]</td><td>late training <strong>improved</strong> the backbone</td></tr>
+        <tr><td>ProtSent-Late (480-D) − ProtSent-Late (64-D)</td><td class="num pos">+.0262</td><td class="num">[+.0221, +.0306]</td><td>the head <strong>discards</strong> more than training added</td></tr>
+        <tr><td>ProtSent-Late (64-D) − ProtSent-V2 + MaxSim</td><td class="num neg">−.0110</td><td class="num">[−.0155, −.0067]</td><td>net: the shipped 64-D arm is behind doing nothing</td></tr>
+        <tr class="group"><td colspan="4">Vanilla ESM-2 backbone — residues never contrastively trained</td></tr>
+        <tr><td>ESM-2-Late (480-D) − ESM-2 + MaxSim</td><td class="num pos">+.1204</td><td class="num">[+.1102, +.1306]</td><td>late training improved the backbone, hugely</td></tr>
+        <tr><td>ESM-2-Late (64-D) − ESM-2-Late (480-D)</td><td class="num pos">+.0766</td><td class="num">[+.0690, +.0841]</td><td>the head <strong>is</strong> the trained space, and beats the residues</td></tr>
+      </tbody>
+      <caption>All five intervals exclude zero at n=2,020. Family level agrees on every sign; the single comparison
+      that loses significance there is ProtSent-Late (64-D) − ProtSent-V2 + MaxSim, at −.0036 [−.0099, +.0030].</caption>
+    </table>
+  </div>
+  <div class="prose">
+    <p>So the 64-D head is not universally lossy, and late training never degraded anything. The projection is
+    <strong>load-bearing when the backbone's residues have never been contrastively trained</strong> — it is the space
+    the objective actually optimised — and <strong>lossy when they have</strong>, because it bottlenecks representations
+    that 34.8M pairs of training had already shaped. That is why the same recipe reads as a triumph from vanilla ESM-2
+    and as a wash from ProtSent-V2, and it makes the head-size question the pilot's most valuable remaining knob for
+    one init and irrelevant for the other.</p>
+    <p>It also names the best configuration measured here, which no earlier revision contained:
+    <strong>ProtSent-V2 + late training, scored at native 480-D</strong> — superfamily eligible MAP .698, against
+    .683 for the untouched backbone and .672 for the shipped 64-D arm. It costs 1.5 GPU-h and a 154× index rather than
+    a 20.6× one.</p>
+  </div>
+</section>
+
+<section id="cath">
+  <div class="sec-head"><span class="tick"></span><h2>CATH midnight zone: the harder test</h2></div>
+  <div class="prose">
+    <p>SCOPe-40 is a self-retrieval benchmark on 2.2k domains. The CATH v4.3 "midnight zone" set from the ProtTucker
+    paper is the sterner one: 150 queries whose homologues are <em>not</em> findable by sequence alignment, transferred
+    1-nearest-neighbour from a 69,605-domain lookup set at the H (superfamily) level. Alignment scores 34.7 here; the
+    dense numbers are the published CATH table (<code>results/benchmarks/cath_eat/</code>, EAT protocol, validated against ProtTucker's published MMseqs2 number: 34.7 here against 35), and the MaxSim rows are new.</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Arm</th><th>Scoring</th><th class="num">H accuracy</th><th class="num">Correct / 150</th><th class="num">vs its own dense arm</th></tr></thead>
+      <tbody>
+        <tr class="baseline"><td>HMMER, CATH-Gene3D profile HMMs <span class="dim">(published)</span></td><td>profile alignment</td><td class="num">77</td><td class="num dim">—</td><td class="num dim">—</td></tr>
+        <tr class="baseline"><td>ProtTucker <span class="dim">(published, ProtT5-based)</span></td><td>contrastive embedding, EAT</td><td class="num">76</td><td class="num dim">—</td><td class="num dim">—</td></tr>
+        <tr class="baseline"><td>MMseqs2 <span class="dim">(published; 34.7 measured here)</span></td><td>alignment</td><td class="num">35</td><td class="num dim">—</td><td class="num dim">—</td></tr>
+        <tr class="group"><td colspan="5">One pipeline, one invocation, identical query order — every pair below is McNemar-testable</td></tr>
+        <tr><td>ESM-2</td><td>pooled cosine</td><td class="num">43.3</td><td class="num">65</td><td class="num dim">—</td></tr>
+        <tr><td>ESM-2 + MaxSim</td><td>MaxSim 480-D</td><td class="num">54.7</td><td class="num">82</td><td class="num pos">+11.3 <span class="dim">p=.002</span></td></tr>
+        <tr><td>ESM-2-Late (64-D)</td><td>MaxSim 64-D</td><td class="num">59.3</td><td class="num">89</td><td class="num pos">+16.0 <span class="dim">p&lt;.001</span></td></tr>
+        <tr><td>ESM-2-Late (480-D)</td><td>MaxSim 480-D</td><td class="num">59.3</td><td class="num">89</td><td class="num pos">+16.0 <span class="dim">p&lt;.001</span></td></tr>
+        <tr><td>ProtSent-V2</td><td>pooled cosine</td><td class="num">56.7</td><td class="num">85</td><td class="num dim">—</td></tr>
+        <tr><td><strong>ProtSent-V2 + MaxSim</strong></td><td>MaxSim 480-D</td><td class="num best">61.3</td><td class="num">92</td><td class="num dim">+4.7 <span class="dim">p=.10, n.s.</span></td></tr>
+        <tr><td>ProtSent-Late (64-D)</td><td>MaxSim 64-D</td><td class="num">58.0</td><td class="num">87</td><td class="num dim">+1.3 <span class="dim">n.s.</span></td></tr>
+        <tr><td>ProtSent-Late (480-D)</td><td>MaxSim 480-D</td><td class="num">60.0</td><td class="num">90</td><td class="num dim">+3.3 <span class="dim">n.s.</span></td></tr>
+      </tbody>
+      <caption><strong>Read the top three rows first: every arm here is far below the published state of the art.</strong>
+      CATH-Gene3D profile HMMER scores 77 and ProtTucker 76 at H; our best is 61.3. This table compares small
+      ESM-2-based models; it is not a claim against alignment.
+      <br><br>All eight arms were rescored in one invocation so the query order is identical by construction and every
+      comparison is paired (McNemar, <code>cath_mcnemar.txt</code>). That replaced an earlier cross-protocol
+      comparison, and it cost the headline 2.6 points: ESM-2's published EAT number (euclidean 1-NN, 40.7) versus the
+      same pipeline's cosine (43.3) is <em>pure protocol</em>, so the old "+14.0" is really <strong>+2.6 protocol and
+      +11.3 real</strong>. On ProtSent-V2 the two scoring rules agree to a hundredth of a point — a well-conditioned
+      embedding space is indifferent to cosine-versus-euclidean, a raw one is not.
+      <br><br><strong>Only comparisons involving the ESM-2 dense arm reach significance.</strong> At n=150 every
+      trained-vs-untrained and every head-size pair lands between p=.23 and p=1.00 — including 64-D vs 480-D, which
+      differ on 8 queries here (p=.72) while SCOPe measures that same gap at +.077 MAP with ten times the queries.
+      CATH corroborates; SCOPe carries the inference.</caption>
+    </table>
+  </div>
+</section>
+
+<section id="fewshot">
+  <div class="sec-head"><span class="tick"></span><h2>Few-shot remote homology</h2></div>
+  <div class="prose">
+    <p>A third retrieval-style test, and the one closest to how a practitioner would actually use these models: label a
+    protein by voting among its three nearest neighbours in a small labelled gallery. Every row here is MaxSim or
+    cosine directly — no probe is trained.</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Arm</th><th class="num">N=500 acc</th><th class="num">N=1000 acc</th><th class="num">N=1000 F1 macro</th></tr></thead>
+      <tbody>
+        <tr><td>ESM-2</td><td class="num">.329</td><td class="num">.406</td><td class="num">.156</td></tr>
+        <tr><td>ESM-2 + MaxSim</td><td class="num">.363</td><td class="num">.440</td><td class="num">.193</td></tr>
+        <tr><td><strong>ESM-2-Late (64-D)</strong></td><td class="num best">.457</td><td class="num best">.548</td><td class="num">.218</td></tr>
+        <tr><td>ProtSent-V2</td><td class="num">.426</td><td class="num">.512</td><td class="num">.201</td></tr>
+        <tr><td>ProtSent-V2 + MaxSim</td><td class="num">.453</td><td class="num">.546</td><td class="num best">.226</td></tr>
+        <tr><td>ProtSent-Late (64-D)</td><td class="num">.454</td><td class="num">.537</td><td class="num">.209</td></tr>
+      </tbody>
+      <caption>Fold prediction, test split, one gallery draw per budget. The N=100 column is omitted: this project's five-seed runs of the same task
+      (<code>results/benchmarks/fewshot_seeds.json</code>) show ±.005–.010 there, wider than any gap it contains. Note the
+      F1 column — on a 1,195-class task with a long tail, accuracy runs ~2.5× higher than macro-F1, so the accuracy
+      figures flatter every arm equally and the ordering is what to read.</caption>
+    </table>
+  </div>
+</section>
+
+<section id="curve">
+  <div class="sec-head"><span class="tick"></span><h2>How fast the training saturates</h2></div>
+  <div class="prose">
+    <p>SCOPe superfamily MAP scored at every checkpoint. Both arms converge to the same place and are essentially flat
+    after ~1,500 steps. The runs consumed 512k of the 4.8M pairs built, so this is not exhaustion — but the pair build
+    took the <em>group-sorted prefix</em> of AFDB and STRING, so the training pairs came from a narrow slice of clusters.
+    Diversity, not volume, is the open question.</p>
+  </div>
+  <figure>
+    <svg viewBox="0 0 720 300" role="img" aria-label="SCOPe superfamily MAP against training step for both arms; ESM-2-Late rises from 0.44 to 0.67, ProtSent-Late from 0.61 to 0.67, both flat after step 1500.">
+      <g stroke="var(--rule)" stroke-width="1">
+        <line x1="60" y1="250" x2="700" y2="250"/>
+        <line x1="60" y1="188" x2="700" y2="188" stroke-dasharray="3 5"/>
+        <line x1="60" y1="126" x2="700" y2="126" stroke-dasharray="3 5"/>
+        <line x1="60" y1="64" x2="700" y2="64" stroke-dasharray="3 5"/>
+      </g>
+      <g fill="var(--ink-faint)" font-family="IBM Plex Mono, monospace" font-size="11">
+        <text x="24" y="254">.40</text><text x="24" y="192">.50</text><text x="24" y="130">.60</text><text x="24" y="68">.70</text>
+        <g text-anchor="middle">
+          <text x="60" y="272">0</text><text x="220" y="272">500</text><text x="380" y="272">1000</text>
+          <text x="540" y="272">1500</text><text x="700" y="272">2000</text>
+        </g>
+        <text x="380" y="292" fill="var(--ink-soft)" text-anchor="middle">training step</text>
+      </g>
+      <!-- ProtSent-V2 zero-shot MaxSim reference: .6831 -->
+      <line x1="60" y1="75" x2="700" y2="75" stroke="var(--ink-faint)" stroke-width="1" stroke-dasharray="6 4"/>
+      <text x="66" y="70" fill="var(--ink-faint)" font-family="Public Sans, sans-serif" font-size="11">ProtSent-V2 + MaxSim, no late head (.683)</text>
+      <!-- ProtSent-Late: .6056 .6127 .6481 .6611 .6658 .6684 .6719 .6721 .6721 -->
+      <polyline fill="none" stroke="var(--ink-soft)" stroke-width="2.5" stroke-linejoin="round"
+        points="60,122 140,118 220,96 300,88 380,85 460,83 540,81 620,81 700,81"/>
+      <!-- ESM-2-Late: .4415 .5865 .6406 .6573 .6620 .6652 .6717 .6700 .6705 -->
+      <polyline fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"
+        points="60,224 140,134 220,101 300,90 380,88 460,86 540,81 620,82 700,82"/>
+      <g>
+        <circle cx="700" cy="82" r="4" fill="var(--accent)"/>
+        <circle cx="700" cy="81" r="4" fill="var(--ink-soft)"/>
+      </g>
+      <g font-family="Public Sans, sans-serif" font-size="12.5">
+        <text x="150" y="222" fill="var(--accent)">ESM-2-Late (64-D)</text>
+        <text x="150" y="112" fill="var(--ink-soft)">ProtSent-Late (64-D)</text>
+      </g>
+    </svg>
+    <figcaption>SCOPe-40 superfamily MAP, eligible queries; y-axis truncated at .40. ProtSent starts high because its
+    backbone is already contrastively trained; the fresh random 64-D head costs it ~.08 MAP at step 0. Training recovers
+    most but not all of that: .648 by step 500, .672 at the end — still −.011 [−.015, −.007] below the untrained
+    480-D MaxSim it started from.</figcaption>
+  </figure>
+</section>
+
+<section id="pooled">
+  <div class="sec-head"><span class="tick"></span><h2>Did the backbone survive? It depends on the probe</h2></div>
+  <div class="prose">
+    <p>The foundation-model question: after late training, is the ordinary mean-pooled 480-D embedding still good?
+    Same protocol for every arm — ProtBench fast suite, test split, seed 42, 20k-sample cap — run twice, once with a
+    KNN probe (k=3) and once with a linear probe. The two are reported side by side and never averaged, because they
+    disagree, and the disagreement is the finding.</p>
+    <p>Five rows are excluded from the tallies because ProtBench forces a linear probe for them in <em>both</em> passes
+    (EC classification and secondary structure are multilabel/token-level; the three SCOPe rows are retrieval, and are
+    the benchmark the late head was trained to win anyway). That leaves <strong>13 comparable transfer tasks</strong>.</p>
+  </div>
+  <div class="cards">
+    <div class="card"><span class="k">KNN probe (k=3)</span><span class="v">4 W / 5 T / 4 L</span>
+      <span class="n">ProtSent-Late vs ProtSent-V2 — neutral. ESM-2-Late vs ESM-2: 7 / 1 / 5</span></div>
+    <div class="card"><span class="k">Linear probe</span><span class="v">10 W / 2 T / 1 L</span>
+      <span class="n">ProtSent-Late vs ProtSent-V2 — clearly improved. ESM-2-Late vs ESM-2: 7 / 2 / 4</span></div>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr>
+        <th rowspan="2">Transfer task</th><th rowspan="2">Metric</th>
+        <th class="num" colspan="3">KNN probe</th><th class="num" colspan="3">Linear probe</th></tr>
+        <tr><th class="num">ESM-2 → Late</th><th class="num">Δ</th><th class="num">ProtSent → Late</th>
+            <th class="num">ESM-2 → Late</th><th class="num">Δ</th><th class="num">ProtSent → Late (Δ)</th></tr></thead>
+      <tbody>
+        <tr><td>Stability (Biomap)</td><td>Spearman</td>
+          <td class="num">.399 → .237</td><td class="num neg">−.162</td><td class="num">.476 → .431 <span class="neg">(−.045)</span></td>
+          <td class="num">.437 → .417</td><td class="num neg">−.020</td><td class="num">.396 → <strong>.468</strong> <span class="pos">(+.072)</span></td></tr>
+        <tr><td>β-lactamase (PEER)</td><td>Spearman</td>
+          <td class="num">.738 → .683</td><td class="num neg">−.054</td><td class="num">.706 → .711 <span class="dim">(+.005)</span></td>
+          <td class="num">.735 → .692</td><td class="num neg">−.043</td><td class="num">.635 → .656 <span class="pos">(+.020)</span></td></tr>
+        <tr><td>Variant Effect (GB1)</td><td>Spearman</td>
+          <td class="num">.663 → .716</td><td class="num pos">+.053</td><td class="num">.778 → .758 <span class="neg">(−.021)</span></td>
+          <td class="num">.844 → .853</td><td class="num pos">+.009</td><td class="num">.846 → .852 <span class="pos">(+.006)</span></td></tr>
+        <tr><td>Fluorescence (TAPE)</td><td>Spearman</td>
+          <td class="num">.360 → .414</td><td class="num pos">+.053</td><td class="num">.457 → .460 <span class="dim">(+.003)</span></td>
+          <td class="num">.588 → .613</td><td class="num pos">+.025</td><td class="num">.588 → .616 <span class="pos">(+.028)</span></td></tr>
+        <tr><td>Remote Homology (Fold)</td><td>F1 macro</td>
+          <td class="num">.319 → .346</td><td class="num pos">+.028</td><td class="num">.409 → .405 <span class="dim">(−.004)</span></td>
+          <td class="num">.364 → .375</td><td class="num pos">+.011</td><td class="num">.417 → .411 <span class="neg">(−.006)</span></td></tr>
+        <tr><td>Peptide-HLA Binding</td><td>F1 macro</td>
+          <td class="num">.668 → .714</td><td class="num pos">+.046</td><td class="num">.710 → .715 <span class="dim">(+.005)</span></td>
+          <td class="num">.782 → .816</td><td class="num pos">+.034</td><td class="num">.775 → .792 <span class="pos">(+.017)</span></td></tr>
+        <tr><td>Subcellular Localisation</td><td>F1 macro</td>
+          <td class="num">.494 → .511</td><td class="num pos">+.017</td><td class="num">.536 → .522 <span class="neg">(−.013)</span></td>
+          <td class="num">.561 → .592</td><td class="num pos">+.031</td><td class="num">.520 → .552 <span class="pos">(+.032)</span></td></tr>
+        <tr><td>PPI (Bernett gold)</td><td>F1 macro</td>
+          <td class="num">.543 → .552</td><td class="num pos">+.009</td><td class="num">.559 → .569 <span class="pos">(+.011)</span></td>
+          <td class="num">.501 → .511</td><td class="num pos">+.010</td><td class="num">.523 → .537 <span class="pos">(+.014)</span></td></tr>
+        <tr><td>Solubility (DeepSol)</td><td>F1 macro</td>
+          <td class="num">.558 → .557</td><td class="num dim">−.001</td><td class="num">.558 → .570 <span class="pos">(+.012)</span></td>
+          <td class="num">.601 → .612</td><td class="num pos">+.011</td><td class="num">.618 → .619 <span class="dim">(+.001)</span></td></tr>
+        <tr><td>Neuropeptide Precursor</td><td>F1 macro</td>
+          <td class="num">.904 → .894</td><td class="num neg">−.009</td><td class="num">.898 → .907 <span class="pos">(+.009)</span></td>
+          <td class="num">.925 → .928</td><td class="num dim">+.003</td><td class="num">.908 → <strong>.933</strong> <span class="pos">(+.025)</span></td></tr>
+        <tr><td>Signal Peptide</td><td>F1 macro</td>
+          <td class="num">.955 → .963</td><td class="num pos">+.008</td><td class="num">.965 → .967 <span class="dim">(+.003)</span></td>
+          <td class="num">.972 → .972</td><td class="num dim">+.000</td><td class="num">.969 → <strong>.972</strong> <span class="dim">(+.003)</span></td></tr>
+        <tr><td>Metal Ion Binding</td><td>F1 macro</td>
+          <td class="num">.745 → .730</td><td class="num neg">−.016</td><td class="num">.751 → .745 <span class="neg">(−.006)</span></td>
+          <td class="num">.717 → .707</td><td class="num neg">−.010</td><td class="num">.688 → .697 <span class="pos">(+.009)</span></td></tr>
+        <tr><td>Enzyme Catalytic Efficiency</td><td>Spearman</td>
+          <td class="num">.698 → .687</td><td class="num neg">−.011</td><td class="num">.667 → .670 <span class="dim">(+.003)</span></td>
+          <td class="num">.545 → .507</td><td class="num neg">−.038</td><td class="num">.500 → .512 <span class="pos">(+.012)</span></td></tr>
+      </tbody>
+      <caption>Ties are |Δ| &lt; 0.005. The headline is the Stability row: under KNN, late training looks like it
+      costs ProtSent .045 Spearman on stability prediction and costs ESM-2 .162; under a linear probe the ProtSent
+      loss becomes a <strong>+.072 gain</strong> and the ESM-2 loss shrinks eightfold to −.020. "Late training hurts fitness and
+      stability tasks" was largely a property of the KNN probe, not of the representation. The consistent reading
+      across both probes: late training leaves neighbourhood geometry roughly where it was while making more
+      information linearly decodable — the opposite of the retrieval-specialisation trade-off this pilot was watching
+      for. Single seed, single split, no confidence intervals: directional only.</caption>
+    </table>
+  </div>
+</section>
+
+<section id="asymmetry">
+  <div class="sec-head"><span class="tick"></span><h2>One thing we did not expect</h2></div>
+  <div class="prose">
+    <p>Query and document are encoded by the identical function here, so it is tempting to symmetrise the score
+    matrix. Doing it naively destroys the ranking: a raw MaxSim row's scale is the <em>query's</em> length, so averaging
+    with the transpose smuggles document length into the comparison. Length-normalising (MeanMaxSim) stops the collapse
+    but still costs every arm except the untouched ProtSent-V2, and costs the two trained arms most — −.275 and −.128
+    MAP:</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Family MAP, eligible</th><th class="num">MaxSim</th><th class="num">½(S + Sᵀ), raw</th><th class="num">½(S + Sᵀ), length-normalised</th></tr></thead>
+      <tbody>
+        <tr><td>ESM-2 + MaxSim</td><td class="num best">.545</td><td class="num neg">.025</td><td class="num">.468</td></tr>
+        <tr><td>ESM-2-Late (64-D)</td><td class="num best">.698</td><td class="num neg">.013</td><td class="num">.423</td></tr>
+        <tr><td>ProtSent-V2 + MaxSim</td><td class="num">.684</td><td class="num neg">.314</td><td class="num best">.687</td></tr>
+        <tr><td>ProtSent-Late (64-D)</td><td class="num best">.681</td><td class="num neg">.015</td><td class="num">.553</td></tr>
+      </tbody>
+      <caption>The directionality carries real signal — a short domain matching inside a long protein is a genuine
+      asymmetric relation, and averaging it away discards that. Trained arms rely on it more than untrained ones,
+      which is itself evidence that the contrastive objective's query/document roles shape the representation even when
+      both roles run the same encoder. Practical rule: score in one direction and keep it consistent.</caption>
+    </table>
+  </div>
+</section>
+
+<section id="caveats">
+  <div class="sec-head"><span class="tick"></span><h2>What this does not yet show</h2></div>
+  <ul class="prose">
+    <li><strong>One seed, one run per arm.</strong> The SCOPe comparisons carry paired bootstrap CIs over queries; the
+    transfer tables carry none at all. With a 0.005 tie threshold, read the tallies and the sign changes, not the third
+    decimal.</li>
+    <li><strong>Neither retrieval benchmark is decontaminated against the pretraining corpus.</strong> The identity
+    stratification above is the mitigation, not a clean split — the median SCOPe domain sits at 0.91 max identity to
+    training data.</li>
+    <li><strong>CATH is underpowered, and that is now measured rather than suspected.</strong> The cross-protocol
+    problem is fixed — all eight arms were rescored in one pipeline — but at 150 queries only comparisons involving the
+    ESM-2 dense arm reach significance. Every trained-vs-untrained and every head-size pair sits between p=.23 and
+    p=1.00, so CATH corroborates SCOPe rather than testing anything independently. Reporting its other levels (C/A/T,
+    ~219 answerable queries) would add breadth but not power at H, which is the level anyone cares about.
+    Separately, the SCOPe alignment baselines exist only at family level, not at the superfamily level declared primary
+    here.</li>
+    <li><strong>No hard-negative mining, one head size, one scale, one training corpus slice.</strong> In-batch
+    negatives only; 64-D and 128-D but nothing larger; 35M with 150M still training; and AFDB/STRING pairs drawn from
+    the group-sorted prefix of the corpus rather than sampled across it, so 2,000 steps saw a narrow slice of clusters.
+    Hard negatives are the largest untouched lever.</li>
+    <li><strong>Function coverage is thin, and this is V2 not V2.5.</strong> EC, metal-ion binding and catalytic
+    efficiency are in; GO-MF and CAFA5 are not, so "does late training hurt function prediction?" is half-answered.
+    The pilot also builds on ProtSent-V2 while the shipped small model is V2.5, so none of these numbers should be
+    quoted against V2.5 results. There is also no comparison against the PROTOCOL benchmark — different splits and relevance definitions.</li>
+  </ul>
+</section>
+
+<section id="next">
+  <div class="sec-head"><span class="tick"></span><h2>Running now, and what comes after</h2></div>
+  <div class="prose">
+    <p>Still running on three A100s:</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Job</th><th>Question it answers</th><th class="num">Cost</th><th>State</th></tr></thead>
+      <tbody>
+        <tr><td>ProtSent-V2-150M-Late · 5,000 steps</td><td>Does the scale story change at 150M?</td><td class="num">~5 GPU-h</td><td>running</td></tr>
+        <tr><td>ESM-2-150M-Late · 5,000 steps</td><td>Same recipe from vanilla, at 150M</td><td class="num">~5 GPU-h</td><td>running</td></tr>
+        <tr><td>128-D head vs 64-D (35M)</td><td>Is the head the bottleneck?</td><td class="num">~1.2 GPU-h</td><td>running</td></tr>
+        <tr><td>Pair-order swap ablation (35M)</td><td>Does the loss's query/document role matter on symmetric pairs?</td><td class="num">~1.2 GPU-h</td><td>queued</td></tr>
+        <tr><td>10,000-step runs, uncapped pair build</td><td>Plateau, or narrow pair diversity?</td><td class="num">~4.4 GPU-h each</td><td>queued</td></tr>
+        <tr><td>GO-MF function suite</td><td>The function gap above</td><td class="num">~2 GPU-h</td><td>queued last</td></tr>
+      </tbody>
+      <caption>Ranked by expected value, rewritten around the head-vs-backbone result:
+      <strong>(1) ship ProtSent-Late scored at 480-D.</strong> It is the best configuration measured, it needs no new
+      training, and it costs only a larger index. <strong>(2) The head-size ablation now has a sharp hypothesis</strong>
+      — 128-D should recover part of the .026 the 64-D head discards on a ProtSent backbone, and should matter far less
+      on ESM-2, where the head is already the trained space. That run is in the queue.
+      <strong>(3) hard-negative mining</strong>, still the largest untouched lever.
+      Dropped: "lower the backbone LR to avoid the stability regression" (a KNN-probe artefact) and "the projection is
+      lossy, use none" (true only for an already-contrastive backbone).</caption>
+    </table>
+  </div>
+</section>
+
+<footer class="prose">
+  <p>Measured on A100-80GBs · sentence-transformers 6.0.0 · torch 2.13 · transformers 5.14 · training on 2 GPUs per arm,
+  evaluation single-GPU · code on branch <code>LateInteractions</code>, SCOPe hierarchy metrics on ProtBench branch
+  <code>scope-hierarchy</code>. Every number here comes from a committed CSV or JSON under
+  <code>results/late_interaction/</code> and <code>results/benchmarks/</code>.</p>
+</footer>
+</div>

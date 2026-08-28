@@ -106,6 +106,11 @@ uv run --no-sync accelerate launch --num_processes "$NUM_PROCESSES" --mixed_prec
           "$DATA/afdb_sorted.parquet" \
           "$DATA/$STRING_FILE" \
   --loss_mode multi --multi_primary_loss "$PRIMARY_LOSS" \
+  `# pinned: the defaults changed after this run finished. --batch_sampler auto now
+   # resolves to NO_DUPLICATES for multi-task runs and --mnrl_directions defaults to
+   # symmetric, so without these two the script no longer reproduces the run RUNS.md
+   # attributes to it.` \
+  --batch_sampler none --mnrl_directions query_to_doc \
   --mnrl_mini_batch_size "$MINI_BATCH" \
   --multi_dataset_sampler proportional \
   --gor_weight 0.0 \

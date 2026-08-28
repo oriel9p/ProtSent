@@ -1,0 +1,2 @@
+protsent_late: step0 dense_view max|diff| = 0.00e+00 -> OK
+esm2_late: step0 dense_view max|diff| = 0.00e+00 -> OK

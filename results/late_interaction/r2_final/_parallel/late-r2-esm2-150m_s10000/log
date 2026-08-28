@@ -1,0 +1,16 @@
+2026-08-26 21:50:01,584 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-26 21:50:01,592 - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/OATML-Markslab/ProteinGym_v1/1ea2aa10a328cc085b64328e790c54755fe32b10/README.md "HTTP/1.1 200 OK"
+2026-08-26 21:50:01,770 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/ProteinGym_v1.py "HTTP/1.1 404 Not Found"
+2026-08-26 21:50:05,115 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/revision/1ea2aa10a328cc085b64328e790c54755fe32b10 "HTTP/1.1 200 OK"
+2026-08-26 21:50:05,288 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-08-26 21:50:05,469 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_indels%2Fdata?recursive=true&expand=false "HTTP/1.1 404 Not Found"
+2026-08-26 21:50:05,647 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10/DMS_indels?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-26 21:50:05,821 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/OATML-Markslab/ProteinGym_v1/tree/1ea2aa10a328cc085b64328e790c54755fe32b10?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-08-26 21:50:06,043 - INFO - HTTP Request: HEAD https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/1ea2aa10a328cc085b64328e790c54755fe32b10/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-08-26 21:51:03,341 - INFO - dms_indels: 66 assays, 287207 sequences to encode per model (0 variants dropped as invisible past the 1022-residue truncation)
+2026-08-26 21:51:03,346 - INFO - No device provided, using cuda:0
+2026-08-26 21:51:03,347 - INFO - Loading MultiVectorEncoder model from /opt/hpc/ddofer/ProtSent/models/late_interaction/late-r2-esm2-150m/snapshots/step-10000.
+Loading weights:   0%|          | 0/488 [00:00<?, ?it/s]Loading weights:  83%|████████▎ | 406/488 [00:00<00:00, 4057.71it/s]Loading weights: 100%|██████████| 488/488 [00:00<00:00, 3997.01it/s]
+2026-08-26 22:16:35,756 - WARNING - corrected average unavailable for these 66 groups: none matched DMS_substitutions.csv, which covers DMS_substitutions only. The row's mean_score still holds the plain mean.
+2026-08-26 22:16:35,757 - INFO - late-r2-esm2-150m_s10000 dms_indels: mean spearman 0.5317 (corrected avg nan) over 66 groups in 1532s
+2026-08-26 22:16:35,758 - INFO - wrote 1 rows -> /opt/hpc/ddofer/ProtSent/results/late_interaction/r2_final/_parallel/late-r2-esm2-150m_s10000/proteingym_maxsim.csv

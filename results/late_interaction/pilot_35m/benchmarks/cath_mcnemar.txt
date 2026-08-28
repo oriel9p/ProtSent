@@ -1,0 +1,40 @@
+8 arms, query alignment verified
+
+  esm2_dense                65/150  43.33%  +/- 7.9
+  esm2_late_480             89/150  59.33%  +/- 7.9
+  esm2_late_64              89/150  59.33%  +/- 7.9
+  esm2_maxsim_480           82/150  54.67%  +/- 8.0
+  protsent_late_480         90/150  60.00%  +/- 7.8
+  protsent_late_64          87/150  58.00%  +/- 7.9
+  protsent_v2_dense         85/150  56.67%  +/- 7.9
+  protsent_v2_maxsim_480    92/150  61.33%  +/- 7.8
+
+pair                                                   b   c  disc   chi2       p
+esm2_dense vs esm2_late_480                            5  29    34  15.56   0.000 *
+esm2_dense vs esm2_late_64                             4  28    32  16.53   0.000 *
+esm2_dense vs esm2_maxsim_480                          5  22    27   9.48   0.002 *
+esm2_dense vs protsent_late_480                        2  27    29  19.86   0.000 *
+esm2_dense vs protsent_late_64                         4  26    30  14.70   0.000 *
+esm2_dense vs protsent_v2_dense                        7  27    34  10.62   0.001 *
+esm2_dense vs protsent_v2_maxsim_480                   3  30    33  20.48   0.000 *
+esm2_late_480 vs esm2_late_64                          4   4     8   0.12   0.724
+esm2_late_480 vs esm2_maxsim_480                      16   9    25   1.44   0.230
+esm2_late_480 vs protsent_late_480                    11  12    23   0.00   1.000
+esm2_late_480 vs protsent_late_64                     14  12    26   0.04   0.845
+esm2_late_480 vs protsent_v2_dense                    16  12    28   0.32   0.571
+esm2_late_480 vs protsent_v2_maxsim_480               10  13    23   0.17   0.677
+esm2_late_64 vs esm2_maxsim_480                       18  11    29   1.24   0.265
+esm2_late_64 vs protsent_late_480                      9  10    19   0.00   1.000
+esm2_late_64 vs protsent_late_64                      13  11    24   0.04   0.838
+esm2_late_64 vs protsent_v2_dense                     15  11    26   0.35   0.556
+esm2_late_64 vs protsent_v2_maxsim_480                 9  12    21   0.19   0.663
+esm2_maxsim_480 vs protsent_late_480                  10  18    28   1.75   0.186
+esm2_maxsim_480 vs protsent_late_64                   12  17    29   0.55   0.458
+esm2_maxsim_480 vs protsent_v2_dense                  15  18    33   0.12   0.728
+esm2_maxsim_480 vs protsent_v2_maxsim_480             10  20    30   2.70   0.100
+protsent_late_480 vs protsent_late_64                  6   3     9   0.44   0.505
+protsent_late_480 vs protsent_v2_dense                11   6    17   0.94   0.332
+protsent_late_480 vs protsent_v2_maxsim_480            5   7    12   0.08   0.773
+protsent_late_64 vs protsent_v2_dense                  8   6    14   0.07   0.789
+protsent_late_64 vs protsent_v2_maxsim_480             4   9    13   1.23   0.267
+protsent_v2_dense vs protsent_v2_maxsim_480            3  10    13   2.77   0.096

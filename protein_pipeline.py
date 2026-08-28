@@ -7,10 +7,13 @@ A modular pipeline for downloading data and training Protein Sentence Transforme
 using Contrastive Learning and the sentence-transformers library.
 
 ## Key Features
-1.  **Hierarchical Hard Negatives**:
-    -   Implements "Clade-Aware" sorting (Clan -> Family) for Pfam.
-    -   Ensures structurally similar but functionally distinct proteins (Hard Negatives)
-        appear in the same batch, forcing the model to learn fine-grained evolutionary signals.
+1.  **Cluster-sorted corpora** (Clan -> Family for Pfam, cluster for AFDB):
+    -   Sorting exists so `_build_pair_dataset` can stream pairs from consecutive same-group
+        rows in O(1) memory. It does NOT shape batches: every training path shuffles the built
+        pair Dataset (``--pair_dataset_shuffle`` default True) and ST's default batch sampler
+        draws via RandomSampler. An earlier version of this docstring claimed the sorting put
+        related families in the same batch as hard negatives -- no run ever did that
+        (audited 2026-08-25).
 
 2.  **Native Multi-Dataset Training**:
     -   Uses sentence-transformers' native `dict[str, Dataset]` multi-dataset support
@@ -234,7 +237,7 @@ from model_utils import (
     get_torch_compile_settings,
     uses_hf_esm_rotary_embeddings,
 )
-from gor_loss import LossWithGOR
+from gor_loss import LossWithGOR, SubsampledLoss
 from static_guide import DEFAULT_STATIC_GUIDE_DIR, load_static_guide_model
 
 logging.basicConfig(
@@ -405,6 +408,90 @@ def _ensure_trainable_rotary_caches(model: nn.Module) -> None:
         logger.info(
             "   🔧 Cloned %d rotary cache tensor(s) out of inference mode", patched
         )
+
+
+def finalize_native_esm(word_embedding_model) -> None:
+    """Apply every post-load fix a native ESM-2 / ModernBERT backbone needs.
+
+    Six fixes that must travel together: pad-token reconciliation, rotary caches, ESM2
+    token_dropout, the unknown-residue fallback, vocab reconciliation and a tokenization smoke
+    test. They are a named set rather than inline code because they were once applied from
+    memory at two different construction sites, which disagreed on four of the six -- each
+    applying a fix the other lacked. There is one construction site again (the late-interaction
+    path now goes through ``load_model_for_training`` with ``model_kwargs``), and the name is
+    what keeps a second one from re-deriving the set by hand.
+
+    Every fix is idempotent, so calling it twice is safe. Call it AFTER the SentenceTransformer
+    wrapper is built: ``_ensure_trainable_rotary_caches`` has to run last so it catches caches
+    that construction left in inference mode.
+    """
+    hf_tokenizer = cast(Any, word_embedding_model.tokenizer)
+    if hf_tokenizer.pad_token is None:
+        if hf_tokenizer.eos_token is not None:
+            hf_tokenizer.pad_token = hf_tokenizer.eos_token
+            logger.info("   ⚠️  Pad token was None, set to EOS token.")
+        else:
+            hf_tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+            word_embedding_model.auto_model.resize_token_embeddings(len(hf_tokenizer))
+            logger.info("   ⚠️  Pad token was None, added '[PAD]' token.")
+
+    _ensure_trainable_rotary_caches(word_embedding_model.auto_model)
+
+    # Fix ESM2 token_dropout bug (HuggingFace transformers >=5.x)
+    disable_esm2_token_dropout(word_embedding_model.auto_model)
+
+    # 'J', '|' and '#' each took down a run or a benchmark task before this was installed.
+    patch_unknown_residue_tokens(hf_tokenizer)
+
+    # Validate tokenizer/model vocabulary consistency
+    tokenizer = hf_tokenizer
+    embedding_layer = word_embedding_model.auto_model.get_input_embeddings()
+    model_vocab_size = embedding_layer.num_embeddings
+    tokenizer_vocab_size = len(tokenizer)
+
+    logger.info(
+        f"   📊 Tokenizer vocab size: {tokenizer_vocab_size}, Model vocab size: {model_vocab_size}"
+    )
+
+    if tokenizer_vocab_size != model_vocab_size:
+        logger.warning(
+            f"   ⚠️  VOCAB MISMATCH DETECTED! Tokenizer: {tokenizer_vocab_size}, Model: {model_vocab_size}"
+        )
+        if tokenizer_vocab_size > model_vocab_size:
+            logger.info(
+                f"   🔧 Resizing model embeddings from {model_vocab_size} to {tokenizer_vocab_size}"
+            )
+            word_embedding_model.auto_model.resize_token_embeddings(
+                tokenizer_vocab_size
+            )
+            model_vocab_size = tokenizer_vocab_size
+        else:
+            logger.error(
+                "   ❌ Tokenizer vocab is smaller than model! This may indicate wrong tokenizer."
+            )
+
+    # Test tokenization
+    test_seq = "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEKAVQVKVKALPDAQFEVVHSLAKWKRQTLGQHDFSAGEGLYTHMKALRPDEDRLSLEVGN"
+    try:
+        test_tokens = tokenizer(test_seq, return_tensors="pt", truncation=True)
+        test_ids = test_tokens["input_ids"][0]
+        max_token_id = test_ids.max().item()
+        min_token_id = test_ids.min().item()
+
+        logger.info(
+            f"   🧪 Test tokenization: min_id={min_token_id}, max_id={max_token_id}, model_vocab={model_vocab_size}"
+        )
+
+        if max_token_id >= model_vocab_size:
+            raise ValueError(
+                f"Tokenizer produced out-of-bounds token ID {max_token_id} >= vocab_size {model_vocab_size}."
+            )
+        if min_token_id < 0:
+            raise ValueError(f"Tokenizer produced negative token ID {min_token_id}.")
+        logger.info("   ✅ Tokenization test passed")
+    except Exception as e:
+        logger.error(f"   ❌ Tokenization test failed: {e}")
+        raise
 
 
 def _is_distributed_launcher_active(world_size: int) -> bool:
@@ -785,6 +872,67 @@ def load_model_for_training(
     device: Optional[str] = None,
     pooling_mode: str = "mean",
     pooling_activation: str = "tanh",
+    model_kwargs: Optional[dict] = None,
+) -> SentenceTransformer:
+    """Load a model for training and enforce ``max_seq_length``.
+
+    The enforcement is not redundant. Every branch below hands
+    ``max_seq_length`` to ``models.Transformer``, but the custom-code backbones
+    then replace that module's tokenizer with their own, and FastPLM's ships
+    ``model_max_length`` = 1e24. sentence-transformers reads the truncation
+    limit off the tokenizer, so the requested value was silently discarded and
+    batches were padded to the longest sequence present — measured at 1,561
+    tokens on a 512-pair batch, which is what turns a 6 GiB contrastive step
+    into a 150 GiB one. Set it once here, after the model is fully assembled,
+    so no branch can drop it.
+
+    ``model_kwargs`` is forwarded to the underlying ``models.Transformer`` -- this is how the
+    late-interaction path pins an attention backend and bf16 weights. Native checkpoints only;
+    see ``_load_model_for_training``.
+    """
+    model = _load_model_for_training(
+        model_name,
+        max_seq_length=max_seq_length,
+        device=device,
+        pooling_mode=pooling_mode,
+        pooling_activation=pooling_activation,
+        model_kwargs=model_kwargs,
+    )
+    _enforce_max_seq_length(model, max_seq_length)
+    return model
+
+
+def _enforce_max_seq_length(model: SentenceTransformer, max_seq_length: int) -> None:
+    """Apply a truncation limit to an assembled SentenceTransformer.
+
+    Every path that builds a model for *training* must call this, not just the
+    fresh-load path: resuming from a checkpoint rebuilds the model with a bare
+    ``SentenceTransformer(dir)``, which reads the limit off the checkpoint's own
+    tokenizer and so reintroduces the bug for the resumed half of a run.
+
+    Sets the requested value in both directions. Tighten-only was wrong: a
+    checkpoint saved after this fix carries a 512 tokenizer, so resuming it at
+    --max_seq_length 1024 would have silently stayed at 512.
+
+    Deliberately unclamped. The obvious guard — clamp to the backbone's
+    ``max_position_embeddings`` — is worthless for the models trained here: ESM-2
+    is rotary, so its declared 1026 bounds nothing, while ESM++/ESM-C omit the
+    field entirely and AMPLIFY spells it ``max_length``. A guard that only fires
+    where the number is meaningless is worse than none. ST's own
+    ``Transformer.max_seq_length`` already applies what bound it can.
+    """
+    if max_seq_length > 0:
+        model.max_seq_length = max_seq_length
+    logger.info("   ✂️  max_seq_length enforced at %s", model.max_seq_length)
+
+
+def _load_model_for_training(
+    model_name: str,
+    max_seq_length: int = 512,
+    device: Optional[str] = None,
+    pooling_mode: str = "mean",
+    pooling_activation: str = "tanh",
+    model_kwargs: Optional[dict] = None,
 ) -> SentenceTransformer:
     """
     Robustly loads a model for SentenceTransformers training.
@@ -803,6 +951,18 @@ def load_model_for_training(
     logger.info(f"🏗️  Loading model: {model_name} (device={device})")
 
     model_type = detect_model_type(model_name)
+
+    # Refuse rather than ignore. Five of the six branches below build their backbone through a
+    # family-specific wrapper and then swap the module's model or tokenizer out from under it,
+    # so a forwarded attn_implementation or dtype would be dropped on the floor -- and a caller
+    # who believes it took effect is worse off than one told it cannot. resolve_attention gates
+    # on the same families, so in practice this only fires on a programming error.
+    if model_kwargs and model_type != "standard":
+        raise ValueError(
+            f"model_kwargs is only supported for native checkpoints, but {model_name} is "
+            f"{model_type!r}. Those load through a family-specific wrapper that would silently "
+            f"discard {sorted(model_kwargs)}."
+        )
 
     if model_type == "amplify":
         logger.info("   ✨ Using AMPLIFY strategy")
@@ -1006,21 +1166,10 @@ def load_model_for_training(
     word_embedding_model = models.Transformer(
         model_name,
         max_seq_length=max_seq_length,
-        model_args={"trust_remote_code": True},
-        tokenizer_args={"trust_remote_code": True},
+        model_kwargs={"trust_remote_code": True, **(model_kwargs or {})},
+        processor_kwargs={"trust_remote_code": True},
     )
-
-    hf_tokenizer = cast(Any, word_embedding_model.tokenizer)
-    if hf_tokenizer.pad_token is None:
-        if hf_tokenizer.eos_token is not None:
-            hf_tokenizer.pad_token = hf_tokenizer.eos_token
-            logger.info("   ⚠️  Pad token was None, set to EOS token.")
-        else:
-            hf_tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-            word_embedding_model.auto_model.resize_token_embeddings(len(hf_tokenizer))
-            logger.info("   ⚠️  Pad token was None, added '[PAD]' token.")
-
-    pooling_dimension = word_embedding_model.get_word_embedding_dimension()
+    pooling_dimension = word_embedding_model.get_embedding_dimension()
     pooling_model = _build_pooling_module(
         pooling_dimension,
         pooling_mode,
@@ -1032,61 +1181,7 @@ def load_model_for_training(
         trust_remote_code=True,
         device=device,
     )
-    _ensure_trainable_rotary_caches(word_embedding_model.auto_model)
-
-    # Fix ESM2 token_dropout bug (HuggingFace transformers >=5.x)
-    disable_esm2_token_dropout(word_embedding_model.auto_model)
-
-    # Validate tokenizer/model vocabulary consistency
-    tokenizer = cast(Any, word_embedding_model.tokenizer)
-    embedding_layer = word_embedding_model.auto_model.get_input_embeddings()
-    model_vocab_size = embedding_layer.num_embeddings
-    tokenizer_vocab_size = len(tokenizer)
-
-    logger.info(
-        f"   📊 Tokenizer vocab size: {tokenizer_vocab_size}, Model vocab size: {model_vocab_size}"
-    )
-
-    if tokenizer_vocab_size != model_vocab_size:
-        logger.warning(
-            f"   ⚠️  VOCAB MISMATCH DETECTED! Tokenizer: {tokenizer_vocab_size}, Model: {model_vocab_size}"
-        )
-        if tokenizer_vocab_size > model_vocab_size:
-            logger.info(
-                f"   🔧 Resizing model embeddings from {model_vocab_size} to {tokenizer_vocab_size}"
-            )
-            word_embedding_model.auto_model.resize_token_embeddings(
-                tokenizer_vocab_size
-            )
-            model_vocab_size = tokenizer_vocab_size
-        else:
-            logger.error(
-                "   ❌ Tokenizer vocab is smaller than model! This may indicate wrong tokenizer."
-            )
-
-    # Test tokenization
-    test_seq = "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEKAVQVKVKALPDAQFEVVHSLAKWKRQTLGQHDFSAGEGLYTHMKALRPDEDRLSLEVGN"
-    try:
-        test_tokens = tokenizer(test_seq, return_tensors="pt", truncation=True)
-        test_ids = test_tokens["input_ids"][0]
-        max_token_id = test_ids.max().item()
-        min_token_id = test_ids.min().item()
-
-        logger.info(
-            f"   🧪 Test tokenization: min_id={min_token_id}, max_id={max_token_id}, model_vocab={model_vocab_size}"
-        )
-
-        if max_token_id >= model_vocab_size:
-            raise ValueError(
-                f"Tokenizer produced out-of-bounds token ID {max_token_id} >= vocab_size {model_vocab_size}."
-            )
-        if min_token_id < 0:
-            raise ValueError(f"Tokenizer produced negative token ID {min_token_id}.")
-        logger.info("   ✅ Tokenization test passed")
-    except Exception as e:
-        logger.error(f"   ❌ Tokenization test failed: {e}")
-        raise
-
+    finalize_native_esm(word_embedding_model)
     logger.info(f"   ✅ Model loaded successfully (dim={pooling_dimension})")
     return model
 
@@ -1227,6 +1322,75 @@ class NoisySimCSECollator(SentenceTransformerDataCollator):
         input_ids[mask_positions] = mask_token_id
 
         return batch
+
+
+def _align_proportional_sampler_to_world_size(world_size: int) -> bool:
+    """Make every DDP rank draw the same dataset on the same step.
+
+    accelerate shards a batch sampler by handing rank i batches i, i+N, i+2N...
+    (``BatchSamplerShard._iter_with_no_split``). With a multi-dataset sampler
+    that means ranks routinely run *different* datasets on one step. That is
+    fine while every dataset shares a loss, and fatal the moment one does not:
+    CachedMNRL calls .backward() inside its own forward and CoSENT does not, so
+    the ranks emit different numbers of DDP gradient allreduces, their collective
+    streams drift apart, and NCCL's watchdog eventually aborts the job on a
+    type mismatch at the same sequence number:
+
+        Rank 0: SeqNum=14603, ALLREDUCE, NumelIn=9285184
+        Rank 1: SeqNum=14603, ALLGATHER, NumelIn=1, NumelOut=3
+
+    Reproduced five times on ESM-C 300M at 2 and 3 ranks, gather on and off,
+    machine load 107 to 722 -- always at step 11-20, which is what the ~5-7%
+    per-step chance of a mixed step predicts and what load does not.
+
+    Fix: emit batches in blocks of ``world_size`` from one dataset, so a rank's
+    slice of every block is that same dataset. Whole blocks only, so a dataset's
+    last (world_size - 1) batches at most are dropped -- single digits out of
+    ~21.6k. Returns False when there is nothing to patch.
+    """
+    if world_size <= 1:
+        return False
+    try:
+        from sentence_transformers.base.sampler import ProportionalBatchSampler
+        from torch.utils.data import SubsetRandomSampler
+    except ImportError:
+        logger.warning("Cannot align proportional sampler; leaving it unpatched.")
+        return False
+
+    def __iter__(self):
+        if self.generator and self.seed is not None:
+            self.generator.manual_seed(self.seed + self.epoch)
+
+        sample_offsets = [0]
+        for dataset in self.dataset.datasets:
+            sample_offsets.append(sample_offsets[-1] + len(dataset))
+
+        # One entry per whole block of world_size batches, shuffled as blocks and
+        # then expanded, so each run of world_size batches is one dataset.
+        blocks = [
+            idx
+            for idx, sampler in enumerate(self.batch_samplers)
+            for _ in range(len(sampler) // world_size)
+        ]
+        block_sampler = SubsetRandomSampler(blocks, generator=self.generator)
+
+        batch_samplers = [iter(sampler) for sampler in self.batch_samplers]
+        for dataset_idx in block_sampler:
+            sample_offset = sample_offsets[dataset_idx]
+            for _ in range(world_size):
+                try:
+                    yield [idx + sample_offset for idx in next(batch_samplers[dataset_idx])]
+                except StopIteration:
+                    break
+
+    ProportionalBatchSampler.__iter__ = __iter__
+    logger.info(
+        "🔒 Proportional sampler aligned to world_size=%d "
+        "(all ranks share a dataset per step; required when CoSENT and "
+        "CachedMNRL are interleaved under DDP)",
+        world_size,
+    )
+    return True
 
 
 def _resolve_dms_train_batch_size(
@@ -1549,10 +1713,49 @@ def _best_family_col_for_file(file_path: str) -> str:
     )
 
 
-def _resolve_batch_sampler(
-    batch_sampler: str,
-    loss_mode: str,
-) -> Optional[object]:
+MNRL_DIRECTIONS_DEFAULT = ("query_to_doc", "doc_to_query")
+
+
+def _mnrl_directions(args) -> tuple:
+    """Which InfoNCE interaction terms MNRL scores.
+
+    Default is symmetric. sentence-transformers defaults to ``("query_to_doc",)``
+    because its canonical task is asymmetric — a short query against a long
+    document. Every contrastive corpus here is symmetric instead: Pfam and AFDB
+    pairs are two members of one cluster, STRING pairs are two interacting
+    proteins, and neither column is privileged. The reverse term costs no extra
+    forward pass, the embeddings are already computed. V1/V2/V2.5 all trained
+    one-directional.
+
+    The fallback matches the argparse default rather than the library's, so a
+    caller that builds args programmatically gets the same loss as the CLI.
+    """
+    return tuple(getattr(args, "mnrl_directions", None) or MNRL_DIRECTIONS_DEFAULT)
+
+
+def _resolve_primary_loss(args) -> str:
+    """The contrastive loss ``--loss_mode multi`` will actually build."""
+    configured = getattr(args, "multi_primary_loss", "auto")
+    if configured == "auto":
+        return getattr(args, "multi_mnrl_loss", "mnrl")
+    return configured
+
+
+def _resolve_batch_sampler(batch_sampler: str, loss_mode: str) -> Optional[object]:
+    """Map a resolved loss to its sampler. Takes ``effective_loss``, never "multi".
+
+    ``auto`` deliberately does NOT select NO_DUPLICATES for the MNRL family, even
+    though the sentence-transformers docs pair the two. That recommendation assumes
+    a shuffled corpus; ours are cluster-sorted, and at k=8 each protein recurs in
+    several consecutive pairs, so NoDuplicatesBatchSampler rejects long runs while
+    trying to fill a batch. Measured on 4 B300s at batch 1024: **zero steps in 23
+    minutes at 0% GPU**, against 10 steps in 4m44s with the sampler off. It is a
+    hang, not a slowdown.
+
+    Both variants stay reachable through an explicit --batch_sampler. The hashed
+    one makes each check cheap but does not reduce how many checks a sorted corpus
+    forces, so it is opt-in and unmeasured here rather than a new default.
+    """
     if batch_sampler == "none":
         return None
     if BatchSamplers is None:
@@ -1562,14 +1765,13 @@ def _resolve_batch_sampler(
         return None
 
     if batch_sampler == "auto":
-        if loss_mode in {"mnrl", "cached_mnrl", "cached_gist", "gist"}:
-            return BatchSamplers.NO_DUPLICATES
         if loss_mode == "triplet":
             return BatchSamplers.GROUP_BY_LABEL
         return None
 
     mapping = {
         "no_duplicates": BatchSamplers.NO_DUPLICATES,
+        "no_duplicates_hashed": BatchSamplers.NO_DUPLICATES_HASHED,
         "group_by_label": BatchSamplers.GROUP_BY_LABEL,
     }
     return mapping.get(batch_sampler)
@@ -1786,7 +1988,8 @@ def _build_pair_dataset(
     max_pairs: int,
     hard_negatives: bool = False,
     length_labels: bool = False,
-    max_seq_length: int = 1024,
+    max_seq_length: int = 512,
+    pair_sampling: str = "disjoint",
 ) -> Dataset:
     """Build a pair Dataset using a generator over group-sorted data.
 
@@ -1805,9 +2008,23 @@ def _build_pair_dataset(
         file_paths: Parquet file paths (must be pre-sorted by group_col).
         seq_col: Column name for sequences.
         group_col: Column name for group/family labels.
-        max_pairs_per_cluster: Cap on sequences sampled per group.
+        max_pairs_per_cluster: Per-group budget, as the k in C(min(n, k), 2).
         max_pairs: Global cap on emitted pairs (0 = no limit).
         hard_negatives: If True, include hard negative columns when present.
+        pair_sampling: How a group's pair budget is spent over its members.
+            ``"disjoint"`` (default) shuffles the group and pairs members off
+            two at a time, reshuffling as needed, so the budget touches as many
+            distinct sequences as it can. ``"combinations"`` is the original
+            behaviour: sample k members, emit every C(k, 2) pair among them.
+            Both emit the same number of pairs per group, so switching does not
+            change the corpus size, the step count, or the schedule.
+
+            Measured on AFDB at k=8: ``combinations`` reuses each sampled
+            sequence in 7 pairs and reaches 5.7% of the corpus, because 97% of
+            sequences sit in groups larger than the cap and only 3.14% of those
+            members are ever drawn. ``disjoint`` spends the identical budget on
+            29.3% of the corpus. Use ``combinations`` to reproduce V1, V2 or
+            V2.5.
 
     Returns:
         HuggingFace Dataset with sentence_0, sentence_1,
@@ -1848,14 +2065,45 @@ def _build_pair_dataset(
         if has_neg:
             columns.append("hard_negative")
 
+        def _group_pairs(n: int):
+            """Index pairs for one group of n members, under the k budget.
+
+            Both modes emit the same count, C(min(n, k), 2), so the per-group
+            weighting that keeps a 303k-member cluster from swamping a 9-member
+            one is unchanged. They differ only in how many distinct members that
+            budget touches.
+            """
+            k = min(n, max_pairs_per_cluster)
+            budget = k * (k - 1) // 2
+            # At or under the cap the budget is every pair, so enumerate them.
+            # Disjoint pairing would spend the same budget with repeats -- a
+            # 3-member group yields one pair per shuffle, so three rounds can
+            # emit {01, 01, 02} and miss 12 entirely.
+            if n <= max_pairs_per_cluster or pair_sampling == "combinations":
+                yield from _comb(
+                    range(n) if n <= max_pairs_per_cluster else random.sample(range(n), k),
+                    2,
+                )
+                return
+            # Above the cap, pair members off two at a time from a shuffled
+            # order, so the budget touches min(2 * budget, n) distinct members
+            # instead of always k. Groups needing more than n // 2 pairs
+            # reshuffle, which repeats sequences but always with a new partner.
+            idx = list(range(n))
+            emitted = 0
+            while emitted < budget:
+                random.shuffle(idx)
+                for a_i, b_i in zip(idx[0::2], idx[1::2]):
+                    yield a_i, b_i
+                    emitted += 1
+                    if emitted >= budget:
+                        break
+
         def _flush_group():
             nonlocal total_pairs, skipped_null_neg
             if len(buf_seqs) < 2:
                 return
-            sample_idx = list(range(len(buf_seqs)))
-            if len(sample_idx) > max_pairs_per_cluster:
-                sample_idx = random.sample(sample_idx, max_pairs_per_cluster)
-            for a_i, b_i in _comb(sample_idx, 2):
+            for a_i, b_i in _group_pairs(len(buf_seqs)):
                 # A null hard negative must not become an empty sentence_2:
                 # MNRL pools every sentence_2 in the batch into the candidate
                 # set, so a "" would be a degenerate zero-residue negative that
@@ -2111,6 +2359,14 @@ def run_training(args):
     if loss_mode == "auto":
         loss_mode = "triplet" if (hierarchical or any_hierarchy) else "cached_mnrl"
 
+    # "multi" is a container, not a loss. Expand it here, once, next to the "auto"
+    # expansion above: every downstream test of the form `loss_mode in {...}` wants
+    # the contrastive loss that actually gets built, and each one that read the raw
+    # mode was silently dead for multi-task runs — the batch sampler resolved to
+    # None, and the cached-loss split logging plus its DDP warning never fired.
+    effective_loss = _resolve_primary_loss(args) if loss_mode == "multi" else loss_mode
+    mnrl_directions = _mnrl_directions(args)
+
     effective_rows = total_rows
     if args.max_map_rows > 0:
         effective_rows = min(total_rows, args.max_map_rows)
@@ -2145,7 +2401,16 @@ def run_training(args):
             "Use PFAM hierarchy data, or re-enable --triplet_use_group_id."
         )
 
-    batch_sampler = _resolve_batch_sampler(args.batch_sampler, loss_mode)
+    # A triplet primary under multi-task keeps the historical None:
+    # GroupByLabelBatchSampler raises when a dataset has no label column, and a
+    # multi-task dict mixes labelled and unlabelled datasets.
+    sampler_loss = "" if loss_mode == "multi" and effective_loss == "triplet" else effective_loss
+    batch_sampler = _resolve_batch_sampler(args.batch_sampler, sampler_loss)
+    if getattr(args, "length_bucketed_batches", False) and args.batch_sampler == "auto":
+        # Explicit bucketing beats an auto-resolved sampler: they set the same
+        # training_kwargs key, and the compatibility check below would otherwise
+        # turn every bucketed multi-task run into a hard error.
+        batch_sampler = None
     if (
         BatchSamplers is not None
         and batch_sampler == BatchSamplers.GROUP_BY_LABEL
@@ -2171,7 +2436,7 @@ def run_training(args):
             args.length_bucket_size,
         )
 
-    if loss_mode in {"cached_mnrl", "cached_gist"}:
+    if effective_loss in {"cached_mnrl", "cached_gist"}:
         cache_splits = (args.batch_size + args.mnrl_mini_batch_size - 1) // max(
             1, args.mnrl_mini_batch_size
         )
@@ -2223,6 +2488,10 @@ def run_training(args):
         logger.info("⏳ Loading model from checkpoint...")
         model = SentenceTransformer(resume_from_checkpoint, trust_remote_code=True)
         logger.info("✅ Model loaded from checkpoint")
+        # Checkpoints carry the backbone's own tokenizer, and FastPLM's declares
+        # model_max_length = 1e24, so without this a resumed run trains untruncated
+        # while the first half of the same run did not.
+        _enforce_max_seq_length(model, args.max_seq_length)
         # Ensure rotary caches are trainable (ESM2 inference mode fix)
         _ensure_trainable_rotary_caches(model)
     else:
@@ -2454,12 +2723,25 @@ def run_training(args):
         dims = sorted([d for d in dims_set if d <= native_dim])
 
         logger.info(f"🪆 Applying MatryoshkaLoss with dimensions: {dims}")
+
+        def _wrap(inner: nn.Module) -> nn.Module:
+            # Matryoshka must sit *inside* the GOR wrapper, never outside it.
+            # MatryoshkaLoss dispatches on the loss it is given: for a Cached*
+            # loss it decorates calculate_loss and the backbone runs once, but
+            # for anything else it decorates SentenceTransformer.forward with an
+            # index-keyed cache. GOR's own forward pass then desynchronises that
+            # index and CachedMNRL's backward hook dies with "inconsistent
+            # tensor size, expected tensor [122880] and src [16384]".
+            if isinstance(inner, LossWithGOR):
+                inner.base_loss = losses.MatryoshkaLoss(
+                    model, inner.base_loss, matryoshka_dims=dims
+                )
+                return inner
+            return losses.MatryoshkaLoss(model, inner, matryoshka_dims=dims)
+
         if isinstance(loss_obj, dict):
-            return {
-                k: losses.MatryoshkaLoss(model, v, matryoshka_dims=dims)
-                for k, v in loss_obj.items()
-            }
-        return losses.MatryoshkaLoss(model, loss_obj, matryoshka_dims=dims)
+            return {k: _wrap(v) for k, v in loss_obj.items()}
+        return _wrap(loss_obj)
 
     gor_weight = float(getattr(args, "gor_weight", 0.0) or 0.0)
     if gor_weight < 0:
@@ -2476,6 +2758,8 @@ def run_training(args):
             loss_obj,
             gor_weight=gor_weight,
             mini_batch_size=mini_batch_size,
+            max_samples=args.gor_max_samples,
+            mean_weight=args.gor_mean_weight,
         )
 
     # ── Build datasets & loss, then train ────────────────────────────────
@@ -2508,6 +2792,7 @@ def run_training(args):
                     seq_col=seq_col,
                     group_col=group_col,
                     max_pairs_per_cluster=args.max_pairs_per_cluster,
+                    pair_sampling=args.pair_sampling,
                     max_pairs=per_file_max,
                     hard_negatives=args.hard_negatives,
                     length_labels=args.length_bucketed_batches,
@@ -2545,6 +2830,7 @@ def run_training(args):
                     seq_col=seq_col,
                     group_col=group_col,
                     max_pairs_per_cluster=args.max_pairs_per_cluster,
+                    pair_sampling=args.pair_sampling,
                     max_pairs=args.max_map_rows,
                     hard_negatives=args.hard_negatives,
                     length_labels=args.length_bucketed_batches,
@@ -2600,6 +2886,7 @@ def run_training(args):
                 similarity_fct=similarity_fct,
                 mini_batch_size=args.mnrl_mini_batch_size,
                 gather_across_devices=_gather_across_devices,
+                directions=mnrl_directions,
             )
         else:
             loss = losses.MultipleNegativesRankingLoss(
@@ -2607,6 +2894,7 @@ def run_training(args):
                 scale=mnrl_scale,
                 similarity_fct=similarity_fct,
                 gather_across_devices=_gather_across_devices,
+                directions=mnrl_directions,
             )
 
         loss = _apply_gor(loss)
@@ -2727,11 +3015,7 @@ def run_training(args):
                 return max(1, args.max_map_rows // max(1, len(files)))
             return 0
 
-        configured_primary = getattr(args, "multi_primary_loss", "auto")
-        legacy_mnrl = getattr(args, "multi_mnrl_loss", "mnrl")
-        primary_loss = (
-            legacy_mnrl if configured_primary == "auto" else configured_primary
-        )
+        primary_loss = _resolve_primary_loss(args)
         allowed_primary = {"mnrl", "cached_mnrl", "triplet", "gist", "cached_gist"}
         if primary_loss not in allowed_primary:
             raise ValueError(
@@ -2742,7 +3026,7 @@ def run_training(args):
         logger.info(
             "🎛️ Multi-task primary loss resolved: %s (legacy multi_mnrl_loss=%s)",
             primary_loss,
-            legacy_mnrl,
+            getattr(args, "multi_mnrl_loss", "mnrl"),
         )
 
         # Similarity function for MNRL variants.
@@ -2779,6 +3063,7 @@ def run_training(args):
                         similarity_fct=similarity_fct,
                         mini_batch_size=args.mnrl_mini_batch_size,
                         gather_across_devices=_gather_across_devices,
+                        directions=mnrl_directions,
                     )
                 )
             if primary_loss == "mnrl":
@@ -2788,6 +3073,7 @@ def run_training(args):
                         scale=mnrl_scale,
                         similarity_fct=similarity_fct,
                         gather_across_devices=_gather_across_devices,
+                        directions=mnrl_directions,
                     )
                 )
             if primary_loss == "cached_gist":
@@ -2871,6 +3157,7 @@ def run_training(args):
                         seq_col=seq_col,
                         group_col=group_col,
                         max_pairs_per_cluster=args.max_pairs_per_cluster,
+                        pair_sampling=args.pair_sampling,
                         max_pairs=_pair_cap_for_file(f),
                         hard_negatives=args.hard_negatives,
                         length_labels=args.length_bucketed_batches,
@@ -2926,17 +3213,26 @@ def run_training(args):
                 dms_ds = _load_dms_dataset(args.dms_file, max_rows=args.dms_max_rows)
                 local_train_ds["dms_cosent"] = dms_ds
                 try:
-                    local_loss_dict["dms_cosent"] = losses.CoSENTLoss(
+                    cosent_loss: nn.Module = losses.CoSENTLoss(
                         model,
                         scale=mnrl_scale,
                         gather_across_devices=_gather_across_devices,
                     )
                 except TypeError:
-                    local_loss_dict["dms_cosent"] = losses.CoSENTLoss(model, scale=mnrl_scale)
+                    cosent_loss = losses.CoSENTLoss(model, scale=mnrl_scale)
+                # CoSENT has no gradient cache: it embeds and backpropagates the
+                # whole batch at once, and DMS sequences are the longest in the
+                # corpus (median 448 residues against a 512-token truncation). At
+                # the batch sizes CachedMNRL is run at, that alone exhausts a
+                # 267 GiB B300. Cap it at the mini-batch that the contrastive path
+                # is already tuned to fit in one grad-enabled forward.
+                cosent_cap = max(1, args.mnrl_mini_batch_size)
+                local_loss_dict["dms_cosent"] = SubsampledLoss(cosent_loss, cosent_cap)
                 logger.info(
-                    "📦 dms_cosent: %d pairs (CoSENTLoss, target_bs=%d, scale=%.1f)",
+                    "📦 dms_cosent: %d pairs (CoSENTLoss, target_bs=%d, cap=%d, scale=%.1f)",
                     len(dms_ds),
                     args.dms_batch_size,
+                    cosent_cap,
                     mnrl_scale,
                 )
             elif args.dms_file:
@@ -3016,6 +3312,12 @@ def run_training(args):
             )
             training_kwargs["multi_dataset_batch_sampler"] = chosen
             logger.info("🎯 Multi-dataset sampler: %s", chosen)
+            # Only PROPORTIONAL is patched, and only when a non-CachedMNRL loss
+            # shares the interleave -- that is the combination that desyncs DDP.
+            if chosen == MultiDatasetBatchSamplers.PROPORTIONAL and (
+                "dms_cosent" in train_dataset
+            ):
+                _align_proportional_sampler_to_world_size(world_size)
         except ImportError:
             logger.warning("MultiDatasetBatchSamplers not available; using default.")
 
@@ -3365,9 +3667,11 @@ if __name__ == "__main__":
     )
     train_cmd.add_argument(
         "--batch_sampler",
-        choices=["auto", "no_duplicates", "group_by_label", "none"],
+        choices=["auto", "no_duplicates", "no_duplicates_hashed", "group_by_label", "none"],
         default="auto",
-        help="Batch sampler selection (map mode only)",
+        help="Batch sampler (map mode only). auto picks GROUP_BY_LABEL for triplet "
+        "and nothing otherwise: no_duplicates hangs on cluster-sorted corpora "
+        "(0 steps in 23 min, measured), so it is opt-in.",
     )
     train_cmd.add_argument(
         "--multi_dataset_sampler",
@@ -3480,14 +3784,49 @@ if __name__ == "__main__":
         "as pushing them apart can hurt performance.",
     )
     train_cmd.add_argument(
+        "--mnrl_directions",
+        nargs="+",
+        default=list(MNRL_DIRECTIONS_DEFAULT),
+        choices=["query_to_doc", "query_to_query", "doc_to_query", "doc_to_doc"],
+        help="InfoNCE interaction terms for (Cached)MNRL. Default is symmetric, which "
+        "suits this data: both columns of a pair are proteins drawn the same way. "
+        "Pass just query_to_doc to reproduce V1/V2/V2.5.",
+    )
+    train_cmd.add_argument(
         "--gor_weight",
         type=float,
         default=0.0,
-        help="Optional GlobalOrthogonalRegularizationLoss weight for contrastive losses "
-        "(requires sentence-transformers>=5.3.0). Use 0 to disable; start with 0.1.",
+        help="Outer multiplier on GlobalOrthogonalRegularizationLoss for contrastive "
+        "losses (requires sentence-transformers>=5.3.0). 0 disables. The GOR paper "
+        "(1708.06320) uses 1.0; V2.5 ran 0.1 and moved geometry but no task metric.",
+    )
+    train_cmd.add_argument(
+        "--gor_max_samples",
+        type=int,
+        default=192,
+        help="Rows per column GOR estimates from. The second-moment term is a tail "
+        "statistic and converges slowly, so this trades accuracy for an extra "
+        "grad-enabled forward pass. 0 uses the whole batch.",
+    )
+    train_cmd.add_argument(
+        "--gor_mean_weight",
+        type=float,
+        default=1.0,
+        help="Weight on GOR's mean term. EmbeddingGemma (2509.20354) sets this to 0, "
+        "keeping only the second moment.",
     )
     train_cmd.add_argument("--max_files", type=int, default=0)
     train_cmd.add_argument("--max_pairs_per_cluster", type=int, default=30)
+    train_cmd.add_argument(
+        "--pair_sampling",
+        choices=["disjoint", "combinations"],
+        default="disjoint",
+        help="How a cluster's pair budget is spent over its members. Both emit "
+        "C(min(n, k), 2) pairs per cluster, so this changes neither corpus size "
+        "nor step count. disjoint pairs members off two at a time and reaches "
+        "29%% of AFDB at k=8; combinations draws k members and emits every pair "
+        "among them, reaching 5.7%%. Use combinations to reproduce V1/V2/V2.5.",
+    )
     train_cmd.add_argument(
         "--gradient_checkpointing",
         action="store_true",

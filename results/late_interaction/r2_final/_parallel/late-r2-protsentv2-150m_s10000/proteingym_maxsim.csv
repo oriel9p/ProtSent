@@ -1,0 +1,3 @@
+aggregation,cap,ci95,corrected_average,dataset_revision,kind,mean_score,metric,model,n_assays,n_boot,n_variants_dropped_truncated,n_variants_scored,path,proj_dim,runtime_s,scoring,variant
+per_group_mean,0,"[0.3278, 0.3724]",0.3426,unpinned,late,0.34930265215083395,spearman,late-r2-protsentv2-150m_s10000,214,1000,3675,2459339,/opt/hpc/ddofer/ProtSent/models/late_interaction/late-r2-protsentv2-150m/snapshots/step-10000,-1,6586.2,maxsim,dms_substitutions
+per_group_mean,0,"[0.4951, 0.5812]",nan,unpinned,late,0.5377858220262081,spearman,late-r2-protsentv2-150m_s10000,66,1000,0,287207,/opt/hpc/ddofer/ProtSent/models/late_interaction/late-r2-protsentv2-150m/snapshots/step-10000,-1,1517.8,maxsim,dms_indels
