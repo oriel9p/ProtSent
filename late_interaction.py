@@ -43,6 +43,13 @@ from sentence_transformers.multi_vector_encoder.modules import MultiVectorMask  
 logger = logging.getLogger(__name__)
 
 SPECIAL_TOKENS = ("<cls>", "<eos>")  # ESM-2 / FastPLM tokenizers; <pad> is already masked
+# Which SCOPe gallery these rows came from. Three protocols are in circulation for this project --
+# the paper's Section 9 describes a 100,000-protein set, RESULTS.md is family-level over this 2,207
+# domain set, and the late_interaction tables are superfamily-level over the same one. ESM-2 150M
+# R@1 reads 0.423, 0.5535 and 0.7277 respectively. Recording the corpus keeps a rerun on a different
+# gallery from being indistinguishable from these rows by anything but n_queries.
+SCOPE_CORPUS = "tattabio/scope40_test"
+
 SCOPE_LEVELS: Dict[str, int] = {"fold": 2, "superfamily": 3, "family": 4}
 
 
@@ -410,7 +417,8 @@ def scope_rows(
     rows, per_query = [], {}
     for level in SCOPE_LEVELS:
         pq = per_query_metrics(ranking, scope_labels(families, level))
-        rows.append({"model": model, "scoring": scoring, "level": level, "runtime_s": runtime_s,
+        rows.append({"model": model, "scoring": scoring, "level": level, "corpus": SCOPE_CORPUS,
+                     "runtime_s": runtime_s,
                      **retrieval_row(pq, n_boot=n_boot, seed=seed)})
         per_query[level] = pq
     return rows, per_query
@@ -458,5 +466,5 @@ def paired_bootstrap(
 def load_scope40() -> Tuple[List[str], List[str]]:
     from datasets import load_dataset
 
-    ds = load_dataset("tattabio/scope40_test", split="train")
+    ds = load_dataset(SCOPE_CORPUS, split="train")
     return list(ds["sequence"]), list(ds["family"])
