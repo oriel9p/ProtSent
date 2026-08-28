@@ -31,6 +31,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import late_interaction as li  # noqa: E402
 from late_interaction_eval import append_csv, parse_model_spec  # noqa: E402
+from bootstrap_ci import boot_ci  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("maxsim_knn")
@@ -69,6 +70,7 @@ def main() -> int:
     ap.add_argument("--chunk_elements", type=int, default=50_000_000)
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--eval_split", default="test")
+    ap.add_argument("--n_boot", type=int, default=2000)
     ap.add_argument("--out_dir", default="results/late_interaction/r2_final/benchmarks")
     args = ap.parse_args()
 
@@ -86,7 +88,7 @@ def main() -> int:
     logger.info("%s: %d gallery, %d eval, problem=%s", args.task, len(tr_seqs), len(te_seqs),
                 cfg.problem_type)
 
-    rows = []
+    rows, per_query = [], {}
     for spec in args.models:
         name, kind, path = parse_model_spec(spec)
         mve = (li.load_multivector_encoder(path, device=args.device) if kind == "late"
@@ -100,13 +102,24 @@ def main() -> int:
         pred = knn_predict(sim, tr_y, k=args.knn_k, regression=regression)
         runtime_s = time.time() - t0
 
+        # Bootstrap over the eval queries, the same axis and estimator the SCOPe and few-shot rows
+        # use, so an interval here means what it means there. Per-query values are kept so two arms
+        # can be compared paired later; marginal intervals overlap freely between arms a paired test
+        # separates cleanly.
         if regression:
             from scipy.stats import pearsonr, spearmanr
             m = {"Spearman": float(spearmanr(te_y, pred).statistic),
                  "Pearson": float(pearsonr(te_y, pred).statistic),
                  "MAE": float(np.abs(te_y - pred).mean())}
+            per_q = np.abs(te_y - pred)          # per-query error; pair on this
+            _, lo, hi = boot_ci(per_q, n_boot=args.n_boot, seed=42)
+            m["MAE_ci95"] = f"[{lo:.4f}, {hi:.4f}]"
         else:
             m = classification_metrics(cfg.problem_type, te_y, pred)
+            per_q = (pred == te_y).astype(float)  # per-query correctness
+            _, lo, hi = boot_ci(per_q, n_boot=args.n_boot, seed=42)
+            m["Accuracy_ci95"] = f"[{lo:.4f}, {hi:.4f}]"
+        per_query[f"{args.task}|{name}"] = per_q
         rows.append({"Task": cfg.name, "task_key": args.task, "model": name, "scoring": "maxsim",
                      "probe": f"knn{args.knn_k}", "n_gallery": len(tr_seqs), "n_eval": len(te_seqs),
                      "runtime_s": round(runtime_s, 2), **m})
@@ -114,8 +127,17 @@ def main() -> int:
         del mve, sim
         torch.cuda.empty_cache()
 
-    out = append_csv(Path(args.out_dir) / "maxsim_knn_bench.csv", rows)
-    logger.info("wrote %d rows -> %s", len(rows), out)
+    append_csv(Path(args.out_dir) / "maxsim_knn_bench.csv", rows)
+    # Merge, never overwrite: rows are appended to the CSV across invocations, so rewriting this
+    # would delete earlier tasks' vectors and defeat the paired comparison they exist for.
+    npz = Path(args.out_dir) / "maxsim_knn_per_query.npz"
+    merged = {}
+    if npz.exists():
+        with np.load(npz) as prev:
+            merged.update({k: prev[k] for k in prev.files})
+    merged.update(per_query)
+    np.savez_compressed(npz, **merged)
+    logger.info("wrote %d rows -> %s", len(rows), Path(args.out_dir) / "maxsim_knn_bench.csv")
     return 0
 
 
