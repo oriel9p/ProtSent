@@ -61,21 +61,6 @@ pairs. Against a learned readout the result is task-dependent: it beats a linear
 regression tasks and on metal ion binding, and loses on the two multiclass tasks, where the labels
 are evidently linearly separable in the pooled space.
 
-**Table C.** ProteinGym under frozen MaxSim: ProtSent minus ESM-2 at matched size.
-
-| Variant | 35M | 150M |
-|---|---|---|
-| DMS substitutions (corrected avg) | **-0.021** | **-0.010** |
-| DMS indels (Spearman) | **-0.017** | **-0.043** |
-| *SCOPe-40 superfamily, for contrast* | *+0.210* | *+0.274* |
-
-*Caption.* Same frozen weights and same MaxSim scoring as Table A, on ProteinGym's full substitution
-set (214 assays, 2,459,339 variants, ProteinGym's corrected average) and its 66 indel assays.
-ProtSent trails stock ESM-2 in all four comparisons, having led it by +0.21 to +0.27 MAP on
-structural retrieval. No individual difference is significant -- the confidence intervals overlap --
-but the direction is consistent across both variants and both scales. ProtSent-V2 does not train on
-`dms_cosent.parquet`, so ProteinGym is held out for these models.
-
 ### Prose
 
 Pooling L residue vectors into one is lossy, and the lost detail is retrievable. Scoring identical
@@ -97,15 +82,6 @@ absolute level across these four models: effective rank of the residue matrix ri
 scale (15.5 to 22.5) and falls for ESM-2 (12.1 to 10.5), consistent with MaxSim requiring residues to
 be individually distinguishable. We report this as a correlation over four models, not a cause.
 
-The advantage is task-specific, and ProteinGym marks its limit (Table C). On mutation-effect
-prediction ProtSent trails stock ESM-2 at both scales and on both variants, having led it by +0.21 to
-+0.27 MAP on structural retrieval with the same weights and the same scoring. The reversal is
-consistent in direction though not individually significant. A plausible reading is that contrastive
-training on family- and structure-level positives teaches the model to place related proteins close
-together, which is precisely the invariance that a single-residue substitution must break for
-ProteinGym to score it. That is the same axis on which the paper already reports stability and
-thermostability regressing.
-
 Late interaction stores L vectors per protein rather than one. Two-stage retrieval removes most of
 that cost: a pooled-cosine shortlist reranked by MaxSim recovers 97.7% of exhaustive MaxSim MAP at
 superfamily while scoring 100 candidates per query, and 94.5% at ten. Only shortlisted candidates
@@ -125,8 +101,30 @@ Stated rather than omitted, so a reviewer finding these files does not assume th
 | Benchmark | Status |
 |---|---|
 | 22-task ProtBench suite, k=3 | Separates nothing: eight model means span 0.579-0.604. These are probe tasks over pooled vectors, which late interaction does not alter. A do-no-harm check, which passes. |
-| ProteinGym, full coverage | 214 substitution assays, 2,459,339 variants, ProteinGym's corrected average. Arms at 0.319-0.346 but every pair of CIs overlaps, so it cannot rank models. Shows residue scoring reaches parity with likelihood scoring at matched size. |
+| ProteinGym, full coverage | **Cut from the section, and the reason matters.** It never tested this section's claim: there is no cosine ProteinGym arm, so it says nothing about MaxSim versus pooling. What it does test is ProtSent versus ESM-2 on mutation effects -- see the note below, which is for the authors, not for this section. |
 | CATH-EAT | **Excluded.** `test_h` has 150 queries and ±0.07 CIs, which cannot carry a 0.02-0.05 effect. In `r2_final/cath_eat.csv`; do not cite. |
+
+### ProteinGym: for the authors, not for this section
+
+Frozen MaxSim, matched size, ProtSent-V2 minus stock ESM-2:
+
+| Variant | 35M | 150M |
+|---|---|---|
+| DMS substitutions (corrected avg) | -0.021 | -0.010 |
+| DMS indels (Spearman) | -0.017 | -0.043 |
+| *SCOPe-40 superfamily, same weights* | *+0.210* | *+0.274* |
+
+ProtSent trails stock ESM-2 in all four comparisons on mutation effects, having led it by +0.21 to
++0.27 on structural retrieval. No single difference is significant -- the intervals overlap -- but the
+direction holds across both variants and both scales. A plausible reading is that contrastive
+training on family and structural positives builds exactly the invariance a point substitution must
+break for ProteinGym to score it; the paper already reports stability and thermostability regressing
+on that axis.
+
+This is out of scope for a section about scoring geometry, which is why it is not in Part 1. It is in
+scope for the paper's general-purpose-embedding claim, so it should be a deliberate decision by the
+authors rather than a silent omission. Full numbers: `r2_final/proteingym_maxsim.csv`. ProtSent-V2
+does not train on `dms_cosent.parquet`, so ProteinGym is genuinely held out for these models.
 
 ## Open items
 
