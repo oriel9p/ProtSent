@@ -185,3 +185,32 @@ passed (`test_head_size_mismatch_refuses_to_silently_reinitialise`).
 | Head-size confound in the 35M pilot | the 64-D arm ran 2,000 steps x batch 256, the 128-D arm 4,000 x 128 |
 | No ESM-2 arm at the recommended config | — |
 | ProtBench sample cap unpinned | 20k vs 100k moves Stability by +0.247 |
+
+## Why late-interaction training barely moved ProtSent-V2-150M (checked 2026-08-28)
+
+Not a bug. Both 150M arms train normally -- relative backbone drift step-1000 to step-10000 is 0.0429
+(V2 init) against 0.0494 (vanilla ESM-2), projection head 0.2185 against 0.2162. Nothing is frozen or
+stuck.
+
+The +0.004 MAP over the frozen model is an **unconverged snapshot**, not a ceiling:
+
+| | V2-150M init | vanilla ESM-2-150M init |
+|---|---|---|
+| SCOPe sfam MAP slope, steps >= 5000 | **+0.00242 / 1k steps** | +0.00054 / 1k steps |
+| shape | still rising at 11k | flat from ~1k |
+| MAP at its own step 0 -> final | 0.6906 -> 0.7235 (**+0.033**) | 0.4254 -> 0.7288 (+0.303) |
+
+Three things confound the "training adds nothing" reading, all measured:
+
+1. **Undertrained.** The V2 arm's slope is 4.5x the vanilla arm's and had not flattened. At the
+   observed rate it needs roughly 6,900 more steps to reach the vanilla arm's best (0.7403).
+2. **29.5% of one epoch.** 10,000 steps x global batch 1024 = 10.24M pairs against 34.76M available.
+3. **Projection-head tax.** A randomly initialised 128-d head costs 0.0285 MAP at step 0 (frozen raw
+   640-d scores 0.7192, the same model with a fresh head scores 0.6906). Early training is spent
+   recovering that, so the net over the arm's own starting point is +0.033, not +0.004.
+
+LR was 5e-5 constant here; V2's own pretraining used 2e-4 (RUNS.md). Not tested, but a candidate.
+
+**What is safe to claim:** late interaction needs no additional training to pay off. **What is not:**
+that additional training cannot help. Settling it needs the V2 arm run to convergence, which no run
+in this campaign did.

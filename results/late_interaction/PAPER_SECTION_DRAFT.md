@@ -86,9 +86,11 @@ Late interaction stores L vectors per protein rather than one. Two-stage retriev
 that cost: a pooled-cosine shortlist reranked by MaxSim recovers 97.7% of exhaustive MaxSim MAP at
 superfamily while scoring 100 candidates per query, and 94.5% at ten. Only shortlisted candidates
 need residue embeddings, so the stored index stays pooled-size. Finally, training a dedicated
-late-interaction projection on ProtSent adds +0.004 MAP, not significant: the representation is
-already residue-level, and the scoring function rather than further training is what makes it
-accessible.
+late-interaction projection on ProtSent adds +0.004 MAP over the frozen model, which is not
+significant. We do not read this as a ceiling: that arm had not converged. Its SCOPe curve was still
+rising at +0.0024 MAP per 1,000 steps over the second half of training, against +0.0005 for the
+vanilla-initialised arm, and it saw 29.5% of one epoch. The measured claim is that late interaction
+needs no additional training to pay off, not that additional training cannot help.
 
 ---
 
